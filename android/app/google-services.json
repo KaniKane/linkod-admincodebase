@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "53598013459",
+    "project_id": "linkod-db",
+    "storage_bucket": "linkod-db.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:53598013459:android:15a5e0e463a7d15620d7e6",
+        "android_client_info": {
+          "package_name": "com.example.linkod_admin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBOTt49luTHZqaYW1zn63acmH8d7pUpkfA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
