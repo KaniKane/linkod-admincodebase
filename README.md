@@ -1,0 +1,2 @@
+# linkod-admincodebase
+admin
