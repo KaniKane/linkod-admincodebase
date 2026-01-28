@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../widgets/app_sidebar.dart';
 import '../widgets/user_header.dart';
@@ -5,6 +6,7 @@ import '../widgets/custom_tabs.dart';
 import '../widgets/search_bar.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/accept_decline_buttons.dart';
+import '../widgets/audience_tag.dart';
 import '../utils/app_colors.dart';
 import 'dashboard_screen.dart';
 import 'announcements_screen.dart';
@@ -23,142 +25,104 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   int _itemsPerPage = 20;
   final Set<int> _selectedIndices = {};
 
-  // Users data
-  final List<Map<String, String>> _users = [
-    {
-      'name': 'Juan Dela Cruz',
-      'phone': '09546265782',
-      'category': 'Farmer, Fisherman, Senior',
-    },
-    {
-      'name': 'Clinch James Lansaderas',
-      'phone': '09546262343',
-      'category': 'Student, PWD, Youth',
-    },
-    {
-      'name': 'Eugene Dave Festejo',
-      'phone': '09546262357',
-      'category': 'Student, Youth',
-    },
-    {
-      'name': 'Anna Marie Quico',
-      'phone': '09546534546',
-      'category': 'Small business owner',
-    },
-    {
-      'name': 'Jerry Lavidor',
-      'phone': '09543434553',
-      'category': 'Senior, Tricycle Driver',
-    },
-    {
-      'name': 'Regine Mae Lagura',
-      'phone': '09546265784',
-      'category': 'Student, Youth',
-    },
-    {
-      'name': 'Marie Scobar',
-      'phone': '09546265745',
-      'category': 'Senior, PWD',
-    },
-    {
-      'name': 'Antonio Tuco',
-      'phone': '09546265798',
-      'category': 'Farmer, Fisherman, Senior, Tanod',
-    },
-    {
-      'name': 'Philip Garcia',
-      'phone': '09546265786',
-      'category': 'Farmer, Tanod',
-    },
-    {
-      'name': 'Randy Buntog',
-      'phone': '09546265785',
-      'category': 'Farmer, Fisherman, Senior, Tanod',
-    },
-  ];
+  bool _isLoading = false;
+  String? _errorMessage;
 
-  // Admins data
-  final List<Map<String, String>> _admins = [
-    {
-      'name': 'Alberto Pacheco',
-      'phone': '09546265782',
-      'position': 'Barangay Captain',
-    },
-    {
-      'name': 'Junty Bandayanon',
-      'phone': '09546265782',
-      'position': 'Barangay Kagawad',
-    },
-    {
-      'name': 'Reyvon Lozada',
-      'phone': '09546265782',
-      'position': 'Barangay Kagawad',
-    },
-    {
-      'name': 'Jerick Valdez',
-      'phone': '09546265782',
-      'position': 'Barangay Kagawad',
-    },
-    {
-      'name': 'Mariza Empeno',
-      'phone': '09546265782',
-      'position': 'Secretary',
-    },
-    {
-      'name': 'Rosmar Dumanhog',
-      'phone': '09546265782',
-      'position': 'Barangay Kagawad',
-    },
-    {
-      'name': 'Pedro Lasala',
-      'phone': '09546265782',
-      'position': 'Barangay Kagawad',
-    },
-    {
-      'name': 'Alvin Pacheco',
-      'phone': '09546265782',
-      'position': 'Barangay Kagawad',
-    },
-    {
-      'name': 'Annalyn Dumanhog',
-      'phone': '09546265782',
-      'position': 'Barangay Kagawad',
-    },
-    {
-      'name': 'Ryan Cabarubias',
-      'phone': '09546265782',
-      'position': 'SK Chairman',
-    },
-  ];
+  // Users data (loaded from Firestore)
+  List<Map<String, String>> _users = [];
 
-  // Awaiting Approval data
-  final List<Map<String, String>> _awaitingApproval = [
-    {
-      'name': 'Christian Lucar',
-      'phone': '09546265782',
-      'category': 'Farmer, Fisherman, Senior, Tanod',
-    },
-    {
-      'name': 'Juan Capalaran',
-      'phone': '09546265782',
-      'category': 'Farmer, Fisherman, Senior, Tanod',
-    },
-    {
-      'name': 'Joel Diaz',
-      'phone': '09546265782',
-      'category': 'Farmer, Fisherman, Senior, Tanod',
-    },
-    {
-      'name': 'Hannah Makaukit',
-      'phone': '09546265782',
-      'category': 'Farmer, Fisherman, Senior, Tanod',
-    },
-    {
-      'name': 'Hanzo Hilom',
-      'phone': '09546265782',
-      'category': 'Farmer, Fisherman, Senior, Tanod',
-    },
-  ];
+  // Admins data (loaded from Firestore)
+  List<Map<String, String>> _admins = [];
+
+  // Awaiting Approval data (loaded from Firestore)
+  List<Map<String, String>> _awaitingApproval = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAccounts();
+  }
+
+  Future<void> _loadAccounts() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final usersSnapshot =
+          await FirebaseFirestore.instance.collection('users').get();
+      final awaitingSnapshot =
+          await FirebaseFirestore.instance.collection('awaitingApproval').get();
+
+      final loadedUsers = <Map<String, String>>[];
+      final loadedAdmins = <Map<String, String>>[];
+      final loadedAwaiting = <Map<String, String>>[];
+
+      for (final doc in usersSnapshot.docs) {
+        final data = doc.data();
+        final fullName = (data['fullName'] ?? '') as String;
+        final phoneNumber = (data['phoneNumber'] ?? '') as String;
+        final role = ((data['role'] ?? '') as String).toLowerCase();
+        final position = (data['position'] ?? '') as String;
+        final demographicCategory =
+            (data['category'] ?? data['demographicCategory'] ?? '') as String;
+
+        if (role == 'admin') {
+          loadedAdmins.add({
+            'id': doc.id,
+            'name': fullName.isNotEmpty ? fullName : 'Unnamed admin',
+            'phone': phoneNumber,
+            'position': position.isNotEmpty ? position : 'Admin',
+          });
+        } else {
+          loadedUsers.add({
+            'id': doc.id,
+            'name': fullName.isNotEmpty ? fullName : 'Unnamed user',
+            'phone': phoneNumber,
+            'category': demographicCategory.isNotEmpty
+                ? demographicCategory
+                : (role.isNotEmpty ? role : 'User'),
+          });
+        }
+      }
+
+      for (final doc in awaitingSnapshot.docs) {
+        final data = doc.data();
+        final fullName = (data['fullName'] ?? '') as String;
+        final phoneNumber = (data['phoneNumber'] ?? '') as String;
+        final role = ((data['role'] ?? '') as String).toLowerCase();
+        final position = (data['position'] ?? '') as String;
+        final category =
+            (data['category'] ?? data['demographicCategory'] ?? '') as String;
+
+        loadedAwaiting.add({
+          'id': doc.id,
+          'name': fullName.isNotEmpty ? fullName : 'Unnamed user',
+          'phone': phoneNumber,
+          'category': category.isNotEmpty
+              ? category
+              : (role == 'admin'
+                  ? (position.isNotEmpty ? position : 'Admin')
+                  : (role.isNotEmpty ? role : 'User')),
+          'role': role,
+          'position': position,
+        });
+      }
+
+      setState(() {
+        _users = loadedUsers;
+        _admins = loadedAdmins;
+        _awaitingApproval = loadedAwaiting;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Failed to load accounts: $e';
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -330,9 +294,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                           text: _activeTabIndex == 0
                                               ? 'Add New User'
                                               : 'Add New Admin',
-                                          onPressed: () {
-                                            // Handle add new user/admin
-                                          },
+                                          onPressed: () => _showAddAccountDialog(
+                                            isAdmin: _activeTabIndex == 1,
+                                          ),
                                           isFullWidth: false,
                                         ),
                                       ],
@@ -342,7 +306,30 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 Expanded(
                                   child: SingleChildScrollView(
                                     padding: const EdgeInsets.symmetric(horizontal: 32),
-                                    child: _buildTable(),
+                                    child: _isLoading
+                                        ? const Padding(
+                                            padding: EdgeInsets.only(top: 48),
+                                            child: Center(
+                                              child: CircularProgressIndicator(),
+                                            ),
+                                          )
+                                        : Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              if (_errorMessage != null) ...[
+                                                Text(
+                                                  _errorMessage!,
+                                                  style: const TextStyle(
+                                                    color: Colors.red,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 16),
+                                              ],
+                                              _buildTable(),
+                                            ],
+                                          ),
                                   ),
                                 ),
                                 // Footer
@@ -435,6 +422,374 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       default:
         return const SizedBox();
     }
+  }
+
+  Future<void> _showAddAccountDialog({required bool isAdmin}) async {
+    final nameController = TextEditingController();
+    final phoneController = TextEditingController();
+    final passwordController = TextEditingController();
+    final roleController = TextEditingController(text: isAdmin ? 'admin' : 'user');
+    // For selectable position / demographic options
+    final Set<String> selectedCategories = {};
+    String? selectedPosition;
+    final formKey = GlobalKey<FormState>();
+    bool isSubmitting = false;
+    String? dialogError;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: !isSubmitting,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.all(20),
+              child: Form(
+                  key: formKey,
+                  child: Center(
+                    child: Container(
+                      constraints: const BoxConstraints(maxWidth: 520),
+                      padding: const EdgeInsets.all(32),
+                      decoration: BoxDecoration(
+                        color: AppColors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.shadowColor,
+                            blurRadius: 10,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            isAdmin ? 'Add New Admin' : 'Add New User',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.loginGreen,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          _buildDialogTextField(
+                            label: 'Full Name',
+                            controller: nameController,
+                            validator: (value) =>
+                                value == null || value.trim().isEmpty ? 'Name is required' : null,
+                          ),
+                          const SizedBox(height: 16),
+                          _buildDialogTextField(
+                            label: 'Phone Number',
+                            controller: phoneController,
+                            validator: (value) => value == null || value.trim().isEmpty
+                                ? 'Phone number is required'
+                                : null,
+                          ),
+                          const SizedBox(height: 16),
+                          _buildDialogTextField(
+                            label: 'Password',
+                            controller: passwordController,
+                            obscureText: true,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Password is required';
+                              }
+                              if (value.length < 6) {
+                                return 'Password must be at least 6 characters';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          if (isAdmin)
+                            _buildPositionSelector(
+                              selectedPosition: selectedPosition,
+                              onSelect: (value) {
+                                setState(() {
+                                  selectedPosition = value;
+                                });
+                              },
+                            )
+                          else
+                            _buildDemographicSelector(
+                              selectedCategories: selectedCategories,
+                              onToggle: (value) {
+                                setState(() {
+                                  if (selectedCategories.contains(value)) {
+                                    selectedCategories.remove(value);
+                                  } else {
+                                    selectedCategories.add(value);
+                                  }
+                                });
+                              },
+                            ),
+                          const SizedBox(height: 16),
+                          _buildDialogTextField(
+                            label: 'Role',
+                            controller: roleController,
+                            enabled: false,
+                          ),
+                          const SizedBox(height: 16),
+                          if (dialogError != null) ...[
+                            Text(
+                              dialogError!,
+                              style: const TextStyle(
+                                color: Colors.red,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              TextButton(
+                                onPressed: isSubmitting ? null : () => Navigator.of(context).pop(),
+                                child: const Text('Cancel'),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.loginGreen,
+                                  foregroundColor: AppColors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                onPressed: isSubmitting
+                                    ? null
+                                    : () async {
+                                        if (!formKey.currentState!.validate()) return;
+
+                                        if (isAdmin && (selectedPosition == null)) {
+                                          setState(() {
+                                            dialogError = 'Please select a position';
+                                          });
+                                          return;
+                                        }
+                                        if (!isAdmin && selectedCategories.isEmpty) {
+                                          setState(() {
+                                            dialogError =
+                                                'Please select at least one demographic category';
+                                          });
+                                          return;
+                                        }
+
+                                        setState(() {
+                                          isSubmitting = true;
+                                          dialogError = null;
+                                        });
+
+                                        try {
+                                          final name = nameController.text.trim();
+                                          final phone = phoneController.text.trim();
+                                          // Password is collected for future use but not used here to avoid changing auth session.
+
+                                          final data = <String, dynamic>{
+                                            'fullName': name,
+                                            'phoneNumber': phone,
+                                            'role': isAdmin ? 'admin' : 'user',
+                                            'createdAt': FieldValue.serverTimestamp(),
+                                          };
+                                          if (isAdmin) {
+                                            data['position'] = selectedPosition ?? 'Admin';
+                                          } else {
+                                            data['category'] = selectedCategories.isEmpty
+                                                ? 'User'
+                                                : selectedCategories.join(', ');
+                                          }
+
+                                          // Use phone as document ID so it is easy to reference; this does NOT affect auth.
+                                          await FirebaseFirestore.instance
+                                              .collection('users')
+                                              .doc(phone)
+                                              .set(data);
+
+                                          if (mounted) {
+                                            await _loadAccounts();
+                                            Navigator.of(context).pop();
+                                          }
+                                        } catch (e) {
+                                          setState(() {
+                                            dialogError = 'Unexpected error: $e';
+                                            isSubmitting = false;
+                                          });
+                                        }
+                                      },
+                                child: isSubmitting
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor: AlwaysStoppedAnimation<Color>(
+                                            AppColors.white,
+                                          ),
+                                        ),
+                                      )
+                                    : const Text('Create'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPositionSelector({
+    required String? selectedPosition,
+    required ValueChanged<String> onSelect,
+  }) {
+    const barangayPositions = [
+      'Barangay Captain',
+      'Barangay Secretary',
+      'Barangay Treasurer',
+      'Barangay Councilor',
+      'SK Chairman',
+      'Barangay Health Worker',
+      'Barangay Tanod',
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Barangay Position',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.normal,
+            color: AppColors.darkGrey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: barangayPositions.map((position) {
+            final isSelected = selectedPosition == position;
+            return AudienceTag(
+              label: position,
+              isSelected: isSelected,
+              onTap: () => onSelect(position),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDemographicSelector({
+    required Set<String> selectedCategories,
+    required ValueChanged<String> onToggle,
+  }) {
+    const audienceOptions = [
+      'Senior',
+      'Student',
+      'PWD',
+      'Youth',
+      'Farmer',
+      'Fisherman',
+      'Tricycle Driver',
+      'Small Business Owner',
+      '4Ps',
+      'Tanod',
+      'Barangay Official',
+      'Parent',
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Demographic Category',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.normal,
+            color: AppColors.darkGrey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: audienceOptions.map((audience) {
+            final isSelected = selectedCategories.contains(audience);
+            return AudienceTag(
+              label: audience,
+              isSelected: isSelected,
+              onTap: () => onToggle(audience),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${selectedCategories.length} category(ies) selected',
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.normal,
+            color: AppColors.lightGrey,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDialogTextField({
+    required String label,
+    required TextEditingController controller,
+    String? Function(String?)? validator,
+    bool obscureText = false,
+    bool enabled = true,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.normal,
+            color: AppColors.darkGrey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 48,
+          decoration: BoxDecoration(
+            color: AppColors.inputBg,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: TextFormField(
+            controller: controller,
+            obscureText: obscureText,
+            enabled: enabled,
+            validator: validator,
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppColors.darkGrey,
+            ),
+            decoration: const InputDecoration(
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 15,
+                vertical: 12,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildUsersTable() {
@@ -709,16 +1064,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               children: [
                 _ActionIcon(
                   icon: Icons.edit,
-                  onTap: () {
-                    // Handle edit
-                  },
+                  onTap: () => _showEditUserDialog(user),
                 ),
                 const SizedBox(width: 12),
                 _ActionIcon(
                   icon: Icons.delete,
-                  onTap: () {
-                    // Handle delete
-                  },
+                  onTap: () => _deleteUser(user),
                 ),
               ],
             ),
@@ -784,16 +1135,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               children: [
                 _ActionIcon(
                   icon: Icons.edit,
-                  onTap: () {
-                    // Handle edit
-                  },
+                  onTap: () => _showEditAdminDialog(admin),
                 ),
                 const SizedBox(width: 12),
                 _ActionIcon(
                   icon: Icons.delete,
-                  onTap: () {
-                    // Handle delete
-                  },
+                  onTap: () => _deleteAdmin(admin),
                 ),
               ],
             ),
@@ -808,6 +1155,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     int index,
     bool isLast,
   ) {
+    final docId = user['id'] ?? '';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -870,19 +1218,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               children: [
                 _ActionIcon(
                   icon: Icons.edit,
-                  onTap: () {
-                    // Handle edit
-                  },
+                  onTap: () => _showEditAwaitingDialog(user),
                 ),
                 const SizedBox(width: 12),
                 Flexible(
                   child: AcceptDeclineButtons(
-                    onAccept: () {
-                      // Handle accept
-                    },
-                    onDecline: () {
-                      // Handle decline
-                    },
+                    onAccept: () => _approveAwaiting(docId, user),
+                    onDecline: () => _declineAwaiting(docId),
                   ),
                 ),
               ],
@@ -891,6 +1233,592 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _approveAwaiting(String docId, Map<String, String> user) async {
+    if (docId.isEmpty) return;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('awaitingApproval')
+          .doc(docId)
+          .get();
+      if (!doc.exists) {
+        return;
+      }
+      final data = doc.data() ?? {};
+      final fullName = (data['fullName'] ?? user['name'] ?? '') as String;
+      final phone = (data['phoneNumber'] ?? user['phone'] ?? '') as String;
+      final role = ((data['role'] ?? user['role'] ?? 'user') as String).toLowerCase();
+      final position = (data['position'] ?? user['position'] ?? '') as String;
+      final category =
+          (data['category'] ?? data['demographicCategory'] ?? user['category'] ?? '') as String;
+
+      final userData = <String, dynamic>{
+        'fullName': fullName,
+        'phoneNumber': phone,
+        'role': role.isNotEmpty ? role : 'user',
+        'createdAt': FieldValue.serverTimestamp(),
+      };
+
+      if (role == 'admin') {
+        userData['position'] = position.isNotEmpty ? position : 'Admin';
+      } else {
+        userData['category'] =
+            category.isNotEmpty ? category : (role.isNotEmpty ? role : 'User');
+      }
+
+      // Use phone as doc id for users collection if available, otherwise fallback to new doc
+      final usersRef = FirebaseFirestore.instance.collection('users');
+      if (phone.isNotEmpty) {
+        await usersRef.doc(phone).set(userData, SetOptions(merge: true));
+      } else {
+        await usersRef.add(userData);
+      }
+
+      // Remove from awaitingApproval
+      await FirebaseFirestore.instance
+          .collection('awaitingApproval')
+          .doc(docId)
+          .delete();
+
+      if (mounted) {
+        await _loadAccounts();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to approve request: $e';
+        });
+      }
+    }
+  }
+
+  Future<void> _declineAwaiting(String docId) async {
+    if (docId.isEmpty) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('awaitingApproval')
+          .doc(docId)
+          .delete();
+      if (mounted) {
+        await _loadAccounts();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to decline request: $e';
+        });
+      }
+    }
+  }
+
+  Future<void> _showEditAwaitingDialog(Map<String, String> user) async {
+    final nameController = TextEditingController(text: user['name'] ?? '');
+    final phoneController = TextEditingController(text: user['phone'] ?? '');
+    final categoryController = TextEditingController(text: user['category'] ?? '');
+    final formKey = GlobalKey<FormState>();
+    bool isSubmitting = false;
+    String? dialogError;
+    final docId = user['id'] ?? '';
+
+    await showDialog(
+      context: context,
+      barrierDismissible: !isSubmitting,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.all(20),
+              child: Form(
+                key: formKey,
+                child: Center(
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      color: AppColors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.shadowColor,
+                          blurRadius: 10,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          'Edit Approval Request',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.loginGreen,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        _buildDialogTextField(
+                          label: 'Full Name',
+                          controller: nameController,
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty ? 'Name is required' : null,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDialogTextField(
+                          label: 'Phone Number',
+                          controller: phoneController,
+                          validator: (value) => value == null || value.trim().isEmpty
+                              ? 'Phone number is required'
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDialogTextField(
+                          label: 'Category / Position',
+                          controller: categoryController,
+                        ),
+                        const SizedBox(height: 16),
+                        if (dialogError != null) ...[
+                          Text(
+                            dialogError!,
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: isSubmitting ? null : () => Navigator.of(context).pop(),
+                              child: const Text('Cancel'),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.loginGreen,
+                                foregroundColor: AppColors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              onPressed: isSubmitting
+                                  ? null
+                                  : () async {
+                                      if (!formKey.currentState!.validate()) return;
+                                      setState(() {
+                                        isSubmitting = true;
+                                        dialogError = null;
+                                      });
+
+                                      try {
+                                        await FirebaseFirestore.instance
+                                            .collection('awaitingApproval')
+                                            .doc(docId)
+                                            .update({
+                                          'fullName': nameController.text.trim(),
+                                          'phoneNumber': phoneController.text.trim(),
+                                          'category': categoryController.text.trim(),
+                                        });
+                                        if (mounted) {
+                                          await _loadAccounts();
+                                          Navigator.of(context).pop();
+                                        }
+                                      } catch (e) {
+                                        setState(() {
+                                          dialogError = 'Failed to update request: $e';
+                                          isSubmitting = false;
+                                        });
+                                      }
+                                    },
+                              child: isSubmitting
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(
+                                          AppColors.white,
+                                        ),
+                                      ),
+                                    )
+                                  : const Text('Save'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showEditUserDialog(Map<String, String> user) async {
+    final nameController = TextEditingController(text: user['name'] ?? '');
+    final phoneController = TextEditingController(text: user['phone'] ?? '');
+    // Initialize selected categories from existing comma-separated string
+    final existingCategory = user['category'] ?? '';
+    final Set<String> selectedCategories = existingCategory.isEmpty
+        ? <String>{}
+        : existingCategory
+            .split(',')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toSet();
+    final formKey = GlobalKey<FormState>();
+    bool isSubmitting = false;
+    String? dialogError;
+    final docId = user['id'] ?? '';
+
+    await showDialog(
+      context: context,
+      barrierDismissible: !isSubmitting,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.all(20),
+              child: Form(
+                key: formKey,
+                child: Center(
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      color: AppColors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.shadowColor,
+                          blurRadius: 10,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          'Edit User',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.loginGreen,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        _buildDialogTextField(
+                          label: 'Full Name',
+                          controller: nameController,
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty ? 'Name is required' : null,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDialogTextField(
+                          label: 'Phone Number',
+                          controller: phoneController,
+                          validator: (value) => value == null || value.trim().isEmpty
+                              ? 'Phone number is required'
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDemographicSelector(
+                          selectedCategories: selectedCategories,
+                          onToggle: (value) {
+                            setState(() {
+                              if (selectedCategories.contains(value)) {
+                                selectedCategories.remove(value);
+                              } else {
+                                selectedCategories.add(value);
+                              }
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        if (dialogError != null) ...[
+                          Text(
+                            dialogError!,
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: isSubmitting ? null : () => Navigator.of(context).pop(),
+                              child: const Text('Cancel'),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.loginGreen,
+                                foregroundColor: AppColors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              onPressed: isSubmitting
+                                  ? null
+                                  : () async {
+                                      if (!formKey.currentState!.validate()) return;
+                                      setState(() {
+                                        isSubmitting = true;
+                                        dialogError = null;
+                                      });
+
+                                      try {
+                                        await FirebaseFirestore.instance
+                                            .collection('users')
+                                            .doc(docId)
+                                            .update({
+                                          'fullName': nameController.text.trim(),
+                                          'phoneNumber': phoneController.text.trim(),
+                                          'category': selectedCategories.isEmpty
+                                              ? 'User'
+                                              : selectedCategories.join(', '),
+                                        });
+                                        if (mounted) {
+                                          await _loadAccounts();
+                                          Navigator.of(context).pop();
+                                        }
+                                      } catch (e) {
+                                        setState(() {
+                                          dialogError = 'Failed to update user: $e';
+                                          isSubmitting = false;
+                                        });
+                                      }
+                                    },
+                              child: isSubmitting
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(
+                                          AppColors.white,
+                                        ),
+                                      ),
+                                    )
+                                  : const Text('Save'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showEditAdminDialog(Map<String, String> admin) async {
+    final nameController = TextEditingController(text: admin['name'] ?? '');
+    final phoneController = TextEditingController(text: admin['phone'] ?? '');
+    String? selectedPosition = admin['position'];
+    final formKey = GlobalKey<FormState>();
+    bool isSubmitting = false;
+    String? dialogError;
+    final docId = admin['id'] ?? '';
+
+    await showDialog(
+      context: context,
+      barrierDismissible: !isSubmitting,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.all(20),
+              child: Form(
+                key: formKey,
+                child: Center(
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      color: AppColors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.shadowColor,
+                          blurRadius: 10,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          'Edit Admin',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.loginGreen,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        _buildDialogTextField(
+                          label: 'Full Name',
+                          controller: nameController,
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty ? 'Name is required' : null,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDialogTextField(
+                          label: 'Phone Number',
+                          controller: phoneController,
+                          validator: (value) => value == null || value.trim().isEmpty
+                              ? 'Phone number is required'
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildPositionSelector(
+                          selectedPosition: selectedPosition,
+                          onSelect: (value) {
+                            setState(() {
+                              selectedPosition = value;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        if (dialogError != null) ...[
+                          Text(
+                            dialogError!,
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: isSubmitting ? null : () => Navigator.of(context).pop(),
+                              child: const Text('Cancel'),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.loginGreen,
+                                foregroundColor: AppColors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              onPressed: isSubmitting
+                                  ? null
+                                  : () async {
+                                      if (!formKey.currentState!.validate()) return;
+                                      setState(() {
+                                        isSubmitting = true;
+                                        dialogError = null;
+                                      });
+
+                                      try {
+                                        final positionValue =
+                                            (selectedPosition ?? admin['position'] ?? '').trim();
+                                        await FirebaseFirestore.instance
+                                            .collection('users')
+                                            .doc(docId)
+                                            .update({
+                                          'fullName': nameController.text.trim(),
+                                          'phoneNumber': phoneController.text.trim(),
+                                          'position':
+                                              positionValue.isNotEmpty ? positionValue : 'Admin',
+                                        });
+                                        if (mounted) {
+                                          await _loadAccounts();
+                                          Navigator.of(context).pop();
+                                        }
+                                      } catch (e) {
+                                        setState(() {
+                                          dialogError = 'Failed to update admin: $e';
+                                          isSubmitting = false;
+                                        });
+                                      }
+                                    },
+                              child: isSubmitting
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(
+                                          AppColors.white,
+                                        ),
+                                      ),
+                                    )
+                                  : const Text('Save'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteUser(Map<String, String> user) async {
+    final docId = user['id'] ?? '';
+    if (docId.isEmpty) return;
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(docId).delete();
+      if (mounted) {
+        await _loadAccounts();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to delete user: $e';
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteAdmin(Map<String, String> admin) async {
+    final docId = admin['id'] ?? '';
+    if (docId.isEmpty) return;
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(docId).delete();
+      if (mounted) {
+        await _loadAccounts();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to delete admin: $e';
+        });
+      }
+    }
   }
 
   Widget _buildTableFooter() {

@@ -1,4 +1,6 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+
 import '../utils/app_colors.dart';
 import '../widgets/custom_link.dart';
 import 'login_screen.dart';
@@ -16,6 +18,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   String? _selectedPosition;
+
+  bool _isLoading = false;
+  String? _errorMessage;
 
   final List<String> _barangayPositions = [
     'Barangay Captain',
@@ -35,12 +40,46 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     super.dispose();
   }
 
-  void _handleSignUp() {
-    if (_formKey.currentState!.validate()) {
-      // Handle sign up logic here
+  Future<void> _handleSignUp() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final name = _nameController.text.trim();
+      final phone = _phoneController.text.trim();
+      final password = _passwordController.text;
+      final position = _selectedPosition ?? '';
+      // Store request in awaitingApproval collection for admin review
+      await FirebaseFirestore.instance.collection('awaitingApproval').add({
+        'fullName': name,
+        'phoneNumber': phone,
+        'password': password, // NOTE: for production, never store plain passwords.
+        'role': 'admin',
+        'position': position,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account request submitted')),
+        const SnackBar(content: Text('Account request submitted for approval')),
       );
+
+      // Navigate back to login
+      _navigateToLogin();
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Unexpected error: $e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -177,8 +216,14 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                   color: AppColors.inputBg,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: TextField(
+                child: TextFormField(
                   controller: _nameController,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Name is required';
+                    }
+                    return null;
+                  },
                   style: const TextStyle(
                     fontSize: 16,
                     color: AppColors.darkGrey,
@@ -215,8 +260,14 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                   color: AppColors.inputBg,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: TextField(
+                child: TextFormField(
                   controller: _phoneController,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Phone number is required';
+                    }
+                    return null;
+                  },
                   style: const TextStyle(
                     fontSize: 16,
                     color: AppColors.darkGrey,
@@ -253,9 +304,18 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                   color: AppColors.inputBg,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: TextField(
+                child: TextFormField(
                   controller: _passwordController,
                   obscureText: true,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Password is required';
+                    }
+                    if (value.length < 6) {
+                      return 'Password must be at least 6 characters';
+                    }
+                    return null;
+                  },
                   style: const TextStyle(
                     fontSize: 16,
                     color: AppColors.darkGrey,
@@ -296,7 +356,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 15),
                   child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
+                    child: DropdownButtonFormField<String>(
                       value: _selectedPosition,
                       isExpanded: true,
                       icon: const Icon(
@@ -325,16 +385,33 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           _selectedPosition = value;
                         });
                       },
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please select a position';
+                        }
+                        return null;
+                      },
                     ),
                   ),
                 ),
               ),
               const SizedBox(height: 30),
               
-              // Login Button
+              if (_errorMessage != null) ...[
+                Text(
+                  _errorMessage!,
+                  style: const TextStyle(
+                    color: Colors.red,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              // Create Admin Button
               _SignUpButton(
-                text: 'Login',
-                onPressed: _handleSignUp,
+                text: 'Create Admin Account',
+                onPressed: _isLoading ? null : _handleSignUp,
               ),
               const SizedBox(height: 15),
               

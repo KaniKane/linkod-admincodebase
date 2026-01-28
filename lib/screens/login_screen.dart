@@ -1,4 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
 import '../utils/app_colors.dart';
 import '../widgets/custom_link.dart';
 import 'create_account_screen.dart';
@@ -16,6 +19,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
+  bool _isLoading = false;
+  String? _errorMessage;
+
   @override
   void dispose() {
     _phoneController.dispose();
@@ -23,12 +29,79 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _handleLogin() {
-    if (_formKey.currentState!.validate()) {
+  Future<void> _handleLogin() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final phone = _phoneController.text.trim();
+      final password = _passwordController.text;
+
+      // Map phone number to an email-style identifier for Firebase Auth,
+      // e.g. "+1234567890" -> "+1234567890@linkod.com"
+      final email = '$phone@linkod.com';
+
+      // Sign in with Firebase Authentication
+      final userCredential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(email: email, password: password);
+
+      final user = userCredential.user;
+
+      if (user == null) {
+        setState(() {
+          _errorMessage = 'Login failed. Please try again.';
+        });
+        return;
+      }
+
+      // Load profile from Firestore: users/{UID}
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (!userDoc.exists) {
+        setState(() {
+          _errorMessage =
+              'Profile not found. Please contact support or create an account.';
+        });
+        return;
+      }
+
+      final data = userDoc.data() ?? {};
+      final role = data['role'] as String? ?? '';
+
+      // Optional: restrict this admin app to admin users only
+      if (role.toLowerCase() != 'admin') {
+        setState(() {
+          _errorMessage =
+              'This admin panel is only for admin accounts. Your role is "$role".';
+        });
+        await FirebaseAuth.instance.signOut();
+        return;
+      }
+
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const DashboardScreen()),
+        MaterialPageRoute(
+          builder: (context) => const DashboardScreen(),
+        ),
       );
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Login failed: $e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -166,8 +239,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: AppColors.inputBg,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: TextField(
+                child: TextFormField(
                   controller: _phoneController,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Phone number is required';
+                    }
+                    return null;
+                  },
                   style: const TextStyle(
                     fontSize: 16,
                     color: AppColors.darkGrey,
@@ -204,9 +283,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: AppColors.inputBg,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: TextField(
+                child: TextFormField(
                   controller: _passwordController,
                   obscureText: true,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Password is required';
+                    }
+                    return null;
+                  },
                   style: const TextStyle(
                     fontSize: 16,
                     color: AppColors.darkGrey,
@@ -226,11 +311,22 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 35),
+
+              if (_errorMessage != null) ...[
+                Text(
+                  _errorMessage!,
+                  style: const TextStyle(
+                    color: Colors.red,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               
               // Login Button
               _LoginButton(
                 text: 'Login',
-                onPressed: _handleLogin,
+                onPressed: _isLoading ? null : _handleLogin,
               ),
               const SizedBox(height: 30),
               
