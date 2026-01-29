@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../widgets/app_sidebar.dart';
 import '../widgets/user_header.dart';
@@ -19,39 +20,18 @@ class AnnouncementsScreen extends StatefulWidget {
 
 class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   int _activeTabIndex = 0;
-  final _titleController = TextEditingController(text: 'Health Check-up Schedule');
-  final _contentController = TextEditingController(
-    text: 'Adonday libre check up sa sabado, 2PM mag sugod, para sa senior og PWD',
-  );
+  final _titleController = TextEditingController();
+  final _contentController = TextEditingController();
   final _aiRefinedController = TextEditingController();
   Set<String> _selectedAudiences = {'Senior'};
   bool _isAIRefined = false;
   final List<String> _suggestedAudiences = ['Senior', 'PWD'];
 
-  // Sample draft data
-  List<AnnouncementDraft> _drafts = [
-    AnnouncementDraft(
-      id: '1',
-      title: 'Livelihood Training Program',
-      content:
-          'Free health check-up for all residents will be held on Saturday, 10 AM at the Barangay Hall. Please bring your health cards.',
-      selectedAudiences: {'Senior', 'PWD'},
-    ),
-    AnnouncementDraft(
-      id: '2',
-      title: 'Community Clean-up Drive',
-      content:
-          'Join us for a community clean-up drive this Sunday morning. All volunteers are welcome. Tools and refreshments will be provided.',
-      selectedAudiences: {'Youth', 'Parent'},
-    ),
-    AnnouncementDraft(
-      id: '3',
-      title: 'Skills Training Workshop',
-      content:
-          'Free skills training workshop for small business owners. Learn essential business management skills. Registration required.',
-      selectedAudiences: {'Small Business Owner', '4Ps'},
-    ),
-  ];
+  // Drafts loaded from Firestore
+  List<AnnouncementDraft> _drafts = [];
+
+  // Currently edited draft id (if any)
+  String? _currentDraftId;
 
   final List<String> _audienceOptions = [
     'Senior',
@@ -67,6 +47,12 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     'Barangay Official',
     'Parent',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDrafts();
+  }
 
   @override
   void dispose() {
@@ -101,11 +87,21 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   }
 
   void _handleRefineWithAI() {
+    final original = _contentController.text.trim();
+    if (original.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter content before refining.'),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isAIRefined = true;
-      // Sample refined text - in real implementation, this would come from AI
-      _aiRefinedController.text =
-          'Aduna kitay ipahigayon nga libreng medikal nga check-up karong umaabot nga Sabado, Nobyembre 22, 2025. Ang kalihokan magsugod sa alas-2 sa hapon (2:00 PM). Kini nga serbisyo gitagana ilabi na alang sa atong mga Senior Citizens ug mga Persons with Disability (PWDs). Gihangyo ang tanang mokuha sa serbisyo sa pagdala sa ilang Senior Citizen\'s ID o PWD ID (ug/o bisan unsang balido nga ID) aron mapahigayon ang hapsay nga pag-proseso. Alang sa dugang impormasyon, palihug kontaka ang inyong mga Barangay Health Workers (BHWs) o ang Opisina sa Barangay. Daghang Salamat!';
+      // Simple placeholder refinement: copy original content.
+      // In real implementation, this would be replaced by an AI-generated version.
+      _aiRefinedController.text = original;
     });
   }
 
@@ -126,6 +122,13 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       _titleController.text = draft.title;
       _contentController.text = draft.content;
       _selectedAudiences = Set.from(draft.selectedAudiences);
+      _isAIRefined = draft.aiRefinedContent != null;
+      if (draft.aiRefinedContent != null) {
+        _aiRefinedController.text = draft.aiRefinedContent!;
+      } else {
+        _aiRefinedController.clear();
+      }
+      _currentDraftId = draft.id;
       _activeTabIndex = 0; // Switch to Compose tab
     });
   }
@@ -143,11 +146,24 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               child: const Text('Cancel'),
             ),
             TextButton(
-              onPressed: () {
-                setState(() {
-                  _drafts.removeWhere((draft) => draft.id == draftId);
-                });
-                Navigator.of(context).pop();
+              onPressed: () async {
+                try {
+                  await FirebaseFirestore.instance
+                      .collection('announcementDrafts')
+                      .doc(draftId)
+                      .delete();
+                } catch (_) {
+                  // Ignore delete error for now; UI will refresh anyway.
+                }
+                if (mounted) {
+                  setState(() {
+                    _drafts.removeWhere((draft) => draft.id == draftId);
+                    if (_currentDraftId == draftId) {
+                      _currentDraftId = null;
+                    }
+                  });
+                  Navigator.of(context).pop();
+                }
               },
               child: const Text(
                 'Delete',
@@ -160,50 +176,170 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     );
   }
 
-  void _handleSaveDraft() {
-    showDialog(
-      context: context,
-      barrierColor: Colors.transparent,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          insetPadding: const EdgeInsets.all(20),
-          child: const DraftSavedNotification(),
-        );
-      },
-    );
+  Future<void> _loadDrafts() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('announcementDrafts')
+          .orderBy('createdAt', descending: true)
+          .get();
 
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted && Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
+      final drafts = snapshot.docs.map((doc) {
+        final data = doc.data();
+        final audiences = (data['audiences'] as List?)
+                ?.whereType<String>()
+                .toList() ??
+            <String>[];
+        return AnnouncementDraft(
+          id: doc.id,
+          title: (data['title'] ?? '') as String,
+          content: (data['content'] ?? '') as String,
+          selectedAudiences: audiences.toSet(),
+          aiRefinedContent: data['aiRefinedContent'] as String?,
+        );
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _drafts = drafts;
+        });
       }
-    });
+    } catch (_) {
+      // Silently ignore load errors for now.
+    }
   }
 
-  void _handlePostAnnouncement() {
-    showDialog(
-      context: context,
-      barrierColor: Colors.transparent,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          insetPadding: const EdgeInsets.all(20),
-          child: const SuccessNotification(
-            message: 'Announcement is posted successfully',
-          ),
-        );
-      },
-    );
+  void _handleSaveDraft() async {
+    final title = _titleController.text.trim();
+    final originalContent = _contentController.text.trim();
+    final refinedContent = _aiRefinedController.text.trim();
+    final content =
+        _isAIRefined && refinedContent.isNotEmpty ? refinedContent : originalContent;
 
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted && Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
+    if (title.isEmpty || content.isEmpty || _selectedAudiences.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Title, content, and at least one target audience are required to save draft'),
+        ),
+      );
+      return;
+    }
+
+    final data = <String, dynamic>{
+      'title': title,
+      'content': content,
+      'originalContent': originalContent,
+      'aiRefinedContent': refinedContent.isNotEmpty ? refinedContent : null,
+      'audiences': _selectedAudiences.toList(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    try {
+      if (_currentDraftId != null) {
+        await FirebaseFirestore.instance
+            .collection('announcementDrafts')
+            .doc(_currentDraftId)
+            .set(data, SetOptions(merge: true));
+      } else {
+        final docRef = await FirebaseFirestore.instance
+            .collection('announcementDrafts')
+            .add({
+          ...data,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        _currentDraftId = docRef.id;
       }
-    });
+
+      await _loadDrafts();
+
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        barrierColor: Colors.transparent,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            insetPadding: const EdgeInsets.all(20),
+            child: const SuccessNotification(
+              message: 'Draft saved successfully',
+            ),
+          );
+        },
+      );
+
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted && Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save draft: $e')),
+      );
+    }
+  }
+
+  void _handlePostAnnouncement() async {
+    final title = _titleController.text.trim();
+    final originalContent = _contentController.text.trim();
+    final refinedContent = _aiRefinedController.text.trim();
+    final content =
+        _isAIRefined && refinedContent.isNotEmpty ? refinedContent : originalContent;
+
+    if (title.isEmpty || content.isEmpty || _selectedAudiences.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Title, content, and at least one target audience are required to post'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await FirebaseFirestore.instance.collection('announcements').add({
+        'title': title,
+        'content': content,
+        'originalContent': originalContent,
+        'aiRefinedContent': refinedContent.isNotEmpty ? refinedContent : null,
+        'audiences': _selectedAudiences.toList(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'status': 'published',
+      });
+
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        barrierColor: Colors.transparent,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            insetPadding: const EdgeInsets.all(20),
+            child: const SuccessNotification(
+              message: 'Announcement is posted successfully',
+            ),
+          );
+        },
+      );
+
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted && Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to post announcement: $e')),
+      );
+    }
   }
 
   @override
