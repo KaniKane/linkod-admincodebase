@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import '../widgets/app_sidebar.dart';
 import '../widgets/user_header.dart';
@@ -10,6 +12,7 @@ import '../widgets/audience_tag.dart';
 import '../utils/app_colors.dart';
 import 'dashboard_screen.dart';
 import 'announcements_screen.dart';
+import 'login_screen.dart';
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -68,7 +71,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         final demographicCategory =
             (data['category'] ?? data['demographicCategory'] ?? '') as String;
 
-        if (role == 'admin') {
+        // Schema: role is official | resident | vendor; admin panel shows "Admin" for official
+        if (role == 'admin' || role == 'official') {
           loadedAdmins.add({
             'id': doc.id,
             'name': fullName.isNotEmpty ? fullName : 'Unnamed admin',
@@ -102,7 +106,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           'phone': phoneNumber,
           'category': category.isNotEmpty
               ? category
-              : (role == 'admin'
+              : (role == 'admin' || role == 'official'
                   ? (position.isNotEmpty ? position : 'Admin')
                   : (role.isNotEmpty ? role : 'User')),
           'role': role,
@@ -587,13 +591,18 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                         try {
                                           final name = nameController.text.trim();
                                           final phone = phoneController.text.trim();
-                                          // Password is collected for future use but not used here to avoid changing auth session.
-
+                                          final now = FieldValue.serverTimestamp();
+                                          // Schema: role official | resident; email phone@linkod.com
+                                          final firestoreRole = isAdmin ? 'official' : 'resident';
                                           final data = <String, dynamic>{
                                             'fullName': name,
                                             'phoneNumber': phone,
-                                            'role': isAdmin ? 'admin' : 'user',
-                                            'createdAt': FieldValue.serverTimestamp(),
+                                            'email': phone.isNotEmpty ? '$phone@linkod.com' : null,
+                                            'role': firestoreRole,
+                                            'createdAt': now,
+                                            'updatedAt': now,
+                                            'isActive': true,
+                                            'isApproved': true,
                                           };
                                           if (isAdmin) {
                                             data['position'] = selectedPosition ?? 'Admin';
@@ -603,7 +612,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                                 : selectedCategories.join(', ');
                                           }
 
-                                          // Use phone as document ID so it is easy to reference; this does NOT affect auth.
+                                          // Direct create uses phone as doc ID (no Auth account; login requires approval flow).
                                           await FirebaseFirestore.instance
                                               .collection('users')
                                               .doc(phone)
@@ -1223,8 +1232,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 const SizedBox(width: 12),
                 Flexible(
                   child: AcceptDeclineButtons(
-                    onAccept: () => _approveAwaiting(docId, user),
-                    onDecline: () => _declineAwaiting(docId),
+                    onAccept: () => _confirmThenApprove(docId, user),
+                    onDecline: () => _showDeclineDialog(docId),
                   ),
                 ),
               ],
@@ -1235,6 +1244,35 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     );
   }
 
+  Future<void> _confirmThenApprove(String docId, Map<String, String> user) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Approve request'),
+        content: const Text(
+          'This will create the user\'s account. You will stay logged in. Continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.loginGreen,
+              foregroundColor: AppColors.white,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Approve'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      await _approveAwaiting(docId, user);
+    }
+  }
+
   Future<void> _approveAwaiting(String docId, Map<String, String> user) async {
     if (docId.isEmpty) return;
     try {
@@ -1242,48 +1280,97 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           .collection('awaitingApproval')
           .doc(docId)
           .get();
-      if (!doc.exists) {
-        return;
-      }
+      if (!doc.exists) return;
       final data = doc.data() ?? {};
       final fullName = (data['fullName'] ?? user['name'] ?? '') as String;
-      final phone = (data['phoneNumber'] ?? user['phone'] ?? '') as String;
+      final phone = (data['phoneNumber'] ?? user['phone'] ?? '').toString().trim();
+      final password = (data['password'] ?? '') as String?;
       final role = ((data['role'] ?? user['role'] ?? 'user') as String).toLowerCase();
       final position = (data['position'] ?? user['position'] ?? '') as String;
       final category =
           (data['category'] ?? data['demographicCategory'] ?? user['category'] ?? '') as String;
 
-      final userData = <String, dynamic>{
+      if (phone.isEmpty) {
+        if (mounted) setState(() => _errorMessage = 'Phone number is required to approve.');
+        return;
+      }
+      if (password == null || password.isEmpty || password.length < 6) {
+        if (mounted) setState(() => _errorMessage = 'Valid password (6+ chars) required in request to approve.');
+        return;
+      }
+
+      final adminUid = FirebaseAuth.instance.currentUser?.uid;
+      final email = '$phone@linkod.com';
+      final now = FieldValue.serverTimestamp();
+
+      // 1) As admin: mark request approved
+      await FirebaseFirestore.instance.collection('awaitingApproval').doc(docId).update({
+        'status': 'approved',
+        'reviewedBy': adminUid,
+        'reviewedAt': now,
+      });
+
+      // 2) Use a secondary Firebase App so we create the Auth user without signing out the admin
+      FirebaseApp secondaryApp;
+      try {
+        secondaryApp = Firebase.app('AuthHelper');
+      } catch (_) {
+        secondaryApp = await Firebase.initializeApp(
+          name: 'AuthHelper',
+          options: Firebase.app().options,
+        );
+      }
+      final authHelper = FirebaseAuth.instanceFor(app: secondaryApp);
+      UserCredential? userCredential;
+      try {
+        userCredential = await authHelper.createUserWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'email-already-in-use') {
+          userCredential = await authHelper.signInWithEmailAndPassword(
+            email: email,
+            password: password,
+          );
+        } else {
+          rethrow;
+        }
+      }
+
+      final newUser = userCredential?.user;
+      if (newUser == null) {
+        if (mounted) setState(() => _errorMessage = 'Failed to create or sign in to account.');
+        return;
+      }
+      final uid = newUser.uid;
+      final firestoreRole = (role == 'admin') ? 'official' : 'resident';
+
+      // 3) As admin (primary Auth unchanged): create/update users/{uid} and delete awaitingApproval
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'userId': uid,
         'fullName': fullName,
         'phoneNumber': phone,
-        'role': role.isNotEmpty ? role : 'user',
-        'createdAt': FieldValue.serverTimestamp(),
-      };
+        'email': email,
+        'role': firestoreRole,
+        'createdAt': now,
+        'updatedAt': now,
+        'isActive': true,
+        'isApproved': true,
+        if (firestoreRole == 'official') 'position': position.isNotEmpty ? position : 'Admin',
+        if (firestoreRole == 'resident') 'category': category.isNotEmpty ? category : 'User',
+      }, SetOptions(merge: true));
 
-      if (role == 'admin') {
-        userData['position'] = position.isNotEmpty ? position : 'Admin';
-      } else {
-        userData['category'] =
-            category.isNotEmpty ? category : (role.isNotEmpty ? role : 'User');
-      }
+      await FirebaseFirestore.instance.collection('awaitingApproval').doc(docId).delete();
 
-      // Use phone as doc id for users collection if available, otherwise fallback to new doc
-      final usersRef = FirebaseFirestore.instance.collection('users');
-      if (phone.isNotEmpty) {
-        await usersRef.doc(phone).set(userData, SetOptions(merge: true));
-      } else {
-        await usersRef.add(userData);
-      }
+      // Sign out from secondary app only so admin stays logged in on primary
+      await authHelper.signOut();
 
-      // Remove from awaitingApproval
-      await FirebaseFirestore.instance
-          .collection('awaitingApproval')
-          .doc(docId)
-          .delete();
-
-      if (mounted) {
-        await _loadAccounts();
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Account created successfully.')),
+      );
+      await _loadAccounts();
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -1293,9 +1380,66 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     }
   }
 
-  Future<void> _declineAwaiting(String docId) async {
+  Future<void> _showDeclineDialog(String docId) async {
+    if (docId.isEmpty) return;
+    final reasonController = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Decline request'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Optionally add a reason (visible to applicant if you use it):',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: reasonController,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  hintText: 'Reason for decline (optional)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _declineAwaiting(docId, reasonController.text.trim());
+              },
+              child: const Text('Decline'),
+            ),
+          ],
+        );
+      },
+    );
+    reasonController.dispose();
+  }
+
+  Future<void> _declineAwaiting(String docId, [String? rejectionReason]) async {
     if (docId.isEmpty) return;
     try {
+      final adminUid = FirebaseAuth.instance.currentUser?.uid;
+      final updates = <String, dynamic>{
+        'status': 'rejected',
+        'reviewedAt': FieldValue.serverTimestamp(),
+        if (adminUid != null) 'reviewedBy': adminUid,
+        if (rejectionReason != null && rejectionReason.isNotEmpty) 'rejectionReason': rejectionReason,
+      };
+      await FirebaseFirestore.instance
+          .collection('awaitingApproval')
+          .doc(docId)
+          .update(updates);
       await FirebaseFirestore.instance
           .collection('awaitingApproval')
           .doc(docId)
@@ -1315,11 +1459,18 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   Future<void> _showEditAwaitingDialog(Map<String, String> user) async {
     final nameController = TextEditingController(text: user['name'] ?? '');
     final phoneController = TextEditingController(text: user['phone'] ?? '');
-    final categoryController = TextEditingController(text: user['category'] ?? '');
     final formKey = GlobalKey<FormState>();
     bool isSubmitting = false;
     String? dialogError;
     final docId = user['id'] ?? '';
+    final isAdmin = ((user['role'] ?? '').toLowerCase() == 'admin' ||
+        (user['role'] ?? '').toLowerCase() == 'official');
+    final existingCategory = user['category'] ?? '';
+    final existingPosition = user['position'] ?? '';
+    String? selectedPosition = existingPosition.isNotEmpty ? existingPosition : null;
+    Set<String> selectedCategories = existingCategory.isEmpty
+        ? <String>{}
+        : existingCategory.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
 
     await showDialog(
       context: context,
@@ -1375,10 +1526,24 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               : null,
                         ),
                         const SizedBox(height: 16),
-                        _buildDialogTextField(
-                          label: 'Category / Position',
-                          controller: categoryController,
-                        ),
+                        if (isAdmin)
+                          _buildPositionSelector(
+                            selectedPosition: selectedPosition,
+                            onSelect: (value) => setState(() => selectedPosition = value),
+                          )
+                        else
+                          _buildDemographicSelector(
+                            selectedCategories: selectedCategories,
+                            onToggle: (value) {
+                              setState(() {
+                                if (selectedCategories.contains(value)) {
+                                  selectedCategories.remove(value);
+                                } else {
+                                  selectedCategories.add(value);
+                                }
+                              });
+                            },
+                          ),
                         const SizedBox(height: 16),
                         if (dialogError != null) ...[
                           Text(
@@ -1410,20 +1575,40 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                   ? null
                                   : () async {
                                       if (!formKey.currentState!.validate()) return;
+                                      if (isAdmin && selectedPosition == null) {
+                                        setState(() => dialogError = 'Please select a position.');
+                                        return;
+                                      }
+                                      if (!isAdmin && selectedCategories.isEmpty) {
+                                        setState(() =>
+                                            dialogError = 'Please select at least one category.');
+                                        return;
+                                      }
                                       setState(() {
                                         isSubmitting = true;
                                         dialogError = null;
                                       });
 
                                       try {
+                                        final updates = <String, dynamic>{
+                                          'fullName': nameController.text.trim(),
+                                          'phoneNumber': phoneController.text.trim(),
+                                        };
+                                        if (isAdmin) {
+                                          updates['position'] =
+                                              selectedPosition?.trim().isNotEmpty == true
+                                                  ? selectedPosition!
+                                                  : 'Admin';
+                                        } else {
+                                          updates['category'] =
+                                              selectedCategories.isEmpty
+                                                  ? 'User'
+                                                  : selectedCategories.join(', ');
+                                        }
                                         await FirebaseFirestore.instance
                                             .collection('awaitingApproval')
                                             .doc(docId)
-                                            .update({
-                                          'fullName': nameController.text.trim(),
-                                          'phoneNumber': phoneController.text.trim(),
-                                          'category': categoryController.text.trim(),
-                                        });
+                                            .update(updates);
                                         if (mounted) {
                                           await _loadAccounts();
                                           Navigator.of(context).pop();
@@ -1591,6 +1776,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                           'category': selectedCategories.isEmpty
                                               ? 'User'
                                               : selectedCategories.join(', '),
+                                          'updatedAt': FieldValue.serverTimestamp(),
+                                          'role': 'resident',
                                         });
                                         if (mounted) {
                                           await _loadAccounts();
@@ -1748,6 +1935,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                           'phoneNumber': phoneController.text.trim(),
                                           'position':
                                               positionValue.isNotEmpty ? positionValue : 'Admin',
+                                          'updatedAt': FieldValue.serverTimestamp(),
+                                          'role': 'official',
                                         });
                                         if (mounted) {
                                           await _loadAccounts();

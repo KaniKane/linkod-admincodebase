@@ -21,6 +21,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _totalAnnouncements = 0;
   bool _isLoading = false;
   String? _errorMessage;
+  final List<Map<String, dynamic>> _recentActivities = [];
 
   @override
   void initState() {
@@ -37,16 +38,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       final usersSnapshot =
           await FirebaseFirestore.instance.collection('users').get();
-      final announcementsSnapshot =
-          await FirebaseFirestore.instance.collection('announcements').get();
+      final announcementsSnapshot = await FirebaseFirestore.instance
+          .collection('announcements')
+          .orderBy('createdAt', descending: true)
+          .limit(10)
+          .get();
       final awaitingSnapshot = await FirebaseFirestore.instance
           .collection('awaitingApproval')
           .get();
+
+      final activities = <Map<String, dynamic>>[];
+      for (final doc in announcementsSnapshot.docs) {
+        final d = doc.data();
+        final title = d['title'] as String? ?? 'Announcement';
+        final postedBy = d['postedBy'] as String? ?? 'Barangay';
+        final createdAt = d['createdAt'];
+        String timestamp = '';
+        if (createdAt != null && createdAt is Timestamp) {
+          final dt = createdAt.toDate();
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          timestamp = '${months[dt.month - 1]} ${dt.day}, ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+        }
+        activities.add({
+          'description': '$postedBy posted an announcement titled $title',
+          'timestamp': timestamp,
+          'boldText': title,
+        });
+      }
 
       setState(() {
         _totalUsers = usersSnapshot.size;
         _totalAnnouncements = announcementsSnapshot.size;
         _awaitingApproval = awaitingSnapshot.size;
+        _recentActivities
+          ..clear()
+          ..addAll(activities);
         _isLoading = false;
       });
     } catch (e) {
@@ -266,28 +292,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     ),
                                   ),
                                   const SizedBox(height: 20),
-                                  // Activity list
-                                  const ActivityItem(
-                                    description:
-                                        'Noly Hinampas approved 5 new signup request.',
-                                    timestamp: 'Nov 14, 4:30pm',
-                                  ),
-                                  const ActivityItem(
-                                    description:
-                                        'Loyda Pacheco posted an announcement titled Livelihood Training Program',
-                                    timestamp: 'Nov 14, 1:24pm',
-                                    boldText: 'Livelihood Training Program',
-                                  ),
-                                  const ActivityItem(
-                                    description:
-                                        'Junty Bandayanun decline 1 signup request',
-                                    timestamp: 'Nov 3, 1:24pm',
-                                  ),
-                                  const ActivityItem(
-                                    description:
-                                        'Junty Bandayanun edited 1 user\'s demographic category',
-                                    timestamp: 'Nov 3, 1:24pm',
-                                  ),
+                                  if (_recentActivities.isEmpty)
+                                    const Padding(
+                                      padding: EdgeInsets.all(16),
+                                      child: Text(
+                                        'No recent activities.',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: AppColors.mediumGrey,
+                                        ),
+                                      ),
+                                    )
+                                  else
+                                    ..._recentActivities.map((a) => ActivityItem(
+                                          description: a['description'] as String,
+                                          timestamp: a['timestamp'] as String,
+                                          boldText: a['boldText'] as String?,
+                                        )),
                                 ],
                               ),
                             ),

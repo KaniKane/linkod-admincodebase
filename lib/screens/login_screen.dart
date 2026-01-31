@@ -73,10 +73,10 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       final data = userDoc.data() ?? {};
-      final role = data['role'] as String? ?? '';
+      final role = (data['role'] as String? ?? '').toLowerCase();
 
-      // Optional: restrict this admin app to admin users only
-      if (role.toLowerCase() != 'admin') {
+      // Restrict this admin app to admin/official users only (schema: official | resident | vendor)
+      if (role != 'admin' && role != 'official') {
         setState(() {
           _errorMessage =
               'This admin panel is only for admin accounts. Your role is "$role".';

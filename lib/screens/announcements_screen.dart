@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../widgets/app_sidebar.dart';
 import '../widgets/user_header.dart';
@@ -301,14 +302,31 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     }
 
     try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      String postedBy = 'Barangay Official';
+      String? postedByUserId;
+      if (currentUser != null) {
+        postedByUserId = currentUser.uid;
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
+        if (userDoc.exists) {
+          postedBy = (userDoc.data()?['fullName'] as String?) ?? postedBy;
+        }
+      }
       await FirebaseFirestore.instance.collection('announcements').add({
         'title': title,
         'content': content,
         'originalContent': originalContent,
         'aiRefinedContent': refinedContent.isNotEmpty ? refinedContent : null,
         'audiences': _selectedAudiences.toList(),
-        'createdAt': FieldValue.serverTimestamp(),
         'status': 'published',
+        'postedBy': postedBy,
+        if (postedByUserId != null) 'postedByUserId': postedByUserId,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'isActive': true,
       });
 
       if (!mounted) return;

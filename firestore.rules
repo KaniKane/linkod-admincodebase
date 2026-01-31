@@ -1,18 +1,90 @@
-rules_version='2'
+rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      // This rule allows anyone with your database reference to view, edit,
-      // and delete all data in your database. It is useful for getting
-      // started, but it is configured to expire after 30 days because it
-      // leaves your app open to attackers. At that time, all client
-      // requests to your database will be denied.
-      //
-      // Make sure to write security rules for your app before that time, or
-      // else all client requests to your database will be denied until you
-      // update your rules.
-      allow read, write: if request.time < timestamp.date(2026, 2, 24);
+
+    // Helper: true if current user has admin/official role in users/{uid}
+    function isOfficial() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'official'];
+    }
+
+    // Users: own doc by UID; officials can read/write all (admin panel CRUD)
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isOfficial();
+    }
+
+    // AwaitingApproval: officials read/update/delete; any auth can create (sign-up); applicant can delete own doc after approval (email matches phone@linkod.com)
+    match /awaitingApproval/{docId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if isOfficial();
+      allow delete: if request.auth != null
+        && request.auth.token.email == (resource.data.phoneNumber + '@linkod.com');
+    }
+
+    // Announcements: read by auth; write by officials
+    match /announcements/{docId} {
+      allow read: if request.auth != null;
+      allow write: if isOfficial();
+    }
+
+    // AnnouncementDrafts: officials only
+    match /announcementDrafts/{docId} {
+      allow read, write: if isOfficial();
+    }
+
+    // Posts and subcollections: auth required; owner or official can write (align with mobile)
+    match /posts/{postId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null
+        && (resource.data.userId == request.auth.uid || isOfficial());
+      match /likes/{likeId} {
+        allow read, write: if request.auth != null;
+      }
+      match /comments/{commentId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+
+    // Products and subcollection
+    match /products/{productId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null
+        && (resource.data.sellerId == request.auth.uid || isOfficial());
+      match /messages/{messageId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+
+    // Tasks and subcollection
+    match /tasks/{taskId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null
+        && (resource.data.requesterId == request.auth.uid || resource.data.assignedTo == request.auth.uid || isOfficial());
+      match /volunteers/{volunteerId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+
+    // Notifications: own by userId
+    match /notifications/{notificationId} {
+      allow read, update, delete: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+    }
+
+    // User announcement reads: own by userId
+    match /userAnnouncementReads/{readId} {
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
     }
   }
 }

@@ -53,7 +53,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       final phone = _phoneController.text.trim();
       final password = _passwordController.text;
       final position = _selectedPosition ?? '';
-      // Store request in awaitingApproval collection for admin review
+      // Store request in awaitingApproval collection for admin review (schema: status pending)
       await FirebaseFirestore.instance.collection('awaitingApproval').add({
         'fullName': name,
         'phoneNumber': phone,
@@ -61,6 +61,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         'role': 'admin',
         'position': position,
         'createdAt': FieldValue.serverTimestamp(),
+        'status': 'pending',
       });
 
       if (!mounted) return;
