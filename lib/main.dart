@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'firebase_options.dart';
+import 'services/fcm_token_service.dart';
 import 'screens/login_screen.dart';
 
 Future<void> main() async {
@@ -9,6 +10,9 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Start FCM token registration (no-op on Windows).
+  FcmTokenService.instance.start();
 
   runApp(const MyApp());
 }

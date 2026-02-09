@@ -1,0 +1,314 @@
+{
+  "description": "Rule-based audience recommendation. Keywords (regex word boundary matched) -> target audiences. Includes English and Tandaganon/Surigaonon terms.",
+  "default_audience": "General Residents",
+  "rules": [
+    {
+      "keywords": [
+        "health",
+        "medical",
+        "clinic",
+        "hospital",
+        "doctor",
+        "nurse",
+        "medicine",
+        "checkup",
+        "check-up",
+        "check up",
+        "consultation",
+        "vaccination",
+        "vaccine",
+        "immunization",
+        "dental",
+        "optical",
+        "blood",
+        "pressure",
+        "sugar",
+        "libreng gamot",
+        "gamot",
+        "tambal",
+        "doktor",
+        "nars",
+        "ospital",
+        "klinika",
+        "konsulta",
+        "bakuna",
+        "ineksyon",
+        "reseta",
+        "vitamins",
+        "bitamina",
+        "dengue",
+        "flu",
+        "sakit",
+        "pamati",
+        "lawas",
+        "kahimsog"
+      ],
+      "audiences": [
+        "Senior",
+        "PWD",
+        "Parent"
+      ]
+    },
+    {
+      "keywords": [
+        "livelihood",
+        "job",
+        "work",
+        "employment",
+        "training",
+        "seminar",
+        "workshop",
+        "business",
+        "negosyo",
+        "puhunan",
+        "loan",
+        "capital",
+        "farming",
+        "farmer",
+        "agriculture",
+        "crops",
+        "planting",
+        "harvest",
+        "fertilizer",
+        "fishing",
+        "fisherman",
+        "fisherfolk",
+        "boat",
+        "sea",
+        "catch",
+        "trabaho",
+        "hanapbuhay",
+        "kita",
+        "sweldo",
+        "panginabuhian",
+        "uma",
+        "mag-uuma",
+        "tanom",
+        "humay",
+        "mais",
+        "abuno",
+        "binhi",
+        "ani",
+        "isda",
+        "managat",
+        "mangingisda",
+        "panagatan",
+        "dagat",
+        "bukad",
+        "hingbis",
+        "tindahan",
+        "merkado",
+        "palengke",
+        "tinda"
+      ],
+      "audiences": [
+        "Farmer",
+        "Fisherman",
+        "Small Business Owner",
+        "4Ps"
+      ]
+    },
+    {
+      "keywords": [
+        "youth",
+        "young",
+        "teen",
+        "teenager",
+        "child",
+        "children",
+        "kid",
+        "student",
+        "pupil",
+        "learner",
+        "school",
+        "education",
+        "class",
+        "scholarship",
+        "sk",
+        "sangguniang kabataan",
+        "kk",
+        "katipunan ng kabataan",
+        "kabataan",
+        "bata",
+        "estudyante",
+        "eskwela",
+        "tulunghaan",
+        "klase",
+        "scholar",
+        "iskolar",
+        "linghud",
+        "sports",
+        "liga",
+        "basketball"
+      ],
+      "audiences": [
+        "Youth",
+        "Student"
+      ]
+    },
+    {
+      "keywords": [
+        "tricycle",
+        "driver",
+        "transport",
+        "vehicle",
+        "traffic",
+        "boundary",
+        "franchise",
+        "license",
+        "registration",
+        "motor",
+        "traysikol",
+        "drayber",
+        "pasahero",
+        "prangkisa",
+        "lisensya",
+        "rehistro",
+        "sakayan"
+      ],
+      "audiences": [
+        "Tricycle Driver"
+      ]
+    },
+    {
+      "keywords": [
+        "tanod",
+        "security",
+        "guard",
+        "watchman",
+        "safety",
+        "protection",
+        "peace",
+        "order",
+        "curfew",
+        "checkpoint",
+        "roving",
+        "bantay",
+        "ronda",
+        "patrol",
+        "seguridad"
+      ],
+      "audiences": [
+        "Tanod"
+      ]
+    },
+    {
+      "keywords": [
+        "barangay official",
+        "captain",
+        "kapitan",
+        "chairman",
+        "councilor",
+        "kagawad",
+        "secretary",
+        "treasurer",
+        "sk chairman",
+        "brgy",
+        "opisyales",
+        "konsehal",
+        "tess",
+        "sec",
+        "session",
+        "meeting",
+        "pulong"
+      ],
+      "audiences": [
+        "Barangay Official"
+      ]
+    },
+    {
+      "keywords": [
+        "4ps",
+        "4p's",
+        "pantawid",
+        "conditional cash",
+        "transfer",
+        "cct",
+        "dswd",
+        "social",
+        "welfare",
+        "indigent",
+        "poor",
+        "ayuda",
+        "subsidy",
+        "grant",
+        "cash",
+        "kwarta",
+        "tabang"
+      ],
+      "audiences": [
+        "4Ps"
+      ]
+    },
+    {
+      "keywords": [
+        "senior",
+        "elderly",
+        "citizen",
+        "pension",
+        "retirement",
+        "grandparent",
+        "matanda",
+        "katiguwang",
+        "edad-edaron",
+        "lolo",
+        "lola",
+        "pomyendo",
+        "senior citizen"
+      ],
+      "audiences": [
+        "Senior"
+      ]
+    },
+    {
+      "keywords": [
+        "pwd",
+        "disabled",
+        "disability",
+        "impaired",
+        "handicap",
+        "special needs",
+        "blind",
+        "deaf",
+        "wheelchair",
+        "accessibility",
+        "ramp",
+        "kapansanan",
+        "may kapansanan",
+        "baldado",
+        "piang",
+        "bungol",
+        "buta"
+      ],
+      "audiences": [
+        "PWD"
+      ]
+    },
+    {
+      "keywords": [
+        "parent",
+        "mother",
+        "father",
+        "guardian",
+        "family",
+        "household",
+        "nutrition",
+        "feeding",
+        "deworming",
+        "nanay",
+        "tatay",
+        "inahan",
+        "amahan",
+        "ginikanan",
+        "pamilya",
+        "purga",
+        "timbang",
+        "opt",
+        "operation timbang"
+      ],
+      "audiences": [
+        "Parent"
+      ]
+    }
+  ]
+}

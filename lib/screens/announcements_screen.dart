@@ -1,12 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../api/announcement_backend_api.dart';
 import '../widgets/app_sidebar.dart';
 import '../widgets/user_header.dart';
 import '../widgets/audience_tag.dart';
 import '../widgets/draft_item.dart';
 import '../widgets/success_notification.dart';
 import '../widgets/draft_saved_notification.dart';
+import '../widgets/error_notification.dart';
+import '../widgets/custom_button.dart';
+import '../widgets/outline_button.dart';
 import '../models/announcement_draft.dart';
 import '../utils/app_colors.dart';
 import 'dashboard_screen.dart';
@@ -26,7 +30,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   final _aiRefinedController = TextEditingController();
   Set<String> _selectedAudiences = {'Senior'};
   bool _isAIRefined = false;
-  final List<String> _suggestedAudiences = ['Senior', 'PWD'];
+  List<String> _suggestedAudiences = ['Senior', 'PWD'];
+  bool _isRefining = false;
 
   // Drafts loaded from Firestore
   List<AnnouncementDraft> _drafts = [];
@@ -35,6 +40,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   String? _currentDraftId;
 
   final List<String> _audienceOptions = [
+    'General Residents',
     'Senior',
     'Student',
     'PWD',
@@ -87,23 +93,79 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     });
   }
 
-  void _handleRefineWithAI() {
+  Future<void> _handleRefineWithAI() async {
     final original = _contentController.text.trim();
     if (original.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter content before refining.'),
+        SnackBar(
+          content: const ErrorNotification(
+              message: 'Please enter content before refining.'),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
         ),
       );
       return;
     }
 
-    setState(() {
-      _isAIRefined = true;
-      // Simple placeholder refinement: copy original content.
-      // In real implementation, this would be replaced by an AI-generated version.
-      _aiRefinedController.text = original;
-    });
+    setState(() => _isRefining = true);
+    try {
+      final result = await refineAnnouncementText(original);
+      if (!mounted) return;
+      setState(() {
+        _aiRefinedController.text = result.refinedText;
+        _isAIRefined = true;
+        _isRefining = false;
+      });
+      // Rule-based audience recommendation from refined text (no AI; transparent)
+      try {
+        final audienceResult = await recommendAudiences(result.refinedText);
+        if (!mounted) return;
+        setState(() {
+          _suggestedAudiences = audienceResult.audiences.isNotEmpty
+              ? audienceResult.audiences
+              : _suggestedAudiences;
+        });
+      } catch (_) {
+        // Keep previous suggested audiences if recommend-audiences fails
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const DraftSavedNotification(
+                  message: 'Audience suggestion unavailable. You can still select audiences manually.'),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } on AnnouncementBackendException catch (e) {
+      if (!mounted) return;
+      setState(() => _isRefining = false);
+      final message = e.statusCode == 503
+          ? 'Refinement failed. Is the backend running and Ollama available (llama3.2:3b)?'
+          : (e.message.length > 80 ? 'Refinement failed. Check backend.' : e.message);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: DraftSavedNotification(message: message),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isRefining = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: ErrorNotification(message: 'Refinement failed: $e'),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   void _handleEditOriginal() {
@@ -142,11 +204,13 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           title: const Text('Delete Draft'),
           content: const Text('Are you sure you want to delete this draft?'),
           actions: [
-            TextButton(
+            OutlineButton(
+              text: 'Cancel',
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
             ),
-            TextButton(
+            CustomButton(
+              text: 'Delete',
+              isFullWidth: false,
               onPressed: () async {
                 try {
                   await FirebaseFirestore.instance
@@ -166,10 +230,6 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                   Navigator.of(context).pop();
                 }
               },
-              child: const Text(
-                'Delete',
-                style: TextStyle(color: AppColors.deleteRed),
-              ),
             ),
           ],
         );
@@ -218,9 +278,12 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
 
     if (title.isEmpty || content.isEmpty || _selectedAudiences.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Title, content, and at least one target audience are required to save draft'),
+        SnackBar(
+          content: const ErrorNotification(
+              message: 'Title, content, and at least one target audience are required to save draft'),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
         ),
       );
       return;
@@ -279,7 +342,12 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save draft: $e')),
+        SnackBar(
+          content: ErrorNotification(message: 'Failed to save draft: $e'),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
   }
@@ -293,13 +361,47 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
 
     if (title.isEmpty || content.isEmpty || _selectedAudiences.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Title, content, and at least one target audience are required to post'),
+        SnackBar(
+          content: const ErrorNotification(
+              message: 'Title, content, and at least one target audience are required to post'),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
         ),
       );
       return;
     }
+
+    // Ask before posting: Cancel = do nothing; Post only = post without push; Send = post and send push.
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Post announcement'),
+          content: Text(
+            'Audience: ${_selectedAudiences.join(', ')}\n\n'
+            'Choose how to publish:',
+          ),
+          actions: [
+            OutlineButton(
+              text: 'Cancel',
+              onPressed: () => Navigator.of(context).pop('cancel'),
+            ),
+            OutlineButton(
+              text: 'Post only',
+              onPressed: () => Navigator.of(context).pop('post_only'),
+            ),
+            CustomButton(
+              text: 'Post and send push',
+              isFullWidth: false,
+              onPressed: () => Navigator.of(context).pop('post_and_push'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (choice == null || choice == 'cancel') return;
 
     try {
       final currentUser = FirebaseAuth.instance.currentUser;
@@ -315,7 +417,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           postedBy = (userDoc.data()?['fullName'] as String?) ?? postedBy;
         }
       }
-      await FirebaseFirestore.instance.collection('announcements').add({
+      final announcementRef =
+          await FirebaseFirestore.instance.collection('announcements').add({
         'title': title,
         'content': content,
         'originalContent': originalContent,
@@ -330,6 +433,52 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       });
 
       if (!mounted) return;
+
+      final shouldSendPush = choice == 'post_and_push';
+      if (shouldSendPush) {
+        final notifBody = content.length > 140
+            ? '${content.substring(0, 137)}...'
+            : content;
+        try {
+          final result = await sendAnnouncementPush(
+            announcementId: announcementRef.id,
+            title: title,
+            body: notifBody,
+            audiences: _selectedAudiences.toList(),
+            requestedByUserId: postedByUserId,
+          );
+
+          if (!mounted) return;
+          final String msg;
+          if (result.tokenCount == 0) {
+            if (result.userCount == 0) {
+              msg = 'No residents matched the selected audiences. Check User Management: role=resident, approved, active, and Demographic category (categories array) matches the chosen audiences.';
+            } else {
+              msg = 'No valid tokens. ${result.userCount} resident(s) matched but none have FCM tokens. Ensure the mobile app has been opened after login on the target device(s).';
+            }
+          } else {
+            msg = 'Push sent: ${result.successCount}/${result.tokenCount} token(s).';
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: DraftSavedNotification(message: msg),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: ErrorNotification(message: 'Push send failed: $e'),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
 
       showDialog(
         context: context,
@@ -355,7 +504,12 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to post announcement: $e')),
+        SnackBar(
+          content: ErrorNotification(message: 'Failed to post announcement: $e'),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
   }
@@ -682,7 +836,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Based on your content, we recommend targeting these groups:',
+                    'Rule-based suggestion from your content (review and edit as needed):',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.normal,
@@ -780,23 +934,32 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
 
   Widget _buildAIButton() {
     return MouseRegion(
-      cursor: SystemMouseCursors.click,
+      cursor: _isRefining ? SystemMouseCursors.basic : SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: _handleRefineWithAI,
+        onTap: _isRefining ? null : _handleRefineWithAI,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           decoration: BoxDecoration(
-            color: AppColors.primaryGreen,
+            color: _isRefining ? AppColors.mediumGrey : AppColors.primaryGreen,
             borderRadius: BorderRadius.circular(25),
           ),
-          child: const Text(
-            'Refine text with AI',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.normal,
-              color: AppColors.white,
-            ),
-          ),
+          child: _isRefining
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.white),
+                  ),
+                )
+              : const Text(
+                  'Refine text with AI',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.normal,
+                    color: AppColors.white,
+                  ),
+                ),
         ),
       ),
     );

@@ -27,7 +27,7 @@ class AppSidebar extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 12 : 20),
             child: Image.asset(
               'assets/img/logo/linkod_logo_2.png',
-              height: isSmallScreen ? 48 : 56,
+              height: isSmallScreen ? 60 : 100,
               fit: BoxFit.contain,
             ),
           ),

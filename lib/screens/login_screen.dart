@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../utils/app_colors.dart';
 import '../widgets/custom_link.dart';
+import '../widgets/error_notification.dart';
 import 'create_account_screen.dart';
 import 'dashboard_screen.dart';
 
@@ -21,6 +22,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _isLoading = false;
   String? _errorMessage;
+  bool _passwordObscure = true;
 
   @override
   void dispose() {
@@ -65,6 +67,20 @@ class _LoginScreenState extends State<LoginScreen> {
           .get();
 
       if (!userDoc.exists) {
+        // Check if they signed up but are still pending approval
+        final pendingQuery = await FirebaseFirestore.instance
+            .collection('awaitingApproval')
+            .where('uid', isEqualTo: user.uid)
+            .limit(1)
+            .get();
+        if (pendingQuery.docs.isNotEmpty) {
+          setState(() {
+            _errorMessage =
+                'Your account is pending approval. You will be notified when an admin approves your request.';
+          });
+          await FirebaseAuth.instance.signOut();
+          return;
+        }
         setState(() {
           _errorMessage =
               'Profile not found. Please contact support or create an account.';
@@ -285,7 +301,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 child: TextFormField(
                   controller: _passwordController,
-                  obscureText: true,
+                  obscureText: _passwordObscure,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Password is required';
@@ -296,16 +312,25 @@ class _LoginScreenState extends State<LoginScreen> {
                     fontSize: 16,
                     color: AppColors.darkGrey,
                   ),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: '************',
-                    hintStyle: TextStyle(
+                    hintStyle: const TextStyle(
                       fontSize: 16,
                       color: AppColors.lightGrey,
                     ),
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
+                    contentPadding: const EdgeInsets.symmetric(
                       horizontal: 15,
                       vertical: 15,
+                    ),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _passwordObscure ? Icons.visibility_off : Icons.visibility,
+                        color: AppColors.darkGrey,
+                        size: 22,
+                      ),
+                      onPressed: () =>
+                          setState(() => _passwordObscure = !_passwordObscure),
                     ),
                   ),
                 ),
@@ -313,13 +338,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 35),
 
               if (_errorMessage != null) ...[
-                Text(
-                  _errorMessage!,
-                  style: const TextStyle(
-                    color: Colors.red,
-                    fontSize: 14,
-                  ),
-                ),
+                ErrorNotification(message: _errorMessage!),
                 const SizedBox(height: 16),
               ],
               

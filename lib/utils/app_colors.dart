@@ -35,6 +35,7 @@ class AppColors {
   // Action colors
   static const Color deleteRed = Color(0xFFE74C3C);
   static const Color deleteRedAlt = Color(0xFFC0392B);
+  static const Color errorBannerBg = Color(0xFFF5D0D0); // Light red for error notifications (draft-style)
   
   // Shadow
   static Color shadowColor = Colors.black.withOpacity(0.1);

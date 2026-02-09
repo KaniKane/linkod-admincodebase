@@ -14,13 +14,22 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
       allow read, write: if isOfficial();
+      
+      // Devices subcollection: users can manage their own device tokens (FCM)
+      match /devices/{deviceId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read, write: if isOfficial();
+      }
     }
 
-    // AwaitingApproval: officials read/update/delete; any auth can create (sign-up); applicant can delete own doc after approval (email matches phone@linkod.com)
+    // AwaitingApproval: officials read/update/delete; any auth can create (sign-up).
+    // Creator can update (e.g. add fcmTokens for approval push); applicant can delete own doc after approval.
     match /awaitingApproval/{docId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
-      allow update, delete: if isOfficial();
+      allow update: if isOfficial()
+        || (request.auth != null && resource.data.requestedByUid == request.auth.uid);
+      allow delete: if isOfficial();
       allow delete: if request.auth != null
         && request.auth.token.email == (resource.data.phoneNumber + '@linkod.com');
     }
@@ -33,6 +42,11 @@ service cloud.firestore {
 
     // AnnouncementDrafts: officials only
     match /announcementDrafts/{docId} {
+      allow read, write: if isOfficial();
+    }
+
+    // Admin activities (recent activity feed: approvals, declines, user created)
+    match /adminActivities/{docId} {
       allow read, write: if isOfficial();
     }
 

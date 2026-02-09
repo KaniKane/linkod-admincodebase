@@ -1,8 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../utils/app_colors.dart';
 import '../widgets/custom_link.dart';
+import '../widgets/draft_saved_notification.dart';
+import '../widgets/error_notification.dart';
 import 'login_screen.dart';
 
 class CreateAccountScreen extends StatefulWidget {
@@ -21,6 +24,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
   bool _isLoading = false;
   String? _errorMessage;
+  bool _passwordObscure = true;
 
   final List<String> _barangayPositions = [
     'Barangay Captain',
@@ -53,24 +57,50 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       final phone = _phoneController.text.trim();
       final password = _passwordController.text;
       final position = _selectedPosition ?? '';
-      // Store request in awaitingApproval collection for admin review (schema: status pending)
+      final email = '$phone@linkod.com';
+
+      // Create Firebase Auth user so they can log in with same credentials (before or after approval)
+      final userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: email, password: password);
+      final uid = userCredential.user?.uid;
+      if (uid == null) {
+        setState(() => _errorMessage = 'Failed to create account. Please try again.');
+        return;
+      }
+
+      // Store request in awaitingApproval for admin review (no password; Auth already created)
       await FirebaseFirestore.instance.collection('awaitingApproval').add({
+        'uid': uid,
         'fullName': name,
         'phoneNumber': phone,
-        'password': password, // NOTE: for production, never store plain passwords.
         'role': 'admin',
         'position': position,
         'createdAt': FieldValue.serverTimestamp(),
         'status': 'pending',
       });
 
+      await FirebaseAuth.instance.signOut();
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account request submitted for approval')),
+        SnackBar(
+          content: const DraftSavedNotification(
+              message: 'Account request submitted for approval. You can log in with your phone and password; access will be granted after approval.'),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
 
-      // Navigate back to login
       _navigateToLogin();
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'email-already-in-use') {
+        setState(() {
+          _errorMessage = 'An account with this phone number already exists. Try logging in or wait for approval.';
+        });
+      } else {
+        setState(() => _errorMessage = e.message ?? 'Sign up failed: ${e.code}');
+      }
     } catch (e) {
       setState(() {
         _errorMessage = 'Unexpected error: $e';
@@ -307,7 +337,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 ),
                 child: TextFormField(
                   controller: _passwordController,
-                  obscureText: true,
+                  obscureText: _passwordObscure,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Password is required';
@@ -321,16 +351,25 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                     fontSize: 16,
                     color: AppColors.darkGrey,
                   ),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: '********',
-                    hintStyle: TextStyle(
+                    hintStyle: const TextStyle(
                       fontSize: 16,
                       color: AppColors.lightGrey,
                     ),
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
+                    contentPadding: const EdgeInsets.symmetric(
                       horizontal: 15,
                       vertical: 15,
+                    ),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _passwordObscure ? Icons.visibility_off : Icons.visibility,
+                        color: AppColors.darkGrey,
+                        size: 22,
+                      ),
+                      onPressed: () =>
+                          setState(() => _passwordObscure = !_passwordObscure),
                     ),
                   ),
                 ),
@@ -399,13 +438,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               const SizedBox(height: 30),
               
               if (_errorMessage != null) ...[
-                Text(
-                  _errorMessage!,
-                  style: const TextStyle(
-                    color: Colors.red,
-                    fontSize: 14,
-                  ),
-                ),
+                ErrorNotification(message: _errorMessage!),
                 const SizedBox(height: 12),
               ],
 

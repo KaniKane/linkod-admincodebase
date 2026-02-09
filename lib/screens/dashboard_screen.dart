@@ -48,23 +48,62 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .get();
 
       final activities = <Map<String, dynamic>>[];
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
       for (final doc in announcementsSnapshot.docs) {
         final d = doc.data();
         final title = d['title'] as String? ?? 'Announcement';
         final postedBy = d['postedBy'] as String? ?? 'Barangay';
         final createdAt = d['createdAt'];
         String timestamp = '';
+        DateTime? sortAt;
         if (createdAt != null && createdAt is Timestamp) {
           final dt = createdAt.toDate();
-          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          sortAt = dt;
           timestamp = '${months[dt.month - 1]} ${dt.day}, ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
         }
         activities.add({
           'description': '$postedBy posted an announcement titled $title',
           'timestamp': timestamp,
           'boldText': title,
+          'sortAt': sortAt,
         });
       }
+
+      final adminActivitiesSnapshot = await FirebaseFirestore.instance
+          .collection('adminActivities')
+          .orderBy('createdAt', descending: true)
+          .limit(10)
+          .get();
+
+      for (final doc in adminActivitiesSnapshot.docs) {
+        final d = doc.data();
+        final description = d['description'] as String? ?? 'Activity';
+        final fullName = d['fullName'] as String? ?? '';
+        final createdAt = d['createdAt'];
+        String timestamp = '';
+        DateTime? sortAt;
+        if (createdAt != null && createdAt is Timestamp) {
+          final dt = createdAt.toDate();
+          sortAt = dt;
+          timestamp = '${months[dt.month - 1]} ${dt.day}, ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+        }
+        activities.add({
+          'description': description,
+          'timestamp': timestamp,
+          'boldText': fullName.isNotEmpty ? fullName : null,
+          'sortAt': sortAt,
+        });
+      }
+
+      activities.sort((a, b) {
+        final aAt = a['sortAt'] as DateTime?;
+        final bAt = b['sortAt'] as DateTime?;
+        if (aAt == null && bAt == null) return 0;
+        if (aAt == null) return 1;
+        if (bAt == null) return -1;
+        return bAt.compareTo(aAt);
+      });
 
       setState(() {
         _totalUsers = usersSnapshot.size;

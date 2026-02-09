@@ -32,8 +32,8 @@ class _UserHeaderState extends State<UserHeader> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 40,
-              height: 40,
+              width: 60,
+              height: 60,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: AppColors.inputBackground,
@@ -45,7 +45,7 @@ class _UserHeaderState extends State<UserHeader> {
               child: const Icon(
                 Icons.person,
                 color: AppColors.darkGrey,
-                size: 24,
+                size: 36,
               ),
             ),
             const SizedBox(width: 12),
