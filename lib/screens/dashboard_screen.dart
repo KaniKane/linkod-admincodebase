@@ -6,6 +6,7 @@ import '../widgets/activity_item.dart';
 import '../widgets/user_header.dart';
 import '../utils/app_colors.dart';
 import 'announcements_screen.dart';
+import 'approvals_screen.dart';
 import 'user_management_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -159,6 +160,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   context,
                   MaterialPageRoute(
                     builder: (context) => const AnnouncementsScreen(),
+                  ),
+                );
+              } else if (route == '/approvals') {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ApprovalsScreen(),
                   ),
                 );
               } else if (route == '/user-management') {

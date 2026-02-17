@@ -11,9 +11,11 @@ import '../widgets/draft_saved_notification.dart';
 import '../widgets/error_notification.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/outline_button.dart';
+import '../widgets/dialog_container.dart';
 import '../models/announcement_draft.dart';
 import '../utils/app_colors.dart';
 import 'dashboard_screen.dart';
+import 'approvals_screen.dart';
 import 'user_management_screen.dart';
 
 class AnnouncementsScreen extends StatefulWidget {
@@ -32,12 +34,19 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   bool _isAIRefined = false;
   List<String> _suggestedAudiences = ['Senior', 'PWD'];
   bool _isRefining = false;
+  bool _isSuggestingDemographic = false;
 
   // Drafts loaded from Firestore
   List<AnnouncementDraft> _drafts = [];
 
+  // Published announcements (Approved) for Posts tab; officials see only their own
+  List<Map<String, dynamic>> _publishedAnnouncements = [];
+
   // Currently edited draft id (if any)
   String? _currentDraftId;
+  
+  // Current user role for permission checks
+  String? _currentUserRole;
 
   final List<String> _audienceOptions = [
     'General Residents',
@@ -59,6 +68,73 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   void initState() {
     super.initState();
     _loadDrafts();
+    _loadCurrentUserRole();
+    _loadPublishedAnnouncements();
+  }
+
+  static DateTime? _parseTimestamp(dynamic t) {
+    if (t == null) return null;
+    if (t is Timestamp) return t.toDate();
+    if (t is DateTime) return t;
+    return null;
+  }
+
+  Future<void> _loadPublishedAnnouncements() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('announcements')
+          .where('status', isEqualTo: 'Approved')
+          .get();
+      var list = snapshot.docs.map((doc) {
+        final d = doc.data();
+        return {
+          'id': doc.id,
+          'title': d['title'] as String? ?? '',
+          'content': d['content'] as String? ?? '',
+          'postedBy': d['postedBy'] as String? ?? '',
+          'postedByUserId': d['postedByUserId'] as String?,
+          'createdAt': _parseTimestamp(d['createdAt']),
+        };
+      }).toList();
+      String role = (_currentUserRole ?? 'official').toLowerCase();
+      if (role == 'official' && currentUser != null) {
+        list = list.where((a) => a['postedByUserId'] == currentUser.uid).toList();
+      }
+      list.sort((a, b) {
+        final aT = a['createdAt'] as DateTime? ?? DateTime(0);
+        final bT = b['createdAt'] as DateTime? ?? DateTime(0);
+        return bT.compareTo(aT);
+      });
+      if (mounted) setState(() => _publishedAnnouncements = list);
+    } catch (_) {
+      if (mounted) setState(() => _publishedAnnouncements = []);
+    }
+  }
+  
+  Future<void> _loadCurrentUserRole() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      try {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
+        if (userDoc.exists && mounted) {
+          final role = (userDoc.data()?['role'] as String? ?? 'official').toLowerCase();
+          setState(() {
+            _currentUserRole = role;
+          });
+        }
+      } catch (_) {
+        // Silently handle error, default to 'official'
+        if (mounted) {
+          setState(() {
+            _currentUserRole = 'official';
+          });
+        }
+      }
+    }
   }
 
   @override
@@ -74,6 +150,11 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const DashboardScreen()),
+      );
+    } else if (route == '/approvals') {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const ApprovalsScreen()),
       );
     } else if (route == '/user-management') {
       Navigator.pushReplacement(
@@ -183,14 +264,12 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   void _handleEditDraft(AnnouncementDraft draft) {
     setState(() {
       _titleController.text = draft.title;
-      _contentController.text = draft.content;
+      // Original content in Content field, refined in AI-Refined field
+      _contentController.text = draft.originalContent ?? draft.content;
       _selectedAudiences = Set.from(draft.selectedAudiences);
-      _isAIRefined = draft.aiRefinedContent != null;
-      if (draft.aiRefinedContent != null) {
-        _aiRefinedController.text = draft.aiRefinedContent!;
-      } else {
-        _aiRefinedController.clear();
-      }
+      final hasRefined = (draft.aiRefinedContent ?? '').trim().isNotEmpty;
+      _isAIRefined = hasRefined;
+      _aiRefinedController.text = draft.aiRefinedContent ?? '';
       _currentDraftId = draft.id;
       _activeTabIndex = 0; // Switch to Compose tab
     });
@@ -254,6 +333,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           id: doc.id,
           title: (data['title'] ?? '') as String,
           content: (data['content'] ?? '') as String,
+          originalContent: data['originalContent'] as String?,
           selectedAudiences: audiences.toSet(),
           aiRefinedContent: data['aiRefinedContent'] as String?,
         );
@@ -266,6 +346,63 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       }
     } catch (_) {
       // Silently ignore load errors for now.
+    }
+  }
+
+  /// Suggest demographics from current content (refined if available, else original).
+  /// Allows rule-based targeting without using "Refine text with AI".
+  /// Sends title + body so rules match against both (works when only original content exists).
+  Future<void> _handleSuggestDemographic() async {
+    final title = _titleController.text.trim();
+    final refined = _aiRefinedController.text.trim();
+    final original = _contentController.text.trim();
+    final body = refined.isNotEmpty ? refined : original;
+    final text = [title, body].where((s) => s.isNotEmpty).join('\n\n');
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const ErrorNotification(
+              message: 'Please enter title or content first to suggest demographics.'),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    setState(() => _isSuggestingDemographic = true);
+    try {
+      final audienceResult = await recommendAudiences(text);
+      if (!mounted) return;
+      setState(() {
+        _suggestedAudiences = audienceResult.audiences.isNotEmpty
+            ? audienceResult.audiences
+            : _suggestedAudiences;
+        _isSuggestingDemographic = false;
+      });
+    } on AnnouncementBackendException catch (e) {
+      if (!mounted) return;
+      setState(() => _isSuggestingDemographic = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: DraftSavedNotification(
+              message: e.message.length > 80 ? 'Suggestion failed. Check backend.' : e.message),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSuggestingDemographic = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: ErrorNotification(message: 'Suggest demographic failed: $e'),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -372,41 +509,13 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       return;
     }
 
-    // Ask before posting: Cancel = do nothing; Post only = post without push; Send = post and send push.
-    final choice = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Post announcement'),
-          content: Text(
-            'Audience: ${_selectedAudiences.join(', ')}\n\n'
-            'Choose how to publish:',
-          ),
-          actions: [
-            OutlineButton(
-              text: 'Cancel',
-              onPressed: () => Navigator.of(context).pop('cancel'),
-            ),
-            OutlineButton(
-              text: 'Post only',
-              onPressed: () => Navigator.of(context).pop('post_only'),
-            ),
-            CustomButton(
-              text: 'Post and send push',
-              isFullWidth: false,
-              onPressed: () => Navigator.of(context).pop('post_and_push'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (choice == null || choice == 'cancel') return;
-
     try {
       final currentUser = FirebaseAuth.instance.currentUser;
       String postedBy = 'Barangay Official';
       String? postedByUserId;
+      String? postedByPosition;
+      String currentUserRole = 'official'; // Default fallback
+      
       if (currentUser != null) {
         postedByUserId = currentUser.uid;
         final userDoc = await FirebaseFirestore.instance
@@ -414,9 +523,75 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             .doc(currentUser.uid)
             .get();
         if (userDoc.exists) {
-          postedBy = (userDoc.data()?['fullName'] as String?) ?? postedBy;
+          final userData = userDoc.data() ?? {};
+          postedBy = (userData['fullName'] as String?) ?? postedBy;
+          postedByPosition = userData['position'] as String?;
+          currentUserRole = ((userData['role'] as String?) ?? 'official').toLowerCase();
         }
       }
+      
+      // Role-based status: SUPER ADMIN publishes directly, OFFICIAL creates as Pending
+      final canPublishDirectly = currentUserRole == 'super_admin';
+      final status = canPublishDirectly ? 'Approved' : 'Pending';
+
+      // OFFICIAL: no push option (push only when admin approves). SUPER ADMIN: choose post only or post + push.
+      String? choice;
+      if (canPublishDirectly) {
+        choice = await showDialog<String>(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text('Post announcement'),
+              content: Text(
+                'Audience: ${_selectedAudiences.join(', ')}\n\n'
+                'Choose how to publish:',
+              ),
+              actions: [
+                OutlineButton(
+                  text: 'Cancel',
+                  onPressed: () => Navigator.of(context).pop('cancel'),
+                ),
+                OutlineButton(
+                  text: 'Post only',
+                  onPressed: () => Navigator.of(context).pop('post_only'),
+                ),
+                CustomButton(
+                  text: 'Post and send push',
+                  isFullWidth: false,
+                  onPressed: () => Navigator.of(context).pop('post_and_push'),
+                ),
+              ],
+            );
+          },
+        );
+      } else {
+        choice = await showDialog<String>(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text('Submit for approval'),
+              content: Text(
+                'Audience: ${_selectedAudiences.join(', ')}\n\n'
+                'Your announcement will be sent to the admin/kapitan for approval. Push will be sent only after approval.',
+              ),
+              actions: [
+                OutlineButton(
+                  text: 'Cancel',
+                  onPressed: () => Navigator.of(context).pop('cancel'),
+                ),
+                CustomButton(
+                  text: 'Submit for approval',
+                  isFullWidth: false,
+                  onPressed: () => Navigator.of(context).pop('post_only'),
+                ),
+              ],
+            );
+          },
+        );
+      }
+
+    if (choice == null || choice == 'cancel') return;
+      
       final announcementRef =
           await FirebaseFirestore.instance.collection('announcements').add({
         'title': title,
@@ -424,8 +599,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         'originalContent': originalContent,
         'aiRefinedContent': refinedContent.isNotEmpty ? refinedContent : null,
         'audiences': _selectedAudiences.toList(),
-        'status': 'published',
+        'status': status,
         'postedBy': postedBy,
+        if (postedByPosition != null && postedByPosition.isNotEmpty) 'postedByPosition': postedByPosition,
         if (postedByUserId != null) 'postedByUserId': postedByUserId,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -434,7 +610,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
 
       if (!mounted) return;
 
-      final shouldSendPush = choice == 'post_and_push';
+      // Only send push when SUPER ADMIN chose "post and send push". OFFICIAL posts are Pending — push sent when admin approves.
+      final shouldSendPush = choice == 'post_and_push' && canPublishDirectly;
       if (shouldSendPush) {
         final notifBody = content.length > 140
             ? '${content.substring(0, 137)}...'
@@ -480,6 +657,10 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         }
       }
 
+      final successMessage = canPublishDirectly
+          ? 'Announcement is posted successfully'
+          : 'Announcement submitted for approval. It will appear after admin approval.';
+      
       showDialog(
         context: context,
         barrierColor: Colors.transparent,
@@ -489,8 +670,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             backgroundColor: Colors.transparent,
             elevation: 0,
             insetPadding: const EdgeInsets.all(20),
-            child: const SuccessNotification(
-              message: 'Announcement is posted successfully',
+            child: SuccessNotification(
+              message: successMessage,
             ),
           );
         },
@@ -568,7 +749,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                               padding: const EdgeInsets.all(32),
                               child: _activeTabIndex == 0
                                   ? _buildComposeTab()
-                                  : _buildDraftTab(),
+                                  : _activeTabIndex == 1
+                                      ? _buildDraftTab()
+                                      : _buildPostsTab(),
                             ),
                           ),
                         ],
@@ -600,6 +783,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           _buildTab('Compose', 0),
           const SizedBox(width: 32),
           _buildTab('Draft', 1),
+          const SizedBox(width: 32),
+          _buildTab('Posts', 2),
         ],
       ),
     );
@@ -614,6 +799,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           setState(() {
             _activeTabIndex = index;
           });
+          if (index == 2) _loadPublishedAnnouncements();
         },
         child: Container(
           padding: const EdgeInsets.only(bottom: 16, top: 16),
@@ -737,11 +923,19 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          // AI Refine button
-          _buildAIButton(),
-          // AI-Refined Version section
+          // AI Refine and Suggest demographic buttons
+          Row(
+            children: [
+              _buildAIButton(),
+              const SizedBox(width: 12),
+              _buildSuggestDemographicButton(),
+            ],
+          ),
+          // Spacing so Suggested Audiences never overlaps buttons (when refined box is absent)
+          const SizedBox(height: 24),
+          // AI-Refined Version section (only when user has refined)
           if (_isAIRefined) ...[
-            const SizedBox(height: 32),
+            const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -806,86 +1000,86 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               ),
             ),
             const SizedBox(height: 32),
-            // Suggested Audiences section
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.suggestedAudienceBg,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.lightbulb_outline,
-                        color: AppColors.darkGrey,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Suggested Audiences',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.darkGrey,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Rule-based suggestion from your content (review and edit as needed):',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.normal,
-                      color: AppColors.mediumGrey,
+          ],
+          // Suggested Audiences section (always visible so "Suggest demographic" works without refining)
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.suggestedAudienceBg,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.lightbulb_outline,
+                      color: AppColors.darkGrey,
+                      size: 20,
                     ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Suggested Audiences',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.darkGrey,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Rule-based suggestion from your content (review and edit as needed):',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.normal,
+                    color: AppColors.mediumGrey,
                   ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: _suggestedAudiences.map((audience) {
-                      final isAlreadySelected = _selectedAudiences.contains(audience);
-                      return MouseRegion(
-                        cursor: SystemMouseCursors.click,
-                        child: GestureDetector(
-                          onTap: () {
-                            if (!isAlreadySelected) {
-                              _handleAddSuggestedAudience(audience);
-                            }
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: AppColors.white,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: AppColors.primaryGreen,
-                                width: 1,
-                              ),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: _suggestedAudiences.map((audience) {
+                    final isAlreadySelected = _selectedAudiences.contains(audience);
+                    return MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: () {
+                          if (!isAlreadySelected) {
+                            _handleAddSuggestedAudience(audience);
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AppColors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: AppColors.primaryGreen,
+                              width: 1,
                             ),
-                            child: Text(
-                              isAlreadySelected
-                                  ? audience
-                                  : '$audience (Click to add)',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.normal,
-                                color: AppColors.darkGrey,
-                              ),
+                          ),
+                          child: Text(
+                            isAlreadySelected
+                                ? audience
+                                : '$audience (Click to add)',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.normal,
+                              color: AppColors.darkGrey,
                             ),
                           ),
                         ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
             ),
-          ],
+          ),
           const SizedBox(height: 32),
           // Target Audience section
           const Text(
@@ -965,6 +1159,43 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     );
   }
 
+  Widget _buildSuggestDemographicButton() {
+    return MouseRegion(
+      cursor: _isSuggestingDemographic
+          ? SystemMouseCursors.basic
+          : SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: _isSuggestingDemographic ? null : _handleSuggestDemographic,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          decoration: BoxDecoration(
+            color: _isSuggestingDemographic
+                ? AppColors.mediumGrey
+                : AppColors.primaryGreen,
+            borderRadius: BorderRadius.circular(25),
+          ),
+          child: _isSuggestingDemographic
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.white),
+                  ),
+                )
+              : const Text(
+                  'Suggest demographic',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.normal,
+                    color: AppColors.white,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildDraftButton() {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -994,6 +1225,11 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   }
 
   Widget _buildPostButton() {
+    // STAFF cannot create announcements
+    if (_currentUserRole == 'staff') {
+      return const SizedBox.shrink();
+    }
+    
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
@@ -1004,9 +1240,10 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             color: AppColors.primaryGreen,
             borderRadius: BorderRadius.circular(10),
           ),
-          child: const Text(
-            'Post Announcement',
-            style: TextStyle(
+          child: Text(
+            // Show different text for OFFICIAL (pending approval) vs SUPER ADMIN (direct publish)
+            _currentUserRole == 'super_admin' ? 'Post Announcement' : 'Submit for Approval',
+            style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.normal,
               color: AppColors.white,
@@ -1073,6 +1310,233 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               },
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPostsTab() {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.shadowColor,
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Published Posts',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: AppColors.darkGrey,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _currentUserRole == 'super_admin'
+                ? 'All approved announcements. Tap "View readers" to see who read each post.'
+                : 'Your approved announcements. Tap "View readers" to see who read each post.',
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppColors.mediumGrey,
+            ),
+          ),
+          const SizedBox(height: 24),
+          if (_publishedAnnouncements.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(40),
+                child: Text(
+                  'No published posts yet',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.normal,
+                    color: AppColors.mediumGrey,
+                  ),
+                ),
+              ),
+            )
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _publishedAnnouncements.length,
+              itemBuilder: (context, index) {
+                final a = _publishedAnnouncements[index];
+                final id = a['id'] as String;
+                final title = a['title'] as String? ?? '';
+                final createdAt = a['createdAt'] as DateTime?;
+                final dateStr = createdAt != null
+                    ? createdAt.toIso8601String().substring(0, 16).replaceFirst('T', ' ')
+                    : '—';
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.dashboardInnerBg,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.inputBackground),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title.isNotEmpty ? title : 'Untitled',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.darkGrey,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                dateStr,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.mediumGrey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        SizedBox(
+                          width: 120,
+                          child: OutlineButton(
+                            text: 'View readers',
+                            onPressed: () => _showViewReadersModal(id, title),
+                            isFullWidth: true,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showViewReadersModal(String announcementId, String title) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('announcements')
+        .doc(announcementId)
+        .collection('views')
+        .get();
+    final readers = snapshot.docs.map((doc) {
+      final d = doc.data();
+      final viewedAt = _parseTimestamp(d['viewedAt']);
+      return {
+        'userId': d['userId'] as String? ?? doc.id,
+        'viewedAt': viewedAt,
+      };
+    }).toList();
+
+    final readersWithNames = <Map<String, dynamic>>[];
+    for (final reader in readers) {
+      final userId = reader['userId'] as String?;
+      if (userId != null && userId.isNotEmpty) {
+        try {
+          final userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .get();
+          final fullName = userDoc.exists
+              ? (userDoc.data()?['fullName'] as String? ?? userId)
+              : userId;
+          readersWithNames.add({
+            'userId': userId,
+            'fullName': fullName,
+            'viewedAt': reader['viewedAt'],
+          });
+        } catch (_) {
+          readersWithNames.add({
+            'userId': userId,
+            'fullName': userId,
+            'viewedAt': reader['viewedAt'],
+          });
+        }
+      }
+    }
+
+    readersWithNames.sort((a, b) {
+      final aT = a['viewedAt'] as DateTime? ?? DateTime(0);
+      final bT = b['viewedAt'] as DateTime? ?? DateTime(0);
+      return bT.compareTo(aT);
+    });
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (context) => DialogContainer(
+        title: 'View Readers: ${title.isNotEmpty ? title : announcementId}',
+        maxWidth: 480,
+        child: readersWithNames.isEmpty
+            ? const Text(
+                'No readers yet.',
+                style: TextStyle(color: AppColors.mediumGrey),
+              )
+            : ListView.builder(
+                shrinkWrap: true,
+                itemCount: readersWithNames.length,
+                itemBuilder: (context, i) {
+                  final r = readersWithNames[i];
+                  final viewedAt = r['viewedAt'] as DateTime?;
+                  final viewedStr = viewedAt != null
+                      ? '${viewedAt.toIso8601String().substring(0, 16)}'
+                      : '—';
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            r['fullName'] as String? ?? r['userId'] as String? ?? '',
+                            style: const TextStyle(fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text(
+                          viewedStr,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.mediumGrey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+        actions: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            SizedBox(
+              width: 110,
+              child: OutlineButton(
+                text: 'Close',
+                onPressed: () => Navigator.of(context).pop(),
+                isFullWidth: true,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

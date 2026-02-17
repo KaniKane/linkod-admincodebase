@@ -91,11 +91,12 @@ class _LoginScreenState extends State<LoginScreen> {
       final data = userDoc.data() ?? {};
       final role = (data['role'] as String? ?? '').toLowerCase();
 
-      // Restrict this admin app to admin/official users only (schema: official | resident | vendor)
-      if (role != 'admin' && role != 'official') {
+      // Restrict this admin app to super_admin/official/staff users only
+      // Schema: super_admin | official | staff | resident | vendor
+      if (role != 'super_admin' && role != 'official' && role != 'staff') {
         setState(() {
           _errorMessage =
-              'This admin panel is only for admin accounts. Your role is "$role".';
+              'This admin panel is only for admin/official/staff accounts. Your role is "$role".';
         });
         await FirebaseAuth.instance.signOut();
         return;
@@ -285,7 +286,7 @@ class _LoginScreenState extends State<LoginScreen> {
               
               // Password Field
               const Text(
-                'Password',
+                'Password (min 6 characters)',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.normal,
@@ -305,6 +306,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Password is required';
+                    }
+                    if (value.length < 6) {
+                      return 'Password must be at least 6 characters';
                     }
                     return null;
                   },
