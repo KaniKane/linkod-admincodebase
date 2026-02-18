@@ -35,12 +35,20 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
   
   // Current user role for permission checks
   String? _currentUserRole;
+  bool _autoApproveAnnouncements = false;
+  bool _autoApproveProducts = false;
+  bool _autoApproveTasks = false;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
-    _loadCurrentUserRole();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await _loadCurrentUserRole();
+    await _loadAutoApproveSettings();
+    await _loadData();
   }
   
   Future<void> _loadCurrentUserRole() async {
@@ -65,6 +73,57 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
           });
         }
       }
+    }
+  }
+
+  Future<void> _loadAutoApproveSettings() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('adminSettings')
+          .doc('approvals')
+          .get();
+      if (doc.exists && mounted) {
+        final data = doc.data() ?? <String, dynamic>{};
+        setState(() {
+          _autoApproveAnnouncements =
+              data['autoApproveAnnouncements'] as bool? ?? false;
+          _autoApproveProducts =
+              data['autoApproveProducts'] as bool? ?? false;
+          _autoApproveTasks =
+              data['autoApproveTasks'] as bool? ?? false;
+        });
+      }
+    } catch (_) {
+      // Ignore settings load errors; default to false.
+    }
+  }
+
+  Future<void> _saveAutoApproveSettings() async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('adminSettings')
+          .doc('approvals')
+          .set(
+        {
+          'autoApproveAnnouncements': _autoApproveAnnouncements,
+          'autoApproveProducts': _autoApproveProducts,
+          'autoApproveTasks': _autoApproveTasks,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: ErrorNotification(
+            message: 'Failed to save auto-approve settings: $e',
+          ),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -107,6 +166,18 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
         _loadPendingProducts(),
         _loadPendingTasks(),
       ]);
+
+      if (_currentUserRole == 'super_admin') {
+        if (_autoApproveAnnouncements && _pendingAnnouncements.isNotEmpty) {
+          await _autoApprovePendingAnnouncements();
+        }
+        if (_autoApproveProducts && _pendingProducts.isNotEmpty) {
+          await _autoApprovePendingProducts();
+        }
+        if (_autoApproveTasks && _pendingTasks.isNotEmpty) {
+          await _autoApprovePendingTasks();
+        }
+      }
     } catch (e) {
       setState(() => _errorMessage = 'Failed to load: $e');
     } finally {
@@ -281,6 +352,153 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: ErrorNotification(message: 'Failed to decline: $e'),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _autoApprovePendingAnnouncements() async {
+    final items = List<Map<String, dynamic>>.from(_pendingAnnouncements);
+    if (items.isEmpty) return;
+
+    int success = 0;
+    int failure = 0;
+
+    for (final a in items) {
+      final id = a['id'] as String;
+      try {
+        final docRef =
+            FirebaseFirestore.instance.collection('announcements').doc(id);
+        await docRef.update({
+          'status': 'Approved',
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        final doc = await docRef.get();
+        if (doc.exists) {
+          final d = doc.data() ?? <String, dynamic>{};
+          final title = d['title'] as String? ?? '';
+          final content = d['content'] as String? ?? '';
+          final audiences = (d['audiences'] as List<dynamic>?)
+                  ?.map((e) => e.toString())
+                  .toList() ??
+              <String>[];
+          final postedByUserId = d['postedByUserId'] as String?;
+          final body =
+              content.length > 140 ? '${content.substring(0, 140)}...' : content;
+
+          await sendAnnouncementPush(
+            announcementId: id,
+            title: title,
+            body: body,
+            audiences: audiences,
+            requestedByUserId: postedByUserId,
+          );
+        }
+        success++;
+      } catch (e) {
+        failure++;
+        debugPrint('Auto-approve announcement $id failed: $e');
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _pendingAnnouncements.clear();
+      });
+      if (success + failure > 0) {
+        final msg = failure == 0
+            ? 'Auto-approved $success announcement(s).'
+            : 'Auto-approved $success announcement(s), $failure failed.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: SuccessNotification(message: msg),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _autoApprovePendingProducts() async {
+    final items = List<Map<String, dynamic>>.from(_pendingProducts);
+    if (items.isEmpty) return;
+
+    int success = 0;
+    int failure = 0;
+
+    for (final p in items) {
+      final id = p['id'] as String;
+      try {
+        await FirebaseFirestore.instance.collection('products').doc(id).update({
+          'status': 'Approved',
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        success++;
+      } catch (e) {
+        failure++;
+        debugPrint('Auto-approve product $id failed: $e');
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _pendingProducts.clear();
+      });
+      if (success + failure > 0) {
+        final msg = failure == 0
+            ? 'Auto-approved $success marketplace item(s).'
+            : 'Auto-approved $success marketplace item(s), $failure failed.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: SuccessNotification(message: msg),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _autoApprovePendingTasks() async {
+    final items = List<Map<String, dynamic>>.from(_pendingTasks);
+    if (items.isEmpty) return;
+
+    int success = 0;
+    int failure = 0;
+
+    for (final t in items) {
+      final id = t['id'] as String;
+      try {
+        await FirebaseFirestore.instance.collection('tasks').doc(id).update({
+          'approvalStatus': 'Approved',
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        success++;
+      } catch (e) {
+        failure++;
+        debugPrint('Auto-approve task $id failed: $e');
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _pendingTasks.clear();
+      });
+      if (success + failure > 0) {
+        final msg = failure == 0
+            ? 'Auto-approved $success errand(s).'
+            : 'Auto-approved $success errand(s), $failure failed.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: SuccessNotification(message: msg),
             backgroundColor: Colors.transparent,
             elevation: 0,
             behavior: SnackBarBehavior.floating,
@@ -678,6 +896,50 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                               onTabChanged: (i) => setState(() => _activeTabIndex = i),
                             ),
                           ),
+                          if (_currentUserRole == 'super_admin')
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(32, 8, 32, 0),
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Checkbox(
+                                      value: _activeTabIndex == 0
+                                          ? _autoApproveAnnouncements
+                                          : _activeTabIndex == 1
+                                              ? _autoApproveProducts
+                                              : _autoApproveTasks,
+                                      onChanged: (val) {
+                                        if (val == null) return;
+                                        setState(() {
+                                          if (_activeTabIndex == 0) {
+                                            _autoApproveAnnouncements = val;
+                                          } else if (_activeTabIndex == 1) {
+                                            _autoApproveProducts = val;
+                                          } else {
+                                            _autoApproveTasks = val;
+                                          }
+                                        });
+                                        _saveAutoApproveSettings();
+                                      },
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _activeTabIndex == 0
+                                          ? 'Auto-approve posts'
+                                          : _activeTabIndex == 1
+                                              ? 'Auto-approve marketplace'
+                                              : 'Auto-approve errands',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.mediumGrey,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           if (_errorMessage != null)
                             Padding(
                               padding: const EdgeInsets.all(32),
