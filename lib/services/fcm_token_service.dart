@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart';
 /// Firebase Cloud Messaging (FCM) token registration.
 ///
 /// Why store tokens in Firestore?
-/// - The FCM token acts as a **device identifier** for push delivery.
+/// - The FCM token acts as a **device identifier** for push `delivery.
 /// - Tokens can change (reinstall, refresh), so we store them in a list and de-duplicate.
 /// - OTP is an authentication enhancement later; token storage stays tied to **Auth UID**.
 ///
@@ -57,8 +57,9 @@ class FcmTokenService {
       unawaited(registerCurrentTokenForUser(user.uid));
     });
 
-    _tokenRefreshSub =
-        FirebaseMessaging.instance.onTokenRefresh.listen((token) async {
+    _tokenRefreshSub = FirebaseMessaging.instance.onTokenRefresh.listen((
+      token,
+    ) async {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) return;
       await _saveToken(uid: uid, token: token);
@@ -92,15 +93,12 @@ class FcmTokenService {
 
   Future<void> _saveToken({required String uid, required String token}) async {
     final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
-    await userRef.set(
-      {
-        // Store as list to support multiple devices in the future.
-        // arrayUnion prevents duplicates.
-        'fcmTokens': FieldValue.arrayUnion([token]),
-        'fcmTokensUpdatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    await userRef.set({
+      // Store as list to support multiple devices in the future.
+      // arrayUnion prevents duplicates.
+      'fcmTokens': FieldValue.arrayUnion([token]),
+      'fcmTokensUpdatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   /// Optional cleanup if you ever need to stop listeners (tests, etc.).
@@ -111,4 +109,3 @@ class FcmTokenService {
     _tokenRefreshSub = null;
   }
 }
-
