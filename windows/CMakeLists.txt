@@ -2,6 +2,10 @@
 cmake_minimum_required(VERSION 3.14)
 project(linkod_admin LANGUAGES CXX)
 
+# Policy to handle Firebase C++ SDK's legacy CMake requirements
+cmake_policy(SET CMP0048 NEW)
+set(CMAKE_POLICY_VERSION_MINIMUM "3.5")
+
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 set(BINARY_NAME "linkod_admin")

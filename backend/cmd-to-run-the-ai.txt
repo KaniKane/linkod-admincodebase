@@ -1,0 +1,9 @@
+cd D:\GitHub\linkod_admin\linkod-admincodebase\backend
+
+# Install all backend deps, including firebase-admin
+python -m pip install -r requirements.txt
+
+$env:GOOGLE_APPLICATION_CREDENTIALS = "D:\Desktop1\linkod-admincodebase\backend\linkod-db-firebase-adminsdk-fbsvc-db4270d732.json"
+
+# Then run the API using the same python
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
