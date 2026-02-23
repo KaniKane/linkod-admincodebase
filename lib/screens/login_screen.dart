@@ -91,12 +91,11 @@ class _LoginScreenState extends State<LoginScreen> {
       final data = userDoc.data() ?? {};
       final role = (data['role'] as String? ?? '').toLowerCase();
 
-      // Restrict this admin app to super_admin/official/staff users only
-      // Schema: super_admin | official | staff | resident | vendor
-      if (role != 'super_admin' && role != 'official' && role != 'staff') {
+      // Only Super Admin and Admin can access this panel. Positions (e.g. official, staff) are labels only.
+      if (role != 'super_admin' && role != 'admin') {
         setState(() {
           _errorMessage =
-              'This admin panel is only for admin/official/staff accounts. Your role is "$role".';
+              'This admin panel is only for Super Admin and Admin accounts. Your role is "$role".';
         });
         await FirebaseAuth.instance.signOut();
         return;

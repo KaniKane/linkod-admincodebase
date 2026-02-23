@@ -4,18 +4,25 @@ import '../utils/app_colors.dart';
 class AppSidebar extends StatelessWidget {
   final String currentRoute;
   final Function(String) onNavigate;
+  /// When non-null, Approvals and User Management are grayed out for non–Super Admin (e.g. Admin). Only Super Admin can access all features; Admin is limited to Dashboard and Announcements (need approval).
+  final String? currentUserRole;
 
   const AppSidebar({
     super.key,
     required this.currentRoute,
     required this.onNavigate,
+    this.currentUserRole,
   });
+
+  /// Gray out Approvals and User Management for everyone except Super Admin.
+  bool get _isAdminRestricted =>
+      (currentUserRole ?? '').toLowerCase() != 'super_admin';
 
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenWidth < 800;
-    
+
     return Container(
       width: isSmallScreen ? 200 : 250,
       color: AppColors.white,
@@ -59,6 +66,7 @@ class AppSidebar extends StatelessWidget {
                   isActive: currentRoute == '/approvals',
                   onTap: () => onNavigate('/approvals'),
                   isSmallScreen: isSmallScreen,
+                  isDisabled: _isAdminRestricted,
                 ),
                 const SizedBox(height: 8),
                 _NavItem(
@@ -67,6 +75,7 @@ class AppSidebar extends StatelessWidget {
                   isActive: currentRoute == '/user-management',
                   onTap: () => onNavigate('/user-management'),
                   isSmallScreen: isSmallScreen,
+                  isDisabled: _isAdminRestricted,
                 ),
               ],
             ),
@@ -83,6 +92,7 @@ class _NavItem extends StatefulWidget {
   final bool isActive;
   final VoidCallback onTap;
   final bool isSmallScreen;
+  final bool isDisabled;
 
   const _NavItem({
     required this.iconPath,
@@ -90,6 +100,7 @@ class _NavItem extends StatefulWidget {
     required this.isActive,
     required this.onTap,
     this.isSmallScreen = false,
+    this.isDisabled = false,
   });
 
   @override
@@ -101,10 +112,22 @@ class _NavItemState extends State<_NavItem> {
 
   @override
   Widget build(BuildContext context) {
+    final disabled = widget.isDisabled;
+    final effectiveActive = widget.isActive && !disabled;
+    final textColor = effectiveActive
+        ? AppColors.white
+        : (disabled ? AppColors.lightGrey : AppColors.darkGrey);
+    final iconColor = effectiveActive
+        ? AppColors.white
+        : (disabled ? AppColors.lightGrey : AppColors.darkGrey);
+    final hoverBg = !disabled && _isHovered && !widget.isActive
+        ? AppColors.primaryGreen.withOpacity(0.1)
+        : Colors.transparent;
+
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      cursor: SystemMouseCursors.click,
+      cursor: disabled ? SystemMouseCursors.basic : SystemMouseCursors.click,
       child: GestureDetector(
         onTap: widget.onTap,
         child: AnimatedContainer(
@@ -114,11 +137,7 @@ class _NavItemState extends State<_NavItem> {
             vertical: 12,
           ),
           decoration: BoxDecoration(
-            color: widget.isActive
-                ? AppColors.primaryGreen
-                : (_isHovered && !widget.isActive
-                    ? AppColors.primaryGreen.withOpacity(0.1)
-                    : Colors.transparent),
+            color: effectiveActive ? AppColors.primaryGreen : hoverBg,
             borderRadius: BorderRadius.circular(10),
           ),
           child: Row(
@@ -127,9 +146,7 @@ class _NavItemState extends State<_NavItem> {
                 widget.iconPath,
                 width: 24,
                 height: 24,
-                color: widget.isActive
-                    ? AppColors.white
-                    : AppColors.darkGrey,
+                color: iconColor,
               ),
               const SizedBox(width: 12),
               Flexible(
@@ -138,9 +155,7 @@ class _NavItemState extends State<_NavItem> {
                   style: TextStyle(
                     fontSize: widget.isSmallScreen ? 14 : 16,
                     fontWeight: FontWeight.normal,
-                    color: widget.isActive
-                        ? AppColors.white
-                        : AppColors.darkGrey,
+                    color: textColor,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),

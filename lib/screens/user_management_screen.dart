@@ -69,16 +69,22 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             .doc(currentUser.uid)
             .get();
         if (userDoc.exists && mounted) {
-          final role = (userDoc.data()?['role'] as String? ?? 'official').toLowerCase();
+          final role = (userDoc.data()?['role'] as String? ?? 'admin').toLowerCase();
           setState(() {
             _currentUserRole = role;
           });
+          if (role != 'super_admin' && mounted) {
+            if (!context.mounted) return;
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const DashboardScreen()),
+            );
+          }
         }
       } catch (_) {
-        // Silently handle error, default to 'official'
         if (mounted) {
           setState(() {
-            _currentUserRole = 'official';
+            _currentUserRole = 'admin';
           });
         }
       }
@@ -117,7 +123,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             'id': doc.id,
             'name': fullName.isNotEmpty ? fullName : 'Unnamed',
             'phone': phoneNumber,
-            'category': role == 'super_admin' || role == 'admin' || role == 'official' || role == 'staff'
+            'category': role == 'super_admin' || role == 'admin'
                 ? (position.isNotEmpty ? position : 'Admin')
                 : (demographicCategory.isNotEmpty ? demographicCategory : 'User'),
             'status': accountStatus == 'suspended' ? 'suspended' : 'declined',
@@ -125,10 +131,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           continue;
         }
 
-        // Persistence & governance: only show active accounts in Users/Admins lists
-        // Schema: role is super_admin | official | staff | resident | vendor
-        // Admin panel accounts: super_admin, official, staff (and legacy 'admin')
-        if (role == 'super_admin' || role == 'admin' || role == 'official' || role == 'staff') {
+        // Only two roles: super_admin and admin. Position is a label (e.g. Barangay Secretary).
+        if (role == 'super_admin' || role == 'admin') {
           loadedAdmins.add({
             'id': doc.id,
             'name': fullName.isNotEmpty ? fullName : 'Unnamed admin',
@@ -162,7 +166,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           'phone': phoneNumber,
           'category': category.isNotEmpty
               ? category
-              : (role == 'admin' || role == 'official'
+                : (role == 'admin'
                   ? (position.isNotEmpty ? position : 'Admin')
                   : (role.isNotEmpty ? role : 'User')),
           'role': role,
@@ -213,6 +217,19 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   void _navigateTo(String route) {
+    if ((_currentUserRole ?? '').toLowerCase() != 'super_admin' &&
+        (route == '/approvals' || route == '/user-management')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const DraftSavedNotification(
+              message: 'Only Super Admin can access this.'),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     if (route == '/dashboard') {
       Navigator.pushReplacement(
         context,
@@ -369,6 +386,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           // Sidebar
           AppSidebar(
             currentRoute: '/user-management',
+            currentUserRole: _currentUserRole,
             onNavigate: _navigateTo,
           ),
           // Main content
@@ -782,7 +800,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
                                           final now = FieldValue.serverTimestamp();
                                           final email = '$phone@linkod.com';
-                                          final firestoreRole = isAdmin ? 'official' : 'resident';
+                                          final firestoreRole = isAdmin ? 'admin' : 'resident';
 
                                           // Create Firebase Auth user (so they can log in) using secondary app so admin stays signed in
                                           FirebaseApp secondaryApp;
@@ -953,7 +971,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
     final passwordController = TextEditingController();
-    String? selectedRole = 'official'; // Default to 'official'
+    String? selectedRole = 'admin'; // SUPER ADMIN and ADMIN only
     String? selectedPosition;
     final formKey = GlobalKey<FormState>();
     bool isSubmitting = false;
@@ -1030,7 +1048,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           },
                         ),
                         const SizedBox(height: 16),
-                        // Role dropdown: SUPER ADMIN, OFFICIAL, STAFF
+                        // Role dropdown: SUPER ADMIN, ADMIN only (position is a label)
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -1064,12 +1082,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                       child: Text('SUPER ADMIN'),
                                     ),
                                     DropdownMenuItem(
-                                      value: 'official',
-                                      child: Text('OFFICIAL'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'staff',
-                                      child: Text('STAFF'),
+                                      value: 'admin',
+                                      child: Text('ADMIN'),
                                     ),
                                   ],
                                   onChanged: (value) {
@@ -1150,7 +1164,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
                                         final now = FieldValue.serverTimestamp();
                                         final email = '$phone@linkod.com';
-                                        final role = selectedRole ?? 'official';
+                                        final role = selectedRole ?? 'admin';
 
                                         // Create Firebase Auth user using secondary app
                                         FirebaseApp secondaryApp;
@@ -2117,7 +2131,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               ),
             _detailRow('Full Name', fullName),
             _detailRow('Phone Number', phone),
-            _detailRow('Demography', category.isNotEmpty ? category : (role == 'admin' || role == 'official' ? 'Admin' : role)),
+            _detailRow('Demography', category.isNotEmpty ? category : (role == 'admin' ? 'Admin' : role)),
             const SizedBox(height: 12),
             const Text('Proof of residence', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
             const SizedBox(height: 6),
@@ -2344,7 +2358,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         uid = newUser.uid;
       }
 
-      final firestoreRole = (role == 'admin') ? 'official' : 'resident';
+      // Official account roles: super_admin and admin only (stored as-is)
+      final firestoreRole = (role == 'super_admin' || role == 'admin')
+          ? role
+          : 'resident';
       final categoriesList = (category)
           .split(',')
           .map((e) => e.trim())
@@ -2365,7 +2382,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         'verificationStatus': 'Verified',
         'accountStatus': 'active',
         if (proofOfResidenceUrl != null && proofOfResidenceUrl.isNotEmpty) 'proofOfResidenceUrl': proofOfResidenceUrl,
-        if (firestoreRole == 'official') 'position': position.isNotEmpty ? position : 'Admin',
+        if (firestoreRole == 'admin') 'position': position.isNotEmpty ? position : 'Admin',
         if (firestoreRole == 'resident') ...{
           // Keep `category` (string) for existing UI and documents.
           'category': category.isNotEmpty ? category : 'User',
@@ -2498,7 +2515,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
         final email = '$phone@linkod.com';
         final now = FieldValue.serverTimestamp();
-        final firestoreRole = (role == 'admin') ? 'official' : 'resident';
+        // Official account roles: super_admin and admin only (stored as-is)
+        final firestoreRole = (role == 'super_admin' || role == 'admin')
+            ? role
+            : 'resident';
 
         if (existingUid != null && existingUid.toString().trim().isNotEmpty) {
           // Mobile created Auth at registration — just create users doc with declined
@@ -2614,9 +2634,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     String? dialogError;
     final docId = user['id'] ?? '';
     final isAdmin = ((user['role'] ?? '').toLowerCase() == 'admin' ||
-        (user['role'] ?? '').toLowerCase() == 'official');
+        (user['role'] ?? '').toLowerCase() == 'super_admin');
     final existingCategory = user['category'] ?? '';
     final existingPosition = user['position'] ?? '';
+    final existingRole = (user['role'] ?? '').toLowerCase();
+    String? selectedRole = (existingRole == 'super_admin') ? 'super_admin' : 'admin';
     String? selectedPosition = existingPosition.isNotEmpty ? existingPosition : null;
     Set<String> selectedCategories = existingCategory.isEmpty
         ? <String>{}
@@ -2676,12 +2698,59 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               : null,
                         ),
                         const SizedBox(height: 16),
-                        if (isAdmin)
+                        if (isAdmin) ...[
+                          // Role for official account: SUPER ADMIN or ADMIN (editable before approval)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Role',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.normal,
+                                  color: AppColors.darkGrey,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: AppColors.inputBg,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String>(
+                                    value: selectedRole,
+                                    isExpanded: true,
+                                    padding: const EdgeInsets.symmetric(horizontal: 15),
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.darkGrey,
+                                    ),
+                                    items: const [
+                                      DropdownMenuItem(
+                                        value: 'super_admin',
+                                        child: Text('SUPER ADMIN'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'admin',
+                                        child: Text('ADMIN'),
+                                      ),
+                                    ],
+                                    onChanged: (value) {
+                                      setState(() => selectedRole = value);
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
                           _buildPositionSelector(
                             selectedPosition: selectedPosition,
                             onSelect: (value) => setState(() => selectedPosition = value),
-                          )
-                        else
+                          ),
+                        ] else
                           _buildDemographicSelector(
                             selectedCategories: selectedCategories,
                             onToggle: (value) {
@@ -2739,6 +2808,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                           'phoneNumber': phoneController.text.trim(),
                                         };
                                         if (isAdmin) {
+                                          updates['role'] =
+                                              selectedRole ?? 'admin';
                                           updates['position'] =
                                               selectedPosition?.trim().isNotEmpty == true
                                                   ? selectedPosition!
@@ -3121,7 +3192,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                           'position':
                                               positionValue.isNotEmpty ? positionValue : 'Admin',
                                           'updatedAt': FieldValue.serverTimestamp(),
-                                          'role': 'official',
+                                          'role': 'admin',
                                         });
                                         if (mounted) {
                                           await _loadAccounts();

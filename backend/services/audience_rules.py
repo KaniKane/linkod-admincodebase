@@ -7,11 +7,25 @@ Transparent and explainable: returns which rules matched and why.
 
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any, List, Optional
 
-# Default path for rules config (relative to backend root)
-DEFAULT_RULES_PATH = Path(__file__).resolve().parent.parent / "config" / "audience_rules.json"
+def _default_rules_path() -> Path:
+    """Config path: dev = backend root; PyInstaller = bundle root or next to exe."""
+    base = Path(__file__).resolve().parent.parent
+    candidate = base / "config" / "audience_rules.json"
+    if candidate.exists():
+        return candidate
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).resolve().parent
+        fallback = exe_dir / "config" / "audience_rules.json"
+        if fallback.exists():
+            return fallback
+        return exe_dir / "config" / "audience_rules.json"
+    return candidate
+
+DEFAULT_RULES_PATH = _default_rules_path()
 
 # When no rule matches, return this default audience
 DEFAULT_AUDIENCE = "General Residents"

@@ -30,11 +30,12 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
   final _aiRefinedController = TextEditingController();
-  Set<String> _selectedAudiences = {'Senior'};
+  Set<String> _selectedAudiences = {};
   bool _isAIRefined = false;
   List<String> _suggestedAudiences = ['Senior', 'PWD'];
   bool _isRefining = false;
   bool _isSuggestingDemographic = false;
+  bool _hasTriggeredAudienceSuggestion = false;
 
   // Drafts loaded from Firestore
   List<AnnouncementDraft> _drafts = [];
@@ -97,8 +98,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           'createdAt': _parseTimestamp(d['createdAt']),
         };
       }).toList();
-      String role = (_currentUserRole ?? 'official').toLowerCase();
-      if (role == 'official' && currentUser != null) {
+      String role = (_currentUserRole ?? 'admin').toLowerCase();
+      if (role == 'admin' && currentUser != null) {
         list = list.where((a) => a['postedByUserId'] == currentUser.uid).toList();
       }
       list.sort((a, b) {
@@ -121,16 +122,15 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             .doc(currentUser.uid)
             .get();
         if (userDoc.exists && mounted) {
-          final role = (userDoc.data()?['role'] as String? ?? 'official').toLowerCase();
+          final role = (userDoc.data()?['role'] as String? ?? 'admin').toLowerCase();
           setState(() {
             _currentUserRole = role;
           });
         }
       } catch (_) {
-        // Silently handle error, default to 'official'
         if (mounted) {
           setState(() {
-            _currentUserRole = 'official';
+            _currentUserRole = 'admin';
           });
         }
       }
@@ -146,6 +146,19 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   }
 
   void _navigateTo(String route) {
+    if ((_currentUserRole ?? '').toLowerCase() != 'super_admin' &&
+        (route == '/approvals' || route == '/user-management')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const DraftSavedNotification(
+              message: 'Only Super Admin can access this.'),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     if (route == '/dashboard') {
       Navigator.pushReplacement(
         context,
@@ -189,7 +202,10 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       return;
     }
 
-    setState(() => _isRefining = true);
+    setState(() {
+      _isRefining = true;
+      _hasTriggeredAudienceSuggestion = true;
+    });
     try {
       final result = await refineAnnouncementText(original);
       if (!mounted) return;
@@ -272,6 +288,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       _aiRefinedController.text = draft.aiRefinedContent ?? '';
       _currentDraftId = draft.id;
       _activeTabIndex = 0; // Switch to Compose tab
+      _hasTriggeredAudienceSuggestion = true;
     });
   }
 
@@ -370,7 +387,10 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       );
       return;
     }
-    setState(() => _isSuggestingDemographic = true);
+    setState(() {
+      _isSuggestingDemographic = true;
+      _hasTriggeredAudienceSuggestion = true;
+    });
     try {
       final audienceResult = await recommendAudiences(text);
       if (!mounted) return;
@@ -526,7 +546,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           final userData = userDoc.data() ?? {};
           postedBy = (userData['fullName'] as String?) ?? postedBy;
           postedByPosition = userData['position'] as String?;
-          currentUserRole = ((userData['role'] as String?) ?? 'official').toLowerCase();
+          currentUserRole = ((userData['role'] as String?) ?? 'admin').toLowerCase();
         }
       }
       
@@ -609,6 +629,28 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       });
 
       if (!mounted) return;
+
+      // When approval is on (status Pending), log to Recent Activities
+      if (status == 'Pending') {
+        try {
+          String adminName = postedBy;
+          if (postedByUserId != null) {
+            final adminDoc = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(postedByUserId)
+                .get();
+            if (adminDoc.exists) {
+              adminName = (adminDoc.data()?['fullName'] as String?) ?? postedBy;
+            }
+          }
+          await FirebaseFirestore.instance.collection('adminActivities').add({
+            'type': 'post_request',
+            'description': '$adminName submitted an announcement for approval: $title',
+            'fullName': title,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        } catch (_) {}
+      }
 
       // Only send push when SUPER ADMIN chose "post and send push". OFFICIAL posts are Pending — push sent when admin approves.
       final shouldSendPush = choice == 'post_and_push' && canPublishDirectly;
@@ -704,6 +746,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           // Sidebar
           AppSidebar(
             currentRoute: '/announcements',
+            currentUserRole: _currentUserRole,
             onNavigate: _navigateTo,
           ),
           // Main content
@@ -903,15 +946,14 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           ),
           const SizedBox(height: 8),
           Container(
-            height: 150,
             decoration: BoxDecoration(
               color: const Color(0xFFF1F1F1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: TextField(
               controller: _contentController,
+              minLines: 5,
               maxLines: null,
-              expands: true,
               style: const TextStyle(
                 fontSize: 16,
                 color: AppColors.darkGrey,
@@ -976,7 +1018,6 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             ),
             const SizedBox(height: 8),
             Container(
-              height: 200,
               decoration: BoxDecoration(
                 color: AppColors.white,
                 borderRadius: BorderRadius.circular(10),
@@ -987,8 +1028,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               ),
               child: TextField(
                 controller: _aiRefinedController,
+                minLines: 5,
                 maxLines: null,
-                expands: true,
                 style: const TextStyle(
                   fontSize: 16,
                   color: AppColors.darkGrey,
@@ -1001,85 +1042,86 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             ),
             const SizedBox(height: 32),
           ],
-          // Suggested Audiences section (always visible so "Suggest demographic" works without refining)
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.suggestedAudienceBg,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.lightbulb_outline,
-                      color: AppColors.darkGrey,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Suggested Audiences',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+          // Suggested Audiences section (shown only after audience suggestion is triggered)
+          if (_hasTriggeredAudienceSuggestion)
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.suggestedAudienceBg,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.lightbulb_outline,
                         color: AppColors.darkGrey,
+                        size: 20,
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Rule-based suggestion from your content (review and edit as needed):',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.normal,
-                    color: AppColors.mediumGrey,
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Suggested Audiences',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.darkGrey,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: _suggestedAudiences.map((audience) {
-                    final isAlreadySelected = _selectedAudiences.contains(audience);
-                    return MouseRegion(
-                      cursor: SystemMouseCursors.click,
-                      child: GestureDetector(
-                        onTap: () {
-                          if (!isAlreadySelected) {
-                            _handleAddSuggestedAudience(audience);
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: AppColors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: AppColors.primaryGreen,
-                              width: 1,
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Rule-based suggestion from your content (review and edit as needed):',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.normal,
+                      color: AppColors.mediumGrey,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: _suggestedAudiences.map((audience) {
+                      final isAlreadySelected = _selectedAudiences.contains(audience);
+                      return MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          onTap: () {
+                            if (!isAlreadySelected) {
+                              _handleAddSuggestedAudience(audience);
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: AppColors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: AppColors.primaryGreen,
+                                width: 1,
+                              ),
                             ),
-                          ),
-                          child: Text(
-                            isAlreadySelected
-                                ? audience
-                                : '$audience (Click to add)',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.normal,
-                              color: AppColors.darkGrey,
+                            child: Text(
+                              isAlreadySelected
+                                  ? audience
+                                  : '$audience (Click to add)',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.normal,
+                                color: AppColors.darkGrey,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
             ),
-          ),
           const SizedBox(height: 32),
           // Target Audience section
           const Text(

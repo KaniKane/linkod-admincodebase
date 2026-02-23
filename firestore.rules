@@ -1,103 +1,266 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper: true if current user has admin/official role in users/{uid}
-    function isOfficial() {
-      return request.auth != null
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'official'];
+    // ========= Helper functions =========
+
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // Users: own doc by UID; officials can read/write all (admin panel CRUD)
+    // Safe accessor for current user's Firestore doc
+    // Note: Only call this after checking hasUserDoc() to avoid errors
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function hasUserDoc() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    
+    // Safe role getter - returns null if doc doesn't exist or role field is missing
+    function getUserRole() {
+      return hasUserDoc() ? userDoc().data.role : null;
+    }
+
+    // Role helpers. Only two roles: super_admin and admin. Positions (e.g. official, staff) are labels only.
+    function role() {
+      return getUserRole();
+    }
+
+    // Only Super Admin has full access (Approvals, User Management, adminSettings, etc.)
+    function isSuperAdmin() {
+      return hasUserDoc() &&
+        getUserRole() == 'super_admin';
+    }
+
+    // Any admin-panel account (can log into Windows app). Only two roles: super_admin and admin.
+    function isAdminPanelUser() {
+      return hasUserDoc() &&
+        getUserRole() in ['super_admin', 'admin'];
+    }
+	
+  	// ========= adminSettings =========
+    // Stores panel-wide flags such as auto-approve settings.
+    match /adminSettings/{docId} {
+      // Only Super Admin can read/write these settings.
+      allow read, write: if isSuperAdmin();
+    }
+
+    // ========= users collection =========
+
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow read, write: if isOfficial();
-      
-      // Devices subcollection: users can manage their own device tokens (FCM)
+      // Super Admin: full access to all profiles
+      allow read, write: if isSuperAdmin();
+
+      // Owner: can read and update own profile (includes declined users re-applying: accountStatus, proofOfResidenceUrl, etc.)
+      allow read, update: if isSignedIn() && request.auth.uid == userId;
+
+      // Only Super Admin can read other users (User Management). Admin is limited to Dashboard and Announcements.
+      allow read: if isSuperAdmin();
+
+      // Create user docs: only Super Admin
+      allow create: if isSuperAdmin();
+
+      // Devices subcollection: FCM tokens
       match /devices/{deviceId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-        allow read, write: if isOfficial();
+        // Owner can manage own devices
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+
+        // SUPER ADMIN may need to inspect devices (optional)
+        allow read: if isSuperAdmin();
       }
     }
 
-    // AwaitingApproval: officials read/update/delete; any auth can create (sign-up).
-    // Creator can update (e.g. add fcmTokens for approval push); applicant can delete own doc after approval.
+    // ========= awaitingApproval =========
+    // Sign-up / verification requests (mobile creates without Auth; Super Admin approves later)
+
     match /awaitingApproval/{docId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update: if isOfficial()
-        || (request.auth != null && resource.data.requestedByUid == request.auth.uid);
-      allow delete: if isOfficial();
-      allow delete: if request.auth != null
-        && request.auth.token.email == (resource.data.phoneNumber + '@linkod.com');
+      // Only Super Admin can list/read all. Applicant can read their own doc.
+      allow read: if isSuperAdmin()
+        || (isSignedIn() && resource.data.requestedByUid == request.auth.uid);
+
+      // Mobile create-account does NOT sign in first — allow unauthenticated create so registration works
+      allow create: if true;
+
+      // Update: only Super Admin or the applicant (e.g. add fcmTokens)
+      allow update: if isSuperAdmin()
+        || (isSignedIn() && resource.data.requestedByUid == request.auth.uid);
+
+      // Delete: Super Admin (approve/decline flow) or applicant (original email-style mapping)
+      allow delete: if isSuperAdmin()
+        || (isSignedIn()
+          && request.auth.token.email == (resource.data.phoneNumber + '@linkod.com'));
     }
 
-    // Announcements: read by auth; write by officials
+    // ========= announcements =========
+
     match /announcements/{docId} {
-      allow read: if request.auth != null;
-      allow write: if isOfficial();
+      // Any signed-in user can read announcements
+      allow read: if isSignedIn();
+
+      // Create: Super Admin and Admin can create (Admin submissions need approval; app logic)
+      allow create: if isAdminPanelUser();
+
+      // Update:
+      // - SUPER ADMIN can fully update (approve/decline, edit)
+      allow update: if isSuperAdmin();
+
+      // Special case: legacy behavior where non-admins update only viewCount/updatedAt.
+      // Keep this for backward compatibility, but restrict to signed-in non-admin-panel users.
+      allow update: if isSignedIn()
+        && !isAdminPanelUser()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['viewCount', 'updatedAt']);
+
+      // No client-side delete except SUPER ADMIN
+      allow delete: if isSuperAdmin();
+
+      // Subcollection: views (reader list)
+      match /views/{viewId} {
+        // Any signed-in user can mark as read
+        allow create: if isSignedIn();
+
+        // Only Super Admin can read reader list
+        allow read: if isSuperAdmin();
+
+        // No client updates/deletes
+        allow update, delete: if false;
+      }
     }
 
-    // AnnouncementDrafts: officials only
+    // ========= announcementDrafts =========
+    // Drafts in admin app.
+
     match /announcementDrafts/{docId} {
-      allow read, write: if isOfficial();
+      // Super Admin and Admin can read/write drafts (Admin limited to own drafts by app)
+      allow read, write: if isAdminPanelUser();
     }
 
-    // Admin activities (recent activity feed: approvals, declines, user created)
+    // ========= adminActivities =========
+    // Recent activities feed in admin dashboard
+
     match /adminActivities/{docId} {
-      allow read, write: if isOfficial();
+      allow read, write: if isAdminPanelUser();
     }
 
-    // Posts and subcollections: auth required; owner or official can write (align with mobile)
+    // ========= posts =========
+    // General posts from mobile app
+
     match /posts/{postId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update, delete: if request.auth != null
-        && (resource.data.userId == request.auth.uid || isOfficial());
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+
+      // Owner or any admin-panel user can update/delete
+      allow update, delete: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isAdminPanelUser());
+
       match /likes/{likeId} {
-        allow read, write: if request.auth != null;
+        allow read, write: if isSignedIn();
       }
+
       match /comments/{commentId} {
-        allow read, write: if request.auth != null;
+        allow read, write: if isSignedIn();
+      }
+      
+      match /comment_read/{userId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
       }
     }
 
-    // Products and subcollection
+    // ========= products (marketplace) =========
+
     match /products/{productId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update, delete: if request.auth != null
-        && (resource.data.sellerId == request.auth.uid || isOfficial());
+      allow read: if isSignedIn();
+
+      // Mobile users create listings (status: Pending)
+      allow create: if isSignedIn();
+
+      // SUPER ADMIN or seller can update/delete
+      allow update, delete: if isSignedIn()
+        && (isSuperAdmin() || resource.data.sellerId == request.auth.uid);
+
+      // Legacy special case: messagesCount updates by non-seller, non-admin
+      // for chat/thread counters.
+      allow update: if isSignedIn()
+        && !isAdminPanelUser()
+        && resource.data.sellerId != request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['messagesCount', 'updatedAt']);
+
       match /messages/{messageId} {
-        allow read, write: if request.auth != null;
+        allow read, write: if isSignedIn();
       }
     }
 
-    // Tasks and subcollection
+    // ========= tasks (errands) =========
+
     match /tasks/{taskId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update, delete: if request.auth != null
-        && (resource.data.requesterId == request.auth.uid || resource.data.assignedTo == request.auth.uid || isOfficial());
-      match /volunteers/{volunteerId} {
-        allow read, write: if request.auth != null;
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+
+      // SUPER ADMIN: full update/delete
+      allow update, delete: if isSuperAdmin();
+
+      // Requester or assignedTo can update, but NOT change approvalStatus
+      allow update: if isSignedIn()
+        && (resource.data.requesterId == request.auth.uid
+            || resource.data.assignedTo == request.auth.uid)
+        && request.resource.data.approvalStatus == resource.data.approvalStatus;
+
+      // Participants can delete their own tasks? (Keep legacy behavior)
+      allow delete: if isSignedIn()
+        && (resource.data.requesterId == request.auth.uid
+            || resource.data.assignedTo == request.auth.uid);
+
+      match /volunteers/{volunteerDocId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update: if isSignedIn()
+          && get(/databases/$(database)/documents/tasks/$(taskId)).data.requesterId == request.auth.uid;
+        allow delete: if isSignedIn()
+          && resource.data.volunteerId == request.auth.uid
+          && resource.data.status == 'pending';
+      }
+
+      match /chat_messages/{messageId} {
+        allow read, write: if isSignedIn()
+          && (get(/databases/$(database)/documents/tasks/$(taskId)).data.requesterId == request.auth.uid
+              || get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedTo == request.auth.uid);
+      }
+
+      match /chat_read/{userId} {
+        allow read, write: if isSignedIn()
+          && request.auth.uid == userId
+          && (get(/databases/$(database)/documents/tasks/$(taskId)).data.requesterId == request.auth.uid
+              || get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedTo == request.auth.uid);
       }
     }
 
-    // Notifications: own by userId
+    // ========= notifications =========
+
     match /notifications/{notificationId} {
-      allow read, update, delete: if request.auth != null
+      // Owner can read/update/delete their own notifications
+      allow read, update, delete: if isSignedIn()
         && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null
+
+      // Users can create notifications for themselves
+      allow create: if isSignedIn()
         && request.resource.data.userId == request.auth.uid;
+
+      // Only Super Admin can create notifications for any user (e.g. account approval)
+      allow create: if isSuperAdmin();
     }
 
-    // User announcement reads: own by userId
+    // ========= userAnnouncementReads =========
+    // Per-user read tracking (separate from announcements/{id}/views)
+
     match /userAnnouncementReads/{readId} {
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null
+      allow read: if isSignedIn()
+        && resource.data.userId == request.auth.uid;
+
+      allow create: if isSignedIn()
         && request.resource.data.userId == request.auth.uid;
     }
   }

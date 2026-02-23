@@ -8,6 +8,7 @@ import '../widgets/custom_tabs.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/outline_button.dart';
 import '../widgets/dialog_container.dart';
+import '../widgets/draft_saved_notification.dart';
 import '../widgets/error_notification.dart';
 import '../widgets/success_notification.dart';
 import '../api/announcement_backend_api.dart';
@@ -47,6 +48,14 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
 
   Future<void> _init() async {
     await _loadCurrentUserRole();
+    if (mounted && (_currentUserRole ?? '').toLowerCase() != 'super_admin') {
+      if (!context.mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const DashboardScreen()),
+      );
+      return;
+    }
     await _loadAutoApproveSettings();
     await _loadData();
   }
@@ -60,16 +69,15 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
             .doc(currentUser.uid)
             .get();
         if (userDoc.exists && mounted) {
-          final role = (userDoc.data()?['role'] as String? ?? 'official').toLowerCase();
+          final role = (userDoc.data()?['role'] as String? ?? 'admin').toLowerCase();
           setState(() {
             _currentUserRole = role;
           });
         }
       } catch (_) {
-        // Silently handle error, default to 'official'
         if (mounted) {
           setState(() {
-            _currentUserRole = 'official';
+            _currentUserRole = 'admin';
           });
         }
       }
@@ -128,6 +136,19 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
   }
 
   void _navigateTo(String route) {
+    if ((_currentUserRole ?? '').toLowerCase() != 'super_admin' &&
+        (route == '/approvals' || route == '/user-management')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const DraftSavedNotification(
+              message: 'Only Super Admin can access this.'),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     if (route == '/dashboard') {
       Navigator.pushReplacement(
         context,
@@ -849,6 +870,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
         children: [
           AppSidebar(
             currentRoute: '/approvals',
+            currentUserRole: _currentUserRole,
             onNavigate: _navigateTo,
           ),
           Expanded(
@@ -1042,8 +1064,8 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                     isFullWidth: true,
                   ),
                 ),
-                // View Readers: SUPER ADMIN and OFFICIAL only
-                if (_currentUserRole == 'super_admin' || _currentUserRole == 'official') ...[
+                // View Readers: SUPER ADMIN only
+                if (_currentUserRole == 'super_admin') ...[
                   const SizedBox(width: 8),
                   SizedBox(
                     width: 110,

@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../widgets/app_sidebar.dart';
 import '../widgets/insight_card.dart';
 import '../widgets/activity_item.dart';
 import '../widgets/user_header.dart';
+import '../widgets/draft_saved_notification.dart';
 import '../utils/app_colors.dart';
 import 'announcements_screen.dart';
 import 'approvals_screen.dart';
@@ -22,12 +24,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _totalAnnouncements = 0;
   bool _isLoading = false;
   String? _errorMessage;
+  String? _currentUserRole;
   final List<Map<String, dynamic>> _recentActivities = [];
 
   @override
   void initState() {
     super.initState();
+    _loadCurrentUserRole();
     _loadDashboardData();
+  }
+
+  Future<void> _loadCurrentUserRole() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      try {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
+        if (userDoc.exists && mounted) {
+          final role = (userDoc.data()?['role'] as String? ?? 'admin').toLowerCase();
+          setState(() => _currentUserRole = role);
+        }
+      } catch (_) {
+        if (mounted) setState(() => _currentUserRole = 'admin');
+      }
+    }
   }
 
   Future<void> _loadDashboardData() async {
@@ -36,16 +58,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _errorMessage = null;
     });
 
+    int totalUsers = 0;
+    int totalAwaiting = 0;
     try {
       final usersSnapshot =
           await FirebaseFirestore.instance.collection('users').get();
+      totalUsers = usersSnapshot.size;
+    } catch (_) {
+      // Admin cannot read users; show 0
+    }
+    try {
+      final awaitingSnapshot = await FirebaseFirestore.instance
+          .collection('awaitingApproval')
+          .get();
+      totalAwaiting = awaitingSnapshot.size;
+    } catch (_) {
+      // Admin cannot read awaitingApproval; show 0
+    }
+
+    try {
       final announcementsSnapshot = await FirebaseFirestore.instance
           .collection('announcements')
           .orderBy('createdAt', descending: true)
           .limit(10)
-          .get();
-      final awaitingSnapshot = await FirebaseFirestore.instance
-          .collection('awaitingApproval')
           .get();
 
       final activities = <Map<String, dynamic>>[];
@@ -106,16 +141,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return bAt.compareTo(aAt);
       });
 
+      if (!mounted) return;
       setState(() {
-        _totalUsers = usersSnapshot.size;
+        _totalUsers = totalUsers;
         _totalAnnouncements = announcementsSnapshot.size;
-        _awaitingApproval = awaitingSnapshot.size;
+        _awaitingApproval = totalAwaiting;
         _recentActivities
           ..clear()
           ..addAll(activities);
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _errorMessage = 'Failed to load dashboard data: $e';
@@ -154,7 +191,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
           // Sidebar
           AppSidebar(
             currentRoute: '/dashboard',
+            currentUserRole: _currentUserRole,
             onNavigate: (route) {
+              if ((_currentUserRole ?? '').toLowerCase() != 'super_admin' &&
+                  (route == '/approvals' || route == '/user-management')) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const DraftSavedNotification(
+                        message: 'Only Super Admin can access this.'),
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
               if (route == '/announcements') {
                 Navigator.pushReplacement(
                   context,

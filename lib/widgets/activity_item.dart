@@ -50,7 +50,7 @@ class ActivityItem extends StatelessWidget {
     
     if (parts.length >= 2) {
       // Common action verbs
-      final actionVerbs = ['approved', 'posted', 'decline', 'declined', 'edited'];
+      final actionVerbs = ['approved', 'posted', 'decline', 'declined', 'edited', 'submitted'];
       int nameEndIndex = 1;
       
       for (int i = 1; i < parts.length && i <= 2; i++) {
