@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'services/fcm_token_service.dart';
 import 'screens/login_screen.dart';
+import 'utils/app_colors.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,8 +25,22 @@ class MyApp extends StatelessWidget {
       title: 'LINKod Admin',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2ECC71)),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2ECC71))
+            .copyWith(
+              onSurface: AppColors.buttonTextOnLightStrong,
+              onSurfaceVariant: AppColors.buttonTextOnLightStrong,
+            ),
         useMaterial3: true,
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.buttonTextOnLightStrong,
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.buttonTextOnLightStrong,
+          ),
+        ),
       ),
       home: const LoginScreen(),
     );

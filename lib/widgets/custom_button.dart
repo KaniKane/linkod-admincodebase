@@ -35,7 +35,7 @@ class _CustomButtonState extends State<CustomButton> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           width: widget.isFullWidth ? double.infinity : null,
-          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
             color: _isHovered
                 ? AppColors.primaryGreenAlt
@@ -43,12 +43,15 @@ class _CustomButtonState extends State<CustomButton> {
             borderRadius: BorderRadius.circular(10),
           ),
           child: Center(
-            child: Text(
-              widget.text,
-              style: TextStyle(
-                fontSize: widget.fontSize ?? 18,
-                fontWeight: widget.fontWeight ?? FontWeight.bold,
-                color: AppColors.white,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                widget.text,
+                style: TextStyle(
+                  fontSize: widget.fontSize ?? 18,
+                  fontWeight: widget.fontWeight ?? FontWeight.bold,
+                  color: AppColors.white,
+                ),
               ),
             ),
           ),

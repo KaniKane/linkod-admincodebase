@@ -31,7 +31,7 @@ class _OutlineButtonState extends State<OutlineButton> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           width: widget.isFullWidth ? double.infinity : null,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
             color: _isHovered
                 ? AppColors.inputBackground
@@ -40,19 +40,22 @@ class _OutlineButtonState extends State<OutlineButton> {
             border: Border.all(
               color: _isHovered
                   ? AppColors.primaryGreen
-                  : AppColors.lightGrey,
+                  : AppColors.mediumGrey,
               width: 1,
             ),
           ),
-          child: Center(
-            child: Text(
-              widget.text,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.normal,
-                color: _isHovered
-                    ? AppColors.primaryGreen
-                    : AppColors.darkGrey,
+          child: DefaultTextStyle(
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: _isHovered
+                  ? AppColors.primaryGreen
+                  : AppColors.buttonTextOnLightStrong,
+            ),
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(widget.text),
               ),
             ),
           ),

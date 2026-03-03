@@ -18,6 +18,8 @@ class AppColors {
   // Text colors
   static const Color darkGrey = Color(0xFF4A4A4A);
   static const Color darkGreyAlt = Color(0xFF333333);
+  static const Color buttonTextOnLight = Color(0xFF1A1A1A); // High contrast for buttons on white/light bg
+  static const Color buttonTextOnLightStrong = Color(0xFF000000); // Pure black for max visibility on light bg
   static const Color lightGrey = Color(0xFF9B9B9B);
   static const Color mediumGrey = Color(0xFF666666);
   
