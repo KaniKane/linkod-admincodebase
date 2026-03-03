@@ -23,6 +23,30 @@ migrate_working_dir/
 # is commented out by default.
 #.vscode/
 
+
+# Node / Firebase Functions
+node_modules/
+functions/node_modules/
+npm-debug.log*
+package-lock.json
+
+# Python virtual environment
+.venv/
+venv/
+
+# Visual Studio (you are using it)
+.vs/
+
+# Firebase local cache
+.firebase/
+
+# Environment files
+.env
+.env.*
+
+
+
+
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id

@@ -1,0 +1,36 @@
+rules_version = '2';
+// Firebase Storage rules for linkod-db (Pay As You Go).
+// Paths: proof/{path}, profiles/{uid}, posts/{path}, products/{path}
+// - Authenticated users can upload to their own paths; anyone can read (for feed/product images).
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Proof of residence: only the authenticated user can write to proof/{uid}_*
+    match /proof/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.resource.size < 10 * 1024 * 1024  // 10 MB
+        && request.resource.contentType.matches('image/.*');
+    }
+    // Profile images: users can write their own profile image
+    match /profiles/{userId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+    // Post images: authenticated users upload to posts/{uid}_{timestamp}_{index}
+    match /posts/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+    // Product images: same as posts
+    match /products/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+  }
+}

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../widgets/full_screen_image_viewer.dart';
 import '../utils/app_colors.dart';
 import '../widgets/app_sidebar.dart';
 import '../widgets/user_header.dart';
@@ -668,21 +669,36 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                   scrollDirection: Axis.horizontal,
                   itemCount: imageUrls.length,
                   separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (_, i) => ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      imageUrls[i],
-                      width: 160,
-                      height: 160,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
+                  itemBuilder: (_, i) => GestureDetector(
+                    onTap: () => openFullScreenImage(ctx, imageUrls[i]),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        imageUrls[i],
                         width: 160,
                         height: 160,
-                        color: AppColors.inputBackground,
-                        child: const Icon(
-                          Icons.image_not_supported_outlined,
-                          color: AppColors.lightGrey,
-                          size: 40,
+                        fit: BoxFit.cover,
+                        cacheWidth: 320,
+                        cacheHeight: 320,
+                        loadingBuilder: (_, child, progress) {
+                          if (progress == null) return child;
+                          return Container(
+                            width: 160,
+                            height: 160,
+                            color: AppColors.inputBackground,
+                            alignment: Alignment.center,
+                            child: const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          );
+                        },
+                        errorBuilder: (_, __, ___) => Container(
+                          width: 160,
+                          height: 160,
+                          color: AppColors.inputBackground,
+                          child: const Icon(Icons.image_not_supported_outlined, color: AppColors.lightGrey, size: 40),
                         ),
                       ),
                     ),

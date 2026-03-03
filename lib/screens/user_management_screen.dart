@@ -14,6 +14,7 @@ import '../widgets/dialog_container.dart';
 import '../widgets/error_notification.dart';
 import '../widgets/decline_reason_dialog.dart';
 import '../widgets/draft_saved_notification.dart';
+import '../widgets/full_screen_image_viewer.dart';
 import '../api/announcement_backend_api.dart';
 import '../utils/app_colors.dart';
 import 'dashboard_screen.dart';
@@ -2382,12 +2383,29 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               width: double.infinity,
               child:
                   proofOfResidenceUrl != null && proofOfResidenceUrl.isNotEmpty
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        proofOfResidenceUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _proofPlaceholder(),
+                  ? GestureDetector(
+                      onTap: () => openFullScreenImage(ctx, proofOfResidenceUrl!),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          proofOfResidenceUrl!,
+                          fit: BoxFit.cover,
+                          cacheWidth: 400,
+                          cacheHeight: 300,
+                          loadingBuilder: (_, child, progress) {
+                            if (progress == null) return child;
+                            return Container(
+                              color: AppColors.inputBackground,
+                              alignment: Alignment.center,
+                              child: const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            );
+                          },
+                          errorBuilder: (_, __, ___) => _proofPlaceholder(),
+                        ),
                       ),
                     )
                   : _proofPlaceholder(),
