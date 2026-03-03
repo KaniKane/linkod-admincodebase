@@ -59,7 +59,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     _loadAccounts();
     _loadCurrentUserRole();
   }
-  
+
   Future<void> _loadCurrentUserRole() async {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser != null) {
@@ -69,7 +69,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             .doc(currentUser.uid)
             .get();
         if (userDoc.exists && mounted) {
-          final role = (userDoc.data()?['role'] as String? ?? 'admin').toLowerCase();
+          final role = (userDoc.data()?['role'] as String? ?? 'admin')
+              .toLowerCase();
           setState(() {
             _currentUserRole = role;
           });
@@ -98,10 +99,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     });
 
     try {
-      final usersSnapshot =
-          await FirebaseFirestore.instance.collection('users').get();
-      final awaitingSnapshot =
-          await FirebaseFirestore.instance.collection('awaitingApproval').get();
+      final usersSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .get();
+      final awaitingSnapshot = await FirebaseFirestore.instance
+          .collection('awaitingApproval')
+          .get();
 
       final loadedUsers = <Map<String, String>>[];
       final loadedAdmins = <Map<String, String>>[];
@@ -125,7 +128,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             'phone': phoneNumber,
             'category': role == 'super_admin' || role == 'admin'
                 ? (position.isNotEmpty ? position : 'Admin')
-                : (demographicCategory.isNotEmpty ? demographicCategory : 'User'),
+                : (demographicCategory.isNotEmpty
+                      ? demographicCategory
+                      : 'User'),
             'status': accountStatus == 'suspended' ? 'suspended' : 'declined',
           });
           continue;
@@ -166,9 +171,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           'phone': phoneNumber,
           'category': category.isNotEmpty
               ? category
-                : (role == 'admin'
-                  ? (position.isNotEmpty ? position : 'Admin')
-                  : (role.isNotEmpty ? role : 'User')),
+              : (role == 'admin'
+                    ? (position.isNotEmpty ? position : 'Admin')
+                    : (role.isNotEmpty ? role : 'User')),
           'role': role,
           'position': position,
           'source': 'awaitingApproval',
@@ -177,17 +182,21 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       // Re-applications: users who were declined and re-applied (accountStatus == 'pending')
       for (final doc in usersSnapshot.docs) {
         final data = doc.data();
-        if ((data['accountStatus'] as String?)?.toLowerCase() != 'pending') continue;
+        if ((data['accountStatus'] as String?)?.toLowerCase() != 'pending')
+          continue;
         final fullName = (data['fullName'] ?? '') as String;
         final phoneNumber = (data['phoneNumber'] ?? '') as String;
         final role = ((data['role'] ?? '') as String).toLowerCase();
         final position = (data['position'] ?? '') as String;
-        final category = (data['category'] ?? data['demographicCategory'] ?? '') as String;
+        final category =
+            (data['category'] ?? data['demographicCategory'] ?? '') as String;
         loadedAwaiting.add({
           'id': doc.id,
           'name': fullName.isNotEmpty ? fullName : 'Unnamed user',
           'phone': phoneNumber,
-          'category': category.isNotEmpty ? category : (role.isNotEmpty ? role : 'User'),
+          'category': category.isNotEmpty
+              ? category
+              : (role.isNotEmpty ? role : 'User'),
           'role': role,
           'position': position,
           'source': 'users',
@@ -222,7 +231,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const DraftSavedNotification(
-              message: 'Only Super Admin can access this.'),
+            message: 'Only Super Admin can access this.',
+          ),
           backgroundColor: Colors.transparent,
           elevation: 0,
           behavior: SnackBarBehavior.floating,
@@ -277,7 +287,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       final name = (u['name'] ?? '').toLowerCase();
       final phone = (u['phone'] ?? '').toLowerCase();
       final cat = (u['category'] ?? '').toLowerCase();
-      return name.contains(_searchQuery) || phone.contains(_searchQuery) || cat.contains(_searchQuery);
+      return name.contains(_searchQuery) ||
+          phone.contains(_searchQuery) ||
+          cat.contains(_searchQuery);
     }).toList();
   }
 
@@ -431,9 +443,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             child: Column(
                               children: [
                                 // Action bar (search + add button)
-                                if (_activeTabIndex == 2) // Awaiting Approval tab
+                                if (_activeTabIndex ==
+                                    2) // Awaiting Approval tab
                                   Padding(
-                                    padding: const EdgeInsets.fromLTRB(32, 24, 32, 16),
+                                    padding: const EdgeInsets.fromLTRB(
+                                      32,
+                                      24,
+                                      32,
+                                      16,
+                                    ),
                                     child: const Align(
                                       alignment: Alignment.centerLeft,
                                       child: Text(
@@ -450,15 +468,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                   Padding(
                                     padding: const EdgeInsets.all(32),
                                     child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
                                       children: [
                                         Expanded(
                                           child: CustomSearchBar(
                                             placeholder: _activeTabIndex == 0
                                                 ? 'Search user'
                                                 : _activeTabIndex == 1
-                                                    ? 'Search admin'
-                                                    : 'Search inactive',
+                                                ? 'Search admin'
+                                                : 'Search inactive',
                                             controller: _searchController,
                                             onChanged: (_) => setState(() {}),
                                           ),
@@ -468,16 +487,19 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                         if (_activeTabIndex == 0)
                                           CustomButton(
                                             text: 'Add New User',
-                                            onPressed: () => _showAddAccountDialog(
-                                              isAdmin: false,
-                                            ),
+                                            onPressed: () =>
+                                                _showAddAccountDialog(
+                                                  isAdmin: false,
+                                                ),
                                             isFullWidth: false,
                                           )
                                         // Admins tab: "Create Official Account" button (SUPER ADMIN only)
-                                        else if (_activeTabIndex == 1 && _currentUserRole == 'super_admin')
+                                        else if (_activeTabIndex == 1 &&
+                                            _currentUserRole == 'super_admin')
                                           CustomButton(
                                             text: 'Create Official Account',
-                                            onPressed: () => _showCreateOfficialAccountDialog(),
+                                            onPressed: () =>
+                                                _showCreateOfficialAccountDialog(),
                                             isFullWidth: false,
                                           )
                                         // Inactive tab: no add button
@@ -489,12 +511,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 // Table content
                                 Expanded(
                                   child: SingleChildScrollView(
-                                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 32,
+                                    ),
                                     child: _isLoading
                                         ? const Padding(
                                             padding: EdgeInsets.only(top: 48),
                                             child: Center(
-                                              child: CircularProgressIndicator(),
+                                              child:
+                                                  CircularProgressIndicator(),
                                             ),
                                           )
                                         : Column(
@@ -503,7 +528,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                             children: [
                                               if (_errorMessage != null) ...[
                                                 ErrorNotification(
-                                                    message: _errorMessage!),
+                                                  message: _errorMessage!,
+                                                ),
                                                 const SizedBox(height: 16),
                                               ],
                                               _buildTable(),
@@ -537,10 +563,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 0),
       decoration: const BoxDecoration(
         border: Border(
-          bottom: BorderSide(
-            color: AppColors.inputBackground,
-            width: 1,
-          ),
+          bottom: BorderSide(color: AppColors.inputBackground, width: 1),
         ),
       ),
       child: Row(
@@ -608,7 +631,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         ),
       );
     }
-    
+
     switch (_activeTabIndex) {
       case 0:
         return _buildUsersTable();
@@ -627,7 +650,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
     final passwordController = TextEditingController();
-    final roleController = TextEditingController(text: isAdmin ? 'admin' : 'user');
+    final roleController = TextEditingController(
+      text: isAdmin ? 'admin' : 'user',
+    );
     // For selectable position / demographic options
     final Set<String> selectedCategories = {};
     String? selectedPosition;
@@ -646,319 +671,363 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               backgroundColor: Colors.transparent,
               insetPadding: const EdgeInsets.all(20),
               child: Form(
-                  key: formKey,
-                  child: Center(
-                    child: Container(
-                      constraints: const BoxConstraints(maxWidth: 520),
-                      padding: const EdgeInsets.all(32),
-                      decoration: BoxDecoration(
-                        color: AppColors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.shadowColor,
-                            blurRadius: 10,
-                            offset: const Offset(0, 5),
+                key: formKey,
+                child: Center(
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      color: AppColors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.shadowColor,
+                          blurRadius: 10,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          isAdmin ? 'Add New Admin' : 'Add New User',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.loginGreen,
                           ),
-                        ],
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            isAdmin ? 'Add New Admin' : 'Add New User',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.loginGreen,
-                            ),
+                        ),
+                        const SizedBox(height: 24),
+                        _buildDialogTextField(
+                          label: 'Full Name',
+                          controller: nameController,
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
+                              ? 'Name is required'
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDialogTextField(
+                          label: 'Phone Number',
+                          controller: phoneController,
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
+                              ? 'Phone number is required'
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDialogPasswordField(
+                          label: 'Password (min 6 characters)',
+                          controller: passwordController,
+                          obscure: passwordObscure,
+                          onToggle: () => setState(
+                            () => passwordObscure = !passwordObscure,
                           ),
-                          const SizedBox(height: 24),
-                          _buildDialogTextField(
-                            label: 'Full Name',
-                            controller: nameController,
-                            validator: (value) =>
-                                value == null || value.trim().isEmpty ? 'Name is required' : null,
-                          ),
-                          const SizedBox(height: 16),
-                          _buildDialogTextField(
-                            label: 'Phone Number',
-                            controller: phoneController,
-                            validator: (value) => value == null || value.trim().isEmpty
-                                ? 'Phone number is required'
-                                : null,
-                          ),
-                          const SizedBox(height: 16),
-                          _buildDialogPasswordField(
-                            label: 'Password (min 6 characters)',
-                            controller: passwordController,
-                            obscure: passwordObscure,
-                            onToggle: () => setState(() => passwordObscure = !passwordObscure),
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Password is required';
-                              }
-                              if (value.length < 6) {
-                                return 'Password must be at least 6 characters';
-                              }
-                              return null;
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Password is required';
+                            }
+                            if (value.length < 6) {
+                              return 'Password must be at least 6 characters';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        if (isAdmin)
+                          _buildPositionSelector(
+                            selectedPosition: selectedPosition,
+                            onSelect: (value) {
+                              setState(() {
+                                selectedPosition = value;
+                              });
+                            },
+                          )
+                        else
+                          _buildDemographicSelector(
+                            selectedCategories: selectedCategories,
+                            onToggle: (value) {
+                              setState(() {
+                                if (selectedCategories.contains(value)) {
+                                  selectedCategories.remove(value);
+                                } else {
+                                  selectedCategories.add(value);
+                                }
+                              });
                             },
                           ),
-                          const SizedBox(height: 16),
-                          if (isAdmin)
-                            _buildPositionSelector(
-                              selectedPosition: selectedPosition,
-                              onSelect: (value) {
-                                setState(() {
-                                  selectedPosition = value;
-                                });
-                              },
-                            )
-                          else
-                            _buildDemographicSelector(
-                              selectedCategories: selectedCategories,
-                              onToggle: (value) {
-                                setState(() {
-                                  if (selectedCategories.contains(value)) {
-                                    selectedCategories.remove(value);
-                                  } else {
-                                    selectedCategories.add(value);
-                                  }
-                                });
-                              },
+                        const SizedBox(height: 16),
+                        _buildDialogTextField(
+                          label: 'Role',
+                          controller: roleController,
+                          enabled: false,
+                        ),
+                        const SizedBox(height: 16),
+                        if (dialogError != null) ...[
+                          ErrorNotification(message: dialogError!),
+                          const SizedBox(height: 8),
+                        ],
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            OutlineButton(
+                              text: 'Cancel',
+                              onPressed: isSubmitting
+                                  ? null
+                                  : () => Navigator.of(context).pop(),
                             ),
-                          const SizedBox(height: 16),
-                          _buildDialogTextField(
-                            label: 'Role',
-                            controller: roleController,
-                            enabled: false,
-                          ),
-                          const SizedBox(height: 16),
-                          if (dialogError != null) ...[
-                            ErrorNotification(message: dialogError!),
-                            const SizedBox(height: 8),
-                          ],
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              OutlineButton(
-                                text: 'Cancel',
-                                onPressed: isSubmitting ? null : () => Navigator.of(context).pop(),
-                              ),
-                              const SizedBox(width: 8),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.loginGreen,
-                                  foregroundColor: AppColors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.loginGreen,
+                                foregroundColor: AppColors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
-                                onPressed: isSubmitting
-                                    ? null
-                                    : () async {
-                                        if (!formKey.currentState!.validate()) return;
+                              ),
+                              onPressed: isSubmitting
+                                  ? null
+                                  : () async {
+                                      if (!formKey.currentState!.validate())
+                                        return;
 
-                                        if (isAdmin && (selectedPosition == null)) {
-                                          setState(() {
-                                            dialogError = 'Please select a position';
-                                          });
-                                          return;
-                                        }
-                                        if (!isAdmin && selectedCategories.isEmpty) {
+                                      if (isAdmin &&
+                                          (selectedPosition == null)) {
+                                        setState(() {
+                                          dialogError =
+                                              'Please select a position';
+                                        });
+                                        return;
+                                      }
+                                      if (!isAdmin &&
+                                          selectedCategories.isEmpty) {
+                                        setState(() {
+                                          dialogError =
+                                              'Please select at least one demographic category';
+                                        });
+                                        return;
+                                      }
+
+                                      setState(() {
+                                        isSubmitting = true;
+                                        dialogError = null;
+                                      });
+
+                                      try {
+                                        final name = nameController.text.trim();
+                                        final phone = phoneController.text
+                                            .trim();
+                                        final password =
+                                            passwordController.text;
+                                        if (phone.isEmpty) {
                                           setState(() {
                                             dialogError =
-                                                'Please select at least one demographic category';
+                                                'Phone number is required';
+                                            isSubmitting = false;
+                                          });
+                                          return;
+                                        }
+                                        if (password.isEmpty ||
+                                            password.length < 6) {
+                                          setState(() {
+                                            dialogError =
+                                                'Password must be at least 6 characters';
+                                            isSubmitting = false;
                                           });
                                           return;
                                         }
 
-                                        setState(() {
-                                          isSubmitting = true;
-                                          dialogError = null;
-                                        });
+                                        final now =
+                                            FieldValue.serverTimestamp();
+                                        final email = '$phone@linkod.com';
+                                        final firestoreRole = isAdmin
+                                            ? 'admin'
+                                            : 'resident';
 
+                                        // Create Firebase Auth user (so they can log in) using secondary app so admin stays signed in
+                                        FirebaseApp secondaryApp;
                                         try {
-                                          final name = nameController.text.trim();
-                                          final phone = phoneController.text.trim();
-                                          final password = passwordController.text;
-                                          if (phone.isEmpty) {
-                                            setState(() {
-                                              dialogError = 'Phone number is required';
-                                              isSubmitting = false;
-                                            });
-                                            return;
-                                          }
-                                          if (password.isEmpty || password.length < 6) {
-                                            setState(() {
-                                              dialogError = 'Password must be at least 6 characters';
-                                              isSubmitting = false;
-                                            });
-                                            return;
-                                          }
-
-                                          final now = FieldValue.serverTimestamp();
-                                          final email = '$phone@linkod.com';
-                                          final firestoreRole = isAdmin ? 'admin' : 'resident';
-
-                                          // Create Firebase Auth user (so they can log in) using secondary app so admin stays signed in
-                                          FirebaseApp secondaryApp;
-                                          try {
-                                            secondaryApp = Firebase.app('AuthHelper');
-                                          } catch (_) {
-                                            secondaryApp = await Firebase.initializeApp(
-                                              name: 'AuthHelper',
-                                              options: Firebase.app().options,
+                                          secondaryApp = Firebase.app(
+                                            'AuthHelper',
+                                          );
+                                        } catch (_) {
+                                          secondaryApp =
+                                              await Firebase.initializeApp(
+                                                name: 'AuthHelper',
+                                                options: Firebase.app().options,
+                                              );
+                                        }
+                                        final authHelper =
+                                            FirebaseAuth.instanceFor(
+                                              app: secondaryApp,
                                             );
-                                          }
-                                          final authHelper = FirebaseAuth.instanceFor(app: secondaryApp);
-                                          UserCredential? userCredential;
-                                          try {
-                                            userCredential = await authHelper.createUserWithEmailAndPassword(
-                                              email: email,
-                                              password: password,
-                                            );
-                                          } on FirebaseAuthException catch (e) {
-                                            if (e.code == 'email-already-in-use') {
-                                              userCredential = await authHelper.signInWithEmailAndPassword(
+                                        UserCredential? userCredential;
+                                        try {
+                                          userCredential = await authHelper
+                                              .createUserWithEmailAndPassword(
                                                 email: email,
                                                 password: password,
                                               );
-                                            } else {
-                                              rethrow;
-                                            }
-                                          }
-                                          final newUser = userCredential?.user;
-                                          if (newUser == null) {
-                                            setState(() {
-                                              dialogError = 'Failed to create account.';
-                                              isSubmitting = false;
-                                            });
-                                            return;
-                                          }
-                                          final uid = newUser.uid;
-
-                                          final data = <String, dynamic>{
-                                            'userId': uid,
-                                            'fullName': name,
-                                            'phoneNumber': phone,
-                                            'email': email,
-                                            'role': firestoreRole,
-                                            'createdAt': now,
-                                            'updatedAt': now,
-                                            'isActive': true,
-                                            'isApproved': true,
-                                          };
-                                          if (isAdmin) {
-                                            data['position'] = selectedPosition ?? 'Admin';
-                                          } else {
-                                            data['category'] = selectedCategories.isEmpty
-                                                ? 'User'
-                                                : selectedCategories.join(', ');
-                                            data['categories'] = selectedCategories.toList();
-                                          }
-
-                                          // Create Firestore document - use set() without merge to ensure all fields are written
-                                          await FirebaseFirestore.instance
-                                              .collection('users')
-                                              .doc(uid)
-                                              .set(data);
-
-                                          // Verify document was created successfully
-                                          final verifyDoc = await FirebaseFirestore.instance
-                                              .collection('users')
-                                              .doc(uid)
-                                              .get();
-                                          if (!verifyDoc.exists) {
-                                            setState(() {
-                                              dialogError = 'Failed to create user document. Please try again.';
-                                              isSubmitting = false;
-                                            });
-                                            return;
-                                          }
-
-                                          await authHelper.signOut();
-
-                                          String adminName = 'Barangay Official';
-                                          final adminUid = FirebaseAuth.instance.currentUser?.uid;
-                                          if (adminUid != null) {
-                                            final adminDoc = await FirebaseFirestore.instance
-                                                .collection('users')
-                                                .doc(adminUid)
-                                                .get();
-                                            if (adminDoc.exists) {
-                                              adminName =
-                                                  (adminDoc.data()?['fullName'] as String?) ??
-                                                      adminName;
-                                            }
-                                          }
-                                          await FirebaseFirestore.instance
-                                              .collection('adminActivities')
-                                              .add({
-                                            'type': 'user_created',
-                                            'description': '$adminName added user $name',
-                                            'fullName': name,
-                                            'createdAt': FieldValue.serverTimestamp(),
-                                          });
-
-                                          if (mounted) {
-                                            await _loadAccounts();
-                                            Navigator.of(context).pop();
-                                          }
                                         } on FirebaseAuthException catch (e) {
-                                          // More helpful error messages for admin when creating users
-                                          String msg;
-                                          switch (e.code) {
-                                            case 'email-already-in-use':
-                                              msg =
-                                                  'An account already exists for this phone number. Please use a different phone or reset the password.';
-                                              break;
-                                            case 'invalid-email':
-                                              msg =
-                                                  'The generated email for this phone number is invalid. Please check the phone format.';
-                                              break;
-                                            case 'operation-not-allowed':
-                                              msg =
-                                                  'Email/password sign-in is disabled in Firebase Auth settings.';
-                                              break;
-                                            case 'weak-password':
-                                              msg =
-                                                  'The password is too weak. Please use at least 6 characters.';
-                                              break;
-                                            default:
-                                              msg = e.message ?? 'Auth error: ${e.code}';
+                                          if (e.code ==
+                                              'email-already-in-use') {
+                                            userCredential = await authHelper
+                                                .signInWithEmailAndPassword(
+                                                  email: email,
+                                                  password: password,
+                                                );
+                                          } else {
+                                            rethrow;
                                           }
-                                          setState(() {
-                                            dialogError = msg;
-                                            isSubmitting = false;
-                                          });
-                                        } catch (e) {
-                                          setState(() {
-                                            dialogError = 'Unexpected error: $e';
-                                            isSubmitting = false;
-                                          });
                                         }
-                                      },
-                                child: isSubmitting
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor: AlwaysStoppedAnimation<Color>(
-                                            AppColors.white,
-                                          ),
-                                        ),
-                                      )
-                                    : const Text('Create'),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                                        final newUser = userCredential?.user;
+                                        if (newUser == null) {
+                                          setState(() {
+                                            dialogError =
+                                                'Failed to create account.';
+                                            isSubmitting = false;
+                                          });
+                                          return;
+                                        }
+                                        final uid = newUser.uid;
+
+                                        final data = <String, dynamic>{
+                                          'userId': uid,
+                                          'fullName': name,
+                                          'phoneNumber': phone,
+                                          'email': email,
+                                          'role': firestoreRole,
+                                          'createdAt': now,
+                                          'updatedAt': now,
+                                          'isActive': true,
+                                          'isApproved': true,
+                                        };
+                                        if (isAdmin) {
+                                          data['position'] =
+                                              selectedPosition ?? 'Admin';
+                                        } else {
+                                          data['category'] =
+                                              selectedCategories.isEmpty
+                                              ? 'User'
+                                              : selectedCategories.join(', ');
+                                          data['categories'] =
+                                              selectedCategories.toList();
+                                        }
+
+                                        // Create Firestore document - use set() without merge to ensure all fields are written
+                                        await FirebaseFirestore.instance
+                                            .collection('users')
+                                            .doc(uid)
+                                            .set(data);
+
+                                        // Verify document was created successfully
+                                        final verifyDoc =
+                                            await FirebaseFirestore.instance
+                                                .collection('users')
+                                                .doc(uid)
+                                                .get();
+                                        if (!verifyDoc.exists) {
+                                          setState(() {
+                                            dialogError =
+                                                'Failed to create user document. Please try again.';
+                                            isSubmitting = false;
+                                          });
+                                          return;
+                                        }
+
+                                        await authHelper.signOut();
+
+                                        String adminName = 'Barangay Official';
+                                        final adminUid = FirebaseAuth
+                                            .instance
+                                            .currentUser
+                                            ?.uid;
+                                        if (adminUid != null) {
+                                          final adminDoc =
+                                              await FirebaseFirestore.instance
+                                                  .collection('users')
+                                                  .doc(adminUid)
+                                                  .get();
+                                          if (adminDoc.exists) {
+                                            adminName =
+                                                (adminDoc.data()?['fullName']
+                                                    as String?) ??
+                                                adminName;
+                                          }
+                                        }
+                                        await FirebaseFirestore.instance
+                                            .collection('adminActivities')
+                                            .add({
+                                              'type': 'user_created',
+                                              'description':
+                                                  '$adminName added user $name',
+                                              'fullName': name,
+                                              'createdAt':
+                                                  FieldValue.serverTimestamp(),
+                                            });
+
+                                        if (mounted) {
+                                          await _loadAccounts();
+                                          Navigator.of(context).pop();
+                                        }
+                                      } on FirebaseAuthException catch (e) {
+                                        // More helpful error messages for admin when creating users
+                                        String msg;
+                                        switch (e.code) {
+                                          case 'email-already-in-use':
+                                            msg =
+                                                'An account already exists for this phone number. Please use a different phone or reset the password.';
+                                            break;
+                                          case 'invalid-email':
+                                            msg =
+                                                'The generated email for this phone number is invalid. Please check the phone format.';
+                                            break;
+                                          case 'operation-not-allowed':
+                                            msg =
+                                                'Email/password sign-in is disabled in Firebase Auth settings.';
+                                            break;
+                                          case 'weak-password':
+                                            msg =
+                                                'The password is too weak. Please use at least 6 characters.';
+                                            break;
+                                          default:
+                                            msg =
+                                                e.message ??
+                                                'Auth error: ${e.code}';
+                                        }
+                                        setState(() {
+                                          dialogError = msg;
+                                          isSubmitting = false;
+                                        });
+                                      } catch (e) {
+                                        setState(() {
+                                          dialogError = 'Unexpected error: $e';
+                                          isSubmitting = false;
+                                        });
+                                      }
+                                    },
+                              child: isSubmitting
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              AppColors.white,
+                                            ),
+                                      ),
+                                    )
+                                  : const Text('Create'),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
+                ),
               ),
             );
           },
@@ -1021,13 +1090,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           label: 'Full Name',
                           controller: nameController,
                           validator: (value) =>
-                              value == null || value.trim().isEmpty ? 'Name is required' : null,
+                              value == null || value.trim().isEmpty
+                              ? 'Name is required'
+                              : null,
                         ),
                         const SizedBox(height: 16),
                         _buildDialogTextField(
                           label: 'Phone Number',
                           controller: phoneController,
-                          validator: (value) => value == null || value.trim().isEmpty
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
                               ? 'Phone number is required'
                               : null,
                         ),
@@ -1036,7 +1108,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           label: 'Password (min 6 characters)',
                           controller: passwordController,
                           obscure: passwordObscure,
-                          onToggle: () => setState(() => passwordObscure = !passwordObscure),
+                          onToggle: () => setState(
+                            () => passwordObscure = !passwordObscure,
+                          ),
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return 'Password is required';
@@ -1071,7 +1145,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 child: DropdownButton<String>(
                                   value: selectedRole,
                                   isExpanded: true,
-                                  padding: const EdgeInsets.symmetric(horizontal: 15),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 15,
+                                  ),
                                   style: const TextStyle(
                                     fontSize: 14,
                                     color: AppColors.darkGrey,
@@ -1115,7 +1191,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           children: [
                             OutlineButton(
                               text: 'Cancel',
-                              onPressed: isSubmitting ? null : () => Navigator.of(context).pop(),
+                              onPressed: isSubmitting
+                                  ? null
+                                  : () => Navigator.of(context).pop(),
                             ),
                             const SizedBox(width: 8),
                             ElevatedButton(
@@ -1129,11 +1207,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               onPressed: isSubmitting
                                   ? null
                                   : () async {
-                                      if (!formKey.currentState!.validate()) return;
+                                      if (!formKey.currentState!.validate())
+                                        return;
 
                                       if (selectedPosition == null) {
                                         setState(() {
-                                          dialogError = 'Please select a position';
+                                          dialogError =
+                                              'Please select a position';
                                         });
                                         return;
                                       }
@@ -1145,50 +1225,65 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
                                       try {
                                         final name = nameController.text.trim();
-                                        final phone = phoneController.text.trim();
-                                        final password = passwordController.text;
+                                        final phone = phoneController.text
+                                            .trim();
+                                        final password =
+                                            passwordController.text;
                                         if (phone.isEmpty) {
                                           setState(() {
-                                            dialogError = 'Phone number is required';
+                                            dialogError =
+                                                'Phone number is required';
                                             isSubmitting = false;
                                           });
                                           return;
                                         }
-                                        if (password.isEmpty || password.length < 6) {
+                                        if (password.isEmpty ||
+                                            password.length < 6) {
                                           setState(() {
-                                            dialogError = 'Password must be at least 6 characters';
+                                            dialogError =
+                                                'Password must be at least 6 characters';
                                             isSubmitting = false;
                                           });
                                           return;
                                         }
 
-                                        final now = FieldValue.serverTimestamp();
+                                        final now =
+                                            FieldValue.serverTimestamp();
                                         final email = '$phone@linkod.com';
                                         final role = selectedRole ?? 'admin';
 
                                         // Create Firebase Auth user using secondary app
                                         FirebaseApp secondaryApp;
                                         try {
-                                          secondaryApp = Firebase.app('AuthHelper');
-                                        } catch (_) {
-                                          secondaryApp = await Firebase.initializeApp(
-                                            name: 'AuthHelper',
-                                            options: Firebase.app().options,
+                                          secondaryApp = Firebase.app(
+                                            'AuthHelper',
                                           );
+                                        } catch (_) {
+                                          secondaryApp =
+                                              await Firebase.initializeApp(
+                                                name: 'AuthHelper',
+                                                options: Firebase.app().options,
+                                              );
                                         }
-                                        final authHelper = FirebaseAuth.instanceFor(app: secondaryApp);
+                                        final authHelper =
+                                            FirebaseAuth.instanceFor(
+                                              app: secondaryApp,
+                                            );
                                         UserCredential? userCredential;
                                         try {
-                                          userCredential = await authHelper.createUserWithEmailAndPassword(
-                                            email: email,
-                                            password: password,
-                                          );
+                                          userCredential = await authHelper
+                                              .createUserWithEmailAndPassword(
+                                                email: email,
+                                                password: password,
+                                              );
                                         } on FirebaseAuthException catch (e) {
-                                          if (e.code == 'email-already-in-use') {
-                                            userCredential = await authHelper.signInWithEmailAndPassword(
-                                              email: email,
-                                              password: password,
-                                            );
+                                          if (e.code ==
+                                              'email-already-in-use') {
+                                            userCredential = await authHelper
+                                                .signInWithEmailAndPassword(
+                                                  email: email,
+                                                  password: password,
+                                                );
                                           } else {
                                             rethrow;
                                           }
@@ -1196,7 +1291,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                         final newUser = userCredential?.user;
                                         if (newUser == null) {
                                           setState(() {
-                                            dialogError = 'Failed to create account.';
+                                            dialogError =
+                                                'Failed to create account.';
                                             isSubmitting = false;
                                           });
                                           return;
@@ -1209,7 +1305,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                           'phoneNumber': phone,
                                           'email': email,
                                           'role': role,
-                                          'position': selectedPosition ?? 'Admin',
+                                          'position':
+                                              selectedPosition ?? 'Admin',
                                           'createdAt': now,
                                           'updatedAt': now,
                                           'isActive': true,
@@ -1223,13 +1320,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                             .set(data);
 
                                         // Verify document was created successfully
-                                        final verifyDoc = await FirebaseFirestore.instance
-                                            .collection('users')
-                                            .doc(uid)
-                                            .get();
+                                        final verifyDoc =
+                                            await FirebaseFirestore.instance
+                                                .collection('users')
+                                                .doc(uid)
+                                                .get();
                                         if (!verifyDoc.exists) {
                                           setState(() {
-                                            dialogError = 'Failed to create user document. Please try again.';
+                                            dialogError =
+                                                'Failed to create user document. Please try again.';
                                             isSubmitting = false;
                                           });
                                           return;
@@ -1238,26 +1337,33 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                         await authHelper.signOut();
 
                                         String adminName = 'Barangay Official';
-                                        final adminUid = FirebaseAuth.instance.currentUser?.uid;
+                                        final adminUid = FirebaseAuth
+                                            .instance
+                                            .currentUser
+                                            ?.uid;
                                         if (adminUid != null) {
-                                          final adminDoc = await FirebaseFirestore.instance
-                                              .collection('users')
-                                              .doc(adminUid)
-                                              .get();
+                                          final adminDoc =
+                                              await FirebaseFirestore.instance
+                                                  .collection('users')
+                                                  .doc(adminUid)
+                                                  .get();
                                           if (adminDoc.exists) {
                                             adminName =
-                                                (adminDoc.data()?['fullName'] as String?) ??
-                                                    adminName;
+                                                (adminDoc.data()?['fullName']
+                                                    as String?) ??
+                                                adminName;
                                           }
                                         }
                                         await FirebaseFirestore.instance
                                             .collection('adminActivities')
                                             .add({
-                                          'type': 'user_created',
-                                          'description': '$adminName created official account: $name ($role)',
-                                          'fullName': name,
-                                          'createdAt': FieldValue.serverTimestamp(),
-                                        });
+                                              'type': 'user_created',
+                                              'description':
+                                                  '$adminName created official account: $name ($role)',
+                                              'fullName': name,
+                                              'createdAt':
+                                                  FieldValue.serverTimestamp(),
+                                            });
 
                                         if (mounted) {
                                           await _loadAccounts();
@@ -1284,7 +1390,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                                 'The password is too weak. Please use at least 6 characters.';
                                             break;
                                           default:
-                                            msg = e.message ?? 'Auth error: ${e.code}';
+                                            msg =
+                                                e.message ??
+                                                'Auth error: ${e.code}';
                                         }
                                         setState(() {
                                           dialogError = msg;
@@ -1303,9 +1411,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                       height: 16,
                                       child: CircularProgressIndicator(
                                         strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                          AppColors.white,
-                                        ),
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              AppColors.white,
+                                            ),
                                       ),
                                     )
                                   : const Text('Create'),
@@ -1452,10 +1561,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             obscureText: obscureText,
             enabled: enabled,
             validator: validator,
-            style: const TextStyle(
-              fontSize: 14,
-              color: AppColors.darkGrey,
-            ),
+            style: const TextStyle(fontSize: 14, color: AppColors.darkGrey),
             decoration: const InputDecoration(
               border: InputBorder.none,
               contentPadding: EdgeInsets.symmetric(
@@ -1498,10 +1604,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             controller: controller,
             obscureText: obscure,
             validator: validator,
-            style: const TextStyle(
-              fontSize: 14,
-              color: AppColors.darkGrey,
-            ),
+            style: const TextStyle(fontSize: 14, color: AppColors.darkGrey),
             decoration: InputDecoration(
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(
@@ -1525,15 +1628,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   Widget _buildUsersTable() {
     final canViewFullData = _currentUserRole == 'super_admin';
-    
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: AppColors.inputBackground,
-          width: 1,
-        ),
+        border: Border.all(color: AppColors.inputBackground, width: 1),
       ),
       child: Column(
         children: [
@@ -1587,7 +1687,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           ),
           ...List.generate(_paginatedList.length, (index) {
             return _buildUserRow(
-                _paginatedList[index], index == _paginatedList.length - 1);
+              _paginatedList[index],
+              index == _paginatedList.length - 1,
+            );
           }),
         ],
       ),
@@ -1599,10 +1701,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: AppColors.inputBackground,
-          width: 1,
-        ),
+        border: Border.all(color: AppColors.inputBackground, width: 1),
       ),
       child: Column(
         children: [
@@ -1656,7 +1755,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           ),
           ...List.generate(_paginatedList.length, (index) {
             return _buildAdminRow(
-                _paginatedList[index], index == _paginatedList.length - 1);
+              _paginatedList[index],
+              index == _paginatedList.length - 1,
+            );
           }),
         ],
       ),
@@ -1668,10 +1769,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: AppColors.inputBackground,
-          width: 1,
-        ),
+        border: Border.all(color: AppColors.inputBackground, width: 1),
       ),
       child: Column(
         children: [
@@ -1689,7 +1787,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 SizedBox(
                   width: 40,
                   child: Checkbox(
-                    value: _selectedIndices.length == _awaitingApproval.length &&
+                    value:
+                        _selectedIndices.length == _awaitingApproval.length &&
                         _awaitingApproval.isNotEmpty,
                     onChanged: _handleSelectAll,
                   ),
@@ -1764,10 +1863,50 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             ),
             child: const Row(
               children: [
-                Expanded(flex: 2, child: Text('Name', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.darkGrey))),
-                Expanded(flex: 2, child: Text('Phone number', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.darkGrey))),
-                Expanded(flex: 2, child: Text('Category', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.darkGrey))),
-                Expanded(flex: 1, child: Text('Status', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.darkGrey))),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    'Name',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.darkGrey,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    'Phone number',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.darkGrey,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    'Category',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.darkGrey,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 1,
+                  child: Text(
+                    'Status',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.darkGrey,
+                    ),
+                  ),
+                ),
                 SizedBox(width: 180),
               ],
             ),
@@ -1784,28 +1923,65 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     );
   }
 
-  Widget _buildInactiveRow(Map<String, String> item, bool isLast, bool canEdit) {
+  Widget _buildInactiveRow(
+    Map<String, String> item,
+    bool isLast,
+    bool canEdit,
+  ) {
     final status = item['status'] ?? 'declined';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.inputBackground.withOpacity(0.3),
-        border: Border(bottom: isLast ? BorderSide.none : BorderSide(color: AppColors.inputBackground, width: 1)),
+        border: Border(
+          bottom: isLast
+              ? BorderSide.none
+              : BorderSide(color: AppColors.inputBackground, width: 1),
+        ),
       ),
       child: Row(
         children: [
-          Expanded(flex: 2, child: Text(item['name'] ?? '—', style: const TextStyle(fontSize: 14, color: AppColors.darkGrey))),
-          Expanded(flex: 2, child: Text(item['phone'] ?? '—', style: const TextStyle(fontSize: 14, color: AppColors.darkGrey))),
-          Expanded(flex: 2, child: Text(item['category'] ?? '—', style: const TextStyle(fontSize: 14, color: AppColors.darkGrey))),
+          Expanded(
+            flex: 2,
+            child: Text(
+              item['name'] ?? '—',
+              style: const TextStyle(fontSize: 14, color: AppColors.darkGrey),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              item['phone'] ?? '—',
+              style: const TextStyle(fontSize: 14, color: AppColors.darkGrey),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              item['category'] ?? '—',
+              style: const TextStyle(fontSize: 14, color: AppColors.darkGrey),
+            ),
+          ),
           Expanded(
             flex: 1,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: status == 'suspended' ? Colors.red.shade50 : Colors.orange.shade50,
+                color: status == 'suspended'
+                    ? Colors.red.shade50
+                    : Colors.orange.shade50,
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: Text(status == 'suspended' ? 'Suspended' : 'Declined', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: status == 'suspended' ? Colors.red.shade700 : Colors.orange.shade700)),
+              child: Text(
+                status == 'suspended' ? 'Suspended' : 'Declined',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: status == 'suspended'
+                      ? Colors.red.shade700
+                      : Colors.orange.shade700,
+                ),
+              ),
             ),
           ),
           if (canEdit)
@@ -1822,7 +1998,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                _ActionIcon(icon: Icons.edit, onTap: () => _showEditUserDialog(item)),
+                _ActionIcon(
+                  icon: Icons.edit,
+                  onTap: () => _showEditUserDialog(item),
+                ),
               ],
             ),
         ],
@@ -1837,10 +2016,18 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Reactivate account'),
-        content: Text('Set ${item['name']} to active? They will be able to sign in again.'),
+        content: Text(
+          'Set ${item['name']} to active? They will be able to sign in again.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Reactivate')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Reactivate'),
+          ),
         ],
       ),
     );
@@ -1853,7 +2040,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       });
       if (mounted) {
         await _loadAccounts();
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account reactivated.')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Account reactivated.')));
       }
     } catch (e) {
       if (mounted) setState(() => _errorMessage = 'Failed to reactivate: $e');
@@ -1864,7 +2053,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     // OFFICIAL role: hide phone number, hide edit/delete buttons
     final canViewFullData = _currentUserRole == 'super_admin';
     final canEditDelete = _currentUserRole == 'super_admin';
-    
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1872,10 +2061,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         border: Border(
           bottom: isLast
               ? BorderSide.none
-              : BorderSide(
-                  color: AppColors.inputBackground,
-                  width: 1,
-                ),
+              : BorderSide(color: AppColors.inputBackground, width: 1),
         ),
       ),
       child: Row(
@@ -1946,10 +2132,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         border: Border(
           bottom: isLast
               ? BorderSide.none
-              : BorderSide(
-                  color: AppColors.inputBackground,
-                  width: 1,
-                ),
+              : BorderSide(color: AppColors.inputBackground, width: 1),
         ),
       ),
       child: Row(
@@ -2022,10 +2205,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         border: Border(
           bottom: isLast
               ? BorderSide.none
-              : BorderSide(
-                  color: AppColors.inputBackground,
-                  width: 1,
-                ),
+              : BorderSide(color: AppColors.inputBackground, width: 1),
         ),
       ),
       child: Row(
@@ -2055,12 +2235,22 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 if (user['reapplication'] == 'true') ...[
                   const SizedBox(width: 6),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.primaryGreen.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: const Text('Re-application', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primaryGreen)),
+                    child: const Text(
+                      'Re-application',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primaryGreen,
+                      ),
+                    ),
                   ),
                 ],
               ],
@@ -2102,16 +2292,27 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     );
   }
 
-  Future<void> _showVerificationDetailModal(String docId, Map<String, String> user) async {
+  Future<void> _showVerificationDetailModal(
+    String docId,
+    Map<String, String> user,
+  ) async {
     final isReapplication = user['source'] == 'users';
     final doc = isReapplication
         ? await FirebaseFirestore.instance.collection('users').doc(docId).get()
-        : await FirebaseFirestore.instance.collection('awaitingApproval').doc(docId).get();
+        : await FirebaseFirestore.instance
+              .collection('awaitingApproval')
+              .doc(docId)
+              .get();
     if (!doc.exists || !mounted) return;
     final data = doc.data() ?? {};
     final fullName = (data['fullName'] ?? user['name'] ?? '') as String;
     final phone = (data['phoneNumber'] ?? user['phone'] ?? '') as String;
-    final category = (data['category'] ?? data['demographicCategory'] ?? user['category'] ?? '') as String;
+    final category =
+        (data['category'] ??
+                data['demographicCategory'] ??
+                user['category'] ??
+                '')
+            as String;
     final role = ((data['role'] ?? user['role'] ?? '') as String).toLowerCase();
     final proofOfResidenceUrl = data['proofOfResidenceUrl'] as String?;
 
@@ -2119,7 +2320,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     showDialog(
       context: context,
       builder: (ctx) => DialogContainer(
-        title: isReapplication ? 'Review re-application' : 'Review verification request',
+        title: isReapplication
+            ? 'Review re-application'
+            : 'Review verification request',
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2127,18 +2330,34 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             if (isReapplication)
               const Padding(
                 padding: EdgeInsets.only(bottom: 12),
-                child: Text('Re-application', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.primaryGreen, fontSize: 14)),
+                child: Text(
+                  'Re-application',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primaryGreen,
+                    fontSize: 14,
+                  ),
+                ),
               ),
             _detailRow('Full Name', fullName),
             _detailRow('Phone Number', phone),
-            _detailRow('Demography', category.isNotEmpty ? category : (role == 'admin' ? 'Admin' : role)),
+            _detailRow(
+              'Demography',
+              category.isNotEmpty
+                  ? category
+                  : (role == 'admin' ? 'Admin' : role),
+            ),
             const SizedBox(height: 12),
-            const Text('Proof of residence', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            const Text(
+              'Proof of residence',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            ),
             const SizedBox(height: 6),
             SizedBox(
               height: 120,
               width: double.infinity,
-              child: proofOfResidenceUrl != null && proofOfResidenceUrl.isNotEmpty
+              child:
+                  proofOfResidenceUrl != null && proofOfResidenceUrl.isNotEmpty
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(8),
                       child: Image.network(
@@ -2196,8 +2415,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: AppColors.lightGrey)),
-          Text(value.isEmpty ? '—' : value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: AppColors.lightGrey),
+          ),
+          Text(
+            value.isEmpty ? '—' : value,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
         ],
       ),
     );
@@ -2209,11 +2434,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         color: AppColors.inputBackground,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: const Center(child: Icon(Icons.image_not_supported_outlined, color: AppColors.lightGrey, size: 32)),
+      child: const Center(
+        child: Icon(
+          Icons.image_not_supported_outlined,
+          color: AppColors.lightGrey,
+          size: 32,
+        ),
+      ),
     );
   }
 
-  Future<void> _confirmThenApprove(String docId, Map<String, String> user) async {
+  Future<void> _confirmThenApprove(
+    String docId,
+    Map<String, String> user,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -2244,10 +2478,19 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Approve re-application'),
-        content: const Text('This will set the account to active. The resident can use the app again. Continue?'),
+        content: const Text(
+          'This will set the account to active. The resident can use the app again. Continue?',
+        ),
         actions: [
-          OutlineButton(text: 'Cancel', onPressed: () => Navigator.pop(context, false)),
-          CustomButton(text: 'Approve', isFullWidth: false, onPressed: () => Navigator.pop(context, true)),
+          OutlineButton(
+            text: 'Cancel',
+            onPressed: () => Navigator.pop(context, false),
+          ),
+          CustomButton(
+            text: 'Approve',
+            isFullWidth: false,
+            onPressed: () => Navigator.pop(context, true),
+          ),
         ],
       ),
     );
@@ -2266,10 +2509,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       });
       if (mounted) {
         await _loadAccounts();
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Re-application approved. Account is now active.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Re-application approved. Account is now active.'),
+          ),
+        );
       }
     } catch (e) {
-      if (mounted) setState(() => _errorMessage = 'Failed to approve re-application: $e');
+      if (mounted)
+        setState(() => _errorMessage = 'Failed to approve re-application: $e');
     }
   }
 
@@ -2283,17 +2531,27 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       if (!doc.exists) return;
       final data = doc.data() ?? {};
       final fullName = (data['fullName'] ?? user['name'] ?? '') as String;
-      final phone = (data['phoneNumber'] ?? user['phone'] ?? '').toString().trim();
+      final phone = (data['phoneNumber'] ?? user['phone'] ?? '')
+          .toString()
+          .trim();
       final password = (data['password'] ?? '') as String?;
       final existingUid = data['uid'] as String?;
-      final role = ((data['role'] ?? user['role'] ?? 'user') as String).toLowerCase();
+      final role = ((data['role'] ?? user['role'] ?? 'user') as String)
+          .toLowerCase();
       final position = (data['position'] ?? user['position'] ?? '') as String;
       final category =
-          (data['category'] ?? data['demographicCategory'] ?? user['category'] ?? '') as String;
+          (data['category'] ??
+                  data['demographicCategory'] ??
+                  user['category'] ??
+                  '')
+              as String;
       final proofOfResidenceUrl = data['proofOfResidenceUrl'] as String?;
 
       if (phone.isEmpty) {
-        if (mounted) setState(() => _errorMessage = 'Phone number is required to approve.');
+        if (mounted)
+          setState(
+            () => _errorMessage = 'Phone number is required to approve.',
+          );
         return;
       }
 
@@ -2307,22 +2565,32 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       if (existingUid != null && existingUid.toString().trim().isNotEmpty) {
         uid = existingUid.toString().trim();
         // Mark request as approved; no Auth creation needed
-        await FirebaseFirestore.instance.collection('awaitingApproval').doc(docId).update({
-          'status': 'approved',
-          'reviewedBy': adminUid,
-          'reviewedAt': now,
-        });
+        await FirebaseFirestore.instance
+            .collection('awaitingApproval')
+            .doc(docId)
+            .update({
+              'status': 'approved',
+              'reviewedBy': adminUid,
+              'reviewedAt': now,
+            });
       } else {
         // Legacy: no uid in request — create Firebase Auth account using secondary app
         if (password == null || password.isEmpty || password.length < 6) {
-          if (mounted) setState(() => _errorMessage = 'Valid password (6+ chars) required in request to approve.');
+          if (mounted)
+            setState(
+              () => _errorMessage =
+                  'Valid password (6+ chars) required in request to approve.',
+            );
           return;
         }
-        await FirebaseFirestore.instance.collection('awaitingApproval').doc(docId).update({
-          'status': 'approved',
-          'reviewedBy': adminUid,
-          'reviewedAt': now,
-        });
+        await FirebaseFirestore.instance
+            .collection('awaitingApproval')
+            .doc(docId)
+            .update({
+              'status': 'approved',
+              'reviewedBy': adminUid,
+              'reviewedAt': now,
+            });
         FirebaseApp secondaryApp;
         try {
           secondaryApp = Firebase.app('AuthHelper');
@@ -2352,7 +2620,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         }
         final newUser = userCredential?.user;
         if (newUser == null) {
-          if (mounted) setState(() => _errorMessage = 'Failed to create or sign in to account.');
+          if (mounted)
+            setState(
+              () => _errorMessage = 'Failed to create or sign in to account.',
+            );
           return;
         }
         uid = newUser.uid;
@@ -2381,8 +2652,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         'isApproved': true,
         'verificationStatus': 'Verified',
         'accountStatus': 'active',
-        if (proofOfResidenceUrl != null && proofOfResidenceUrl.isNotEmpty) 'proofOfResidenceUrl': proofOfResidenceUrl,
-        if (firestoreRole == 'admin') 'position': position.isNotEmpty ? position : 'Admin',
+        if (proofOfResidenceUrl != null && proofOfResidenceUrl.isNotEmpty)
+          'proofOfResidenceUrl': proofOfResidenceUrl,
+        if (firestoreRole == 'admin')
+          'position': position.isNotEmpty ? position : 'Admin',
         if (firestoreRole == 'resident') ...{
           // Keep `category` (string) for existing UI and documents.
           'category': category.isNotEmpty ? category : 'User',
@@ -2405,7 +2678,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: ErrorNotification(
-                  message: 'Account created. Push notification could not be sent: $e'),
+                message:
+                    'Account created. Push notification could not be sent: $e',
+              ),
               backgroundColor: Colors.transparent,
               elevation: 0,
               behavior: SnackBarBehavior.floating,
@@ -2414,7 +2689,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         }
       }
 
-      await FirebaseFirestore.instance.collection('awaitingApproval').doc(docId).delete();
+      await FirebaseFirestore.instance
+          .collection('awaitingApproval')
+          .doc(docId)
+          .delete();
 
       // Sign out from secondary app only when we used it (legacy flow)
       if (authHelperUsed != null) {
@@ -2424,7 +2702,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       // Log activity for recent activities on dashboard
       String adminName = 'Barangay Official';
       if (adminUid != null) {
-        final adminDoc = await FirebaseFirestore.instance.collection('users').doc(adminUid).get();
+        final adminDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(adminUid)
+            .get();
         if (adminDoc.exists) {
           adminName = (adminDoc.data()?['fullName'] as String?) ?? adminName;
         }
@@ -2440,7 +2721,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const DraftSavedNotification(
-              message: 'Account created successfully.'),
+            message: 'Account created successfully.',
+          ),
           backgroundColor: Colors.transparent,
           elevation: 0,
           behavior: SnackBarBehavior.floating,
@@ -2456,7 +2738,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     }
   }
 
-  Future<void> _showDeclineDialog(String docId, [Map<String, String>? item]) async {
+  Future<void> _showDeclineDialog(
+    String docId, [
+    Map<String, String>? item,
+  ]) async {
     if (docId.isEmpty) return;
     final result = await showDialog<DeclineReasonResult>(
       context: context,
@@ -2474,7 +2759,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   /// Persistence & governance: decline with reason. No Auth deletion (Spark plan).
   /// - Re-application (item.source == 'users'): update users doc to accountStatus declined.
   /// - New request (awaitingApproval): create Auth + users doc with accountStatus declined, then delete awaitingApproval.
-  Future<void> _declineAwaiting(String docId, String reason, [Map<String, String>? item, String? reapplyType]) async {
+  Future<void> _declineAwaiting(
+    String docId,
+    String reason, [
+    Map<String, String>? item,
+    String? reapplyType,
+  ]) async {
     if (docId.isEmpty) return;
     if (mounted) setState(() => _errorMessage = null);
     try {
@@ -2498,18 +2788,24 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             .doc(docId)
             .get();
         if (!doc.exists) {
-          if (mounted) setState(() => _errorMessage = 'Request no longer found.');
+          if (mounted)
+            setState(() => _errorMessage = 'Request no longer found.');
           return;
         }
         final data = doc.data() ?? {};
         fullName = (data['fullName'] as String? ?? 'Applicant').toString();
         final phone = (data['phoneNumber'] as String?)?.toString().trim() ?? '';
         final existingUid = data['uid'] as String?;
-        final category = (data['category'] ?? data['demographicCategory'] ?? '') as String;
+        final category =
+            (data['category'] ?? data['demographicCategory'] ?? '') as String;
         final role = ((data['role'] ?? 'user') as String).toLowerCase();
 
         if (phone.isEmpty) {
-          if (mounted) setState(() => _errorMessage = 'Phone number required to decline with governance.');
+          if (mounted)
+            setState(
+              () => _errorMessage =
+                  'Phone number required to decline with governance.',
+            );
           return;
         }
 
@@ -2538,13 +2834,18 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             'updatedAt': now,
             'isActive': false,
             'isApproved': false,
-            if (firestoreRole == 'resident') 'category': category.isNotEmpty ? category : 'User',
+            if (firestoreRole == 'resident')
+              'category': category.isNotEmpty ? category : 'User',
           }, SetOptions(merge: true));
         } else {
           // Legacy: no uid — create Auth + users doc
           final password = data['password'] as String?;
           if (password == null || password.isEmpty || password.length < 6) {
-            if (mounted) setState(() => _errorMessage = 'Valid password (6+ chars) required in request.');
+            if (mounted)
+              setState(
+                () => _errorMessage =
+                    'Valid password (6+ chars) required in request.',
+              );
             return;
           }
           FirebaseApp secondaryApp;
@@ -2575,7 +2876,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           }
           final newUser = userCredential?.user;
           if (newUser == null) {
-            if (mounted) setState(() => _errorMessage = 'Could not create account for declined user.');
+            if (mounted)
+              setState(
+                () => _errorMessage =
+                    'Could not create account for declined user.',
+              );
             return;
           }
           final uid = newUser.uid;
@@ -2594,17 +2899,24 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             'updatedAt': now,
             'isActive': false,
             'isApproved': false,
-            if (firestoreRole == 'resident') 'category': category.isNotEmpty ? category : 'User',
+            if (firestoreRole == 'resident')
+              'category': category.isNotEmpty ? category : 'User',
           }, SetOptions(merge: true));
           await authHelper.signOut();
         }
 
-        await FirebaseFirestore.instance.collection('awaitingApproval').doc(docId).delete();
+        await FirebaseFirestore.instance
+            .collection('awaitingApproval')
+            .doc(docId)
+            .delete();
       }
 
       String adminName = 'Barangay Official';
       if (adminUid != null) {
-        final adminDoc = await FirebaseFirestore.instance.collection('users').doc(adminUid).get();
+        final adminDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(adminUid)
+            .get();
         if (adminDoc.exists) {
           adminName = (adminDoc.data()?['fullName'] as String?) ?? adminName;
         }
@@ -2633,16 +2945,25 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     bool isSubmitting = false;
     String? dialogError;
     final docId = user['id'] ?? '';
-    final isAdmin = ((user['role'] ?? '').toLowerCase() == 'admin' ||
+    final isAdmin =
+        ((user['role'] ?? '').toLowerCase() == 'admin' ||
         (user['role'] ?? '').toLowerCase() == 'super_admin');
     final existingCategory = user['category'] ?? '';
     final existingPosition = user['position'] ?? '';
     final existingRole = (user['role'] ?? '').toLowerCase();
-    String? selectedRole = (existingRole == 'super_admin') ? 'super_admin' : 'admin';
-    String? selectedPosition = existingPosition.isNotEmpty ? existingPosition : null;
+    String? selectedRole = (existingRole == 'super_admin')
+        ? 'super_admin'
+        : 'admin';
+    String? selectedPosition = existingPosition.isNotEmpty
+        ? existingPosition
+        : null;
     Set<String> selectedCategories = existingCategory.isEmpty
         ? <String>{}
-        : existingCategory.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
+        : existingCategory
+              .split(',')
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toSet();
 
     await showDialog(
       context: context,
@@ -2687,13 +3008,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           label: 'Full Name',
                           controller: nameController,
                           validator: (value) =>
-                              value == null || value.trim().isEmpty ? 'Name is required' : null,
+                              value == null || value.trim().isEmpty
+                              ? 'Name is required'
+                              : null,
                         ),
                         const SizedBox(height: 16),
                         _buildDialogTextField(
                           label: 'Phone Number',
                           controller: phoneController,
-                          validator: (value) => value == null || value.trim().isEmpty
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
                               ? 'Phone number is required'
                               : null,
                         ),
@@ -2722,7 +3046,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                   child: DropdownButton<String>(
                                     value: selectedRole,
                                     isExpanded: true,
-                                    padding: const EdgeInsets.symmetric(horizontal: 15),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 15,
+                                    ),
                                     style: const TextStyle(
                                       fontSize: 14,
                                       color: AppColors.darkGrey,
@@ -2748,7 +3074,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           const SizedBox(height: 16),
                           _buildPositionSelector(
                             selectedPosition: selectedPosition,
-                            onSelect: (value) => setState(() => selectedPosition = value),
+                            onSelect: (value) =>
+                                setState(() => selectedPosition = value),
                           ),
                         ] else
                           _buildDemographicSelector(
@@ -2773,7 +3100,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           children: [
                             OutlineButton(
                               text: 'Cancel',
-                              onPressed: isSubmitting ? null : () => Navigator.of(context).pop(),
+                              onPressed: isSubmitting
+                                  ? null
+                                  : () => Navigator.of(context).pop(),
                             ),
                             const SizedBox(width: 8),
                             ElevatedButton(
@@ -2787,14 +3116,21 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               onPressed: isSubmitting
                                   ? null
                                   : () async {
-                                      if (!formKey.currentState!.validate()) return;
+                                      if (!formKey.currentState!.validate())
+                                        return;
                                       if (isAdmin && selectedPosition == null) {
-                                        setState(() => dialogError = 'Please select a position.');
+                                        setState(
+                                          () => dialogError =
+                                              'Please select a position.',
+                                        );
                                         return;
                                       }
-                                      if (!isAdmin && selectedCategories.isEmpty) {
-                                        setState(() =>
-                                            dialogError = 'Please select at least one category.');
+                                      if (!isAdmin &&
+                                          selectedCategories.isEmpty) {
+                                        setState(
+                                          () => dialogError =
+                                              'Please select at least one category.',
+                                        );
                                         return;
                                       }
                                       setState(() {
@@ -2804,21 +3140,26 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
                                       try {
                                         final updates = <String, dynamic>{
-                                          'fullName': nameController.text.trim(),
-                                          'phoneNumber': phoneController.text.trim(),
+                                          'fullName': nameController.text
+                                              .trim(),
+                                          'phoneNumber': phoneController.text
+                                              .trim(),
                                         };
                                         if (isAdmin) {
                                           updates['role'] =
                                               selectedRole ?? 'admin';
                                           updates['position'] =
-                                              selectedPosition?.trim().isNotEmpty == true
-                                                  ? selectedPosition!
-                                                  : 'Admin';
+                                              selectedPosition
+                                                      ?.trim()
+                                                      .isNotEmpty ==
+                                                  true
+                                              ? selectedPosition!
+                                              : 'Admin';
                                         } else {
                                           updates['category'] =
                                               selectedCategories.isEmpty
-                                                  ? 'User'
-                                                  : selectedCategories.join(', ');
+                                              ? 'User'
+                                              : selectedCategories.join(', ');
                                         }
                                         await FirebaseFirestore.instance
                                             .collection('awaitingApproval')
@@ -2830,7 +3171,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                         }
                                       } catch (e) {
                                         setState(() {
-                                          dialogError = 'Failed to update request: $e';
+                                          dialogError =
+                                              'Failed to update request: $e';
                                           isSubmitting = false;
                                         });
                                       }
@@ -2841,9 +3183,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                       height: 16,
                                       child: CircularProgressIndicator(
                                         strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                          AppColors.white,
-                                        ),
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              AppColors.white,
+                                            ),
                                       ),
                                     )
                                   : const Text('Save'),
@@ -2865,8 +3208,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   Future<void> _showEditUserDialog(Map<String, String> user) async {
     final docId = user['id'] ?? '';
     if (docId.isEmpty) return;
-    final doc = await FirebaseFirestore.instance.collection('users').doc(docId).get();
-    final currentStatus = (doc.data()?['accountStatus'] as String?)?.toLowerCase() ?? 'active';
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(docId)
+        .get();
+    final currentStatus =
+        (doc.data()?['accountStatus'] as String?)?.toLowerCase() ?? 'active';
     final currentNote = (doc.data()?['adminNote'] as String?) ?? '';
 
     final nameController = TextEditingController(text: user['name'] ?? '');
@@ -2876,12 +3223,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final Set<String> selectedCategories = existingCategory.isEmpty
         ? <String>{}
         : existingCategory
-            .split(',')
-            .map((e) => e.trim())
-            .where((e) => e.isNotEmpty)
-            .toSet();
+              .split(',')
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toSet();
     String selectedStatus = currentStatus;
-    if (selectedStatus != 'active' && selectedStatus != 'declined' && selectedStatus != 'suspended') {
+    if (selectedStatus != 'active' &&
+        selectedStatus != 'declined' &&
+        selectedStatus != 'suspended') {
       selectedStatus = 'active';
     }
     final formKey = GlobalKey<FormState>();
@@ -2894,171 +3243,227 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
-            return Dialog(
-              backgroundColor: Colors.transparent,
-              insetPadding: const EdgeInsets.all(20),
-              child: Form(
-                key: formKey,
-                child: Center(
-                  child: Container(
-                    constraints: const BoxConstraints(maxWidth: 520),
-                    padding: const EdgeInsets.all(32),
-                    decoration: BoxDecoration(
-                      color: AppColors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.shadowColor,
-                          blurRadius: 10,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const Text(
-                          'Edit User',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.loginGreen,
+            return Theme(
+              data: Theme.of(context).copyWith(
+                colorScheme: Theme.of(context).colorScheme.copyWith(
+                  onSurface: AppColors.buttonTextOnLightStrong,
+                  onSurfaceVariant: AppColors.buttonTextOnLightStrong,
+                ),
+              ),
+              child: Dialog(
+                backgroundColor: Colors.transparent,
+                insetPadding: const EdgeInsets.all(20),
+                child: Form(
+                  key: formKey,
+                  child: Center(
+                    child: Container(
+                      constraints: const BoxConstraints(maxWidth: 520),
+                      padding: const EdgeInsets.all(32),
+                      decoration: BoxDecoration(
+                        color: AppColors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.shadowColor,
+                            blurRadius: 10,
+                            offset: const Offset(0, 5),
                           ),
-                        ),
-                        const SizedBox(height: 24),
-                        _buildDialogTextField(
-                          label: 'Full Name',
-                          controller: nameController,
-                          validator: (value) =>
-                              value == null || value.trim().isEmpty ? 'Name is required' : null,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDialogTextField(
-                          label: 'Phone Number',
-                          controller: phoneController,
-                          validator: (value) => value == null || value.trim().isEmpty
-                              ? 'Phone number is required'
-                              : null,
-                        ),
-                        const SizedBox(height: 16),
-                        const Text('Account status', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.darkGrey)),
-                        const SizedBox(height: 8),
-                        DropdownButtonFormField<String>(
-                          value: selectedStatus,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          ),
-                          items: const [
-                            DropdownMenuItem(value: 'active', child: Text('Active')),
-                            DropdownMenuItem(value: 'declined', child: Text('Declined')),
-                            DropdownMenuItem(value: 'suspended', child: Text('Suspended')),
-                          ],
-                          onChanged: isSubmitting ? null : (v) => setState(() => selectedStatus = v ?? 'active'),
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDialogTextField(
-                          label: 'Admin note (optional)',
-                          controller: adminNoteController,
-                          validator: (_) => null,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDemographicSelector(
-                          selectedCategories: selectedCategories,
-                          onToggle: (value) {
-                            setState(() {
-                              if (selectedCategories.contains(value)) {
-                                selectedCategories.remove(value);
-                              } else {
-                                selectedCategories.add(value);
-                              }
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        if (dialogError != null) ...[
-                          ErrorNotification(message: dialogError!),
-                          const SizedBox(height: 8),
                         ],
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            SizedBox(
-                              width: 110,
-                              height: 40,
-                              child: OutlineButton(
-                                text: 'Cancel',
-                                onPressed: isSubmitting ? null : () => Navigator.of(context).pop(),
-                                isFullWidth: true,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Text(
+                            'Edit User',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.loginGreen,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          _buildDialogTextField(
+                            label: 'Full Name',
+                            controller: nameController,
+                            validator: (value) =>
+                                value == null || value.trim().isEmpty
+                                ? 'Name is required'
+                                : null,
+                          ),
+                          const SizedBox(height: 16),
+                          _buildDialogTextField(
+                            label: 'Phone Number',
+                            controller: phoneController,
+                            validator: (value) =>
+                                value == null || value.trim().isEmpty
+                                ? 'Phone number is required'
+                                : null,
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Account status',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.darkGrey,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            value: selectedStatus,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            SizedBox(
-                              width: 110,
-                              height: 40,
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.loginGreen,
-                                  foregroundColor: AppColors.white,
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'active',
+                                child: Text('Active'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'declined',
+                                child: Text('Declined'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'suspended',
+                                child: Text('Suspended'),
+                              ),
+                            ],
+                            onChanged: isSubmitting
+                                ? null
+                                : (v) => setState(
+                                    () => selectedStatus = v ?? 'active',
                                   ),
-                                ),
-                                onPressed: isSubmitting
-                                    ? null
-                                    : () async {
-                                        if (!formKey.currentState!.validate()) return;
-                                        setState(() {
-                                          isSubmitting = true;
-                                          dialogError = null;
-                                        });
-
-                                        try {
-                                          await FirebaseFirestore.instance
-                                              .collection('users')
-                                              .doc(docId)
-                                              .update({
-                                            'fullName': nameController.text.trim(),
-                                            'phoneNumber': phoneController.text.trim(),
-                                            'category': selectedCategories.isEmpty
-                                                ? 'User'
-                                                : selectedCategories.join(', '),
-                                            'categories': selectedCategories.toList(),
-                                            'accountStatus': selectedStatus,
-                                            'adminNote': adminNoteController.text.trim(),
-                                            'lastUpdated': FieldValue.serverTimestamp(),
-                                            'updatedAt': FieldValue.serverTimestamp(),
-                                          });
-                                        if (mounted) {
-                                          await _loadAccounts();
-                                          Navigator.of(context).pop();
-                                        }
-                                      } catch (e) {
-                                        setState(() {
-                                          dialogError = 'Failed to update user: $e';
-                                          isSubmitting = false;
-                                        });
-                                      }
-                                    },
-                                child: isSubmitting
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor: AlwaysStoppedAnimation<Color>(
-                                            AppColors.white,
-                                          ),
-                                        ),
-                                      )
-                                    : const Text('Save'),
-                              ),
-                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildDialogTextField(
+                            label: 'Admin note (optional)',
+                            controller: adminNoteController,
+                            validator: (_) => null,
+                          ),
+                          const SizedBox(height: 16),
+                          _buildDemographicSelector(
+                            selectedCategories: selectedCategories,
+                            onToggle: (value) {
+                              setState(() {
+                                if (selectedCategories.contains(value)) {
+                                  selectedCategories.remove(value);
+                                } else {
+                                  selectedCategories.add(value);
+                                }
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          if (dialogError != null) ...[
+                            ErrorNotification(message: dialogError!),
+                            const SizedBox(height: 8),
                           ],
-                        ),
-                      ],
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              SizedBox(
+                                width: 110,
+                                height: 40,
+                                child: OutlineButton(
+                                  text: 'Cancel',
+                                  onPressed: isSubmitting
+                                      ? null
+                                      : () => Navigator.of(context).pop(),
+                                  isFullWidth: true,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              SizedBox(
+                                width: 110,
+                                height: 40,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.loginGreen,
+                                    foregroundColor: AppColors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 10,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                  onPressed: isSubmitting
+                                      ? null
+                                      : () async {
+                                          if (!formKey.currentState!.validate())
+                                            return;
+                                          setState(() {
+                                            isSubmitting = true;
+                                            dialogError = null;
+                                          });
+
+                                          try {
+                                            await FirebaseFirestore.instance
+                                                .collection('users')
+                                                .doc(docId)
+                                                .update({
+                                                  'fullName': nameController
+                                                      .text
+                                                      .trim(),
+                                                  'phoneNumber': phoneController
+                                                      .text
+                                                      .trim(),
+                                                  'category':
+                                                      selectedCategories.isEmpty
+                                                      ? 'User'
+                                                      : selectedCategories.join(
+                                                          ', ',
+                                                        ),
+                                                  'categories':
+                                                      selectedCategories
+                                                          .toList(),
+                                                  'accountStatus':
+                                                      selectedStatus,
+                                                  'adminNote':
+                                                      adminNoteController.text
+                                                          .trim(),
+                                                  'lastUpdated':
+                                                      FieldValue.serverTimestamp(),
+                                                  'updatedAt':
+                                                      FieldValue.serverTimestamp(),
+                                                });
+                                            if (mounted) {
+                                              await _loadAccounts();
+                                              Navigator.of(context).pop();
+                                            }
+                                          } catch (e) {
+                                            setState(() {
+                                              dialogError =
+                                                  'Failed to update user: $e';
+                                              isSubmitting = false;
+                                            });
+                                          }
+                                        },
+                                  child: isSubmitting
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                  AppColors.white,
+                                                ),
+                                          ),
+                                        )
+                                      : const Text('Save'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -3122,13 +3527,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           label: 'Full Name',
                           controller: nameController,
                           validator: (value) =>
-                              value == null || value.trim().isEmpty ? 'Name is required' : null,
+                              value == null || value.trim().isEmpty
+                              ? 'Name is required'
+                              : null,
                         ),
                         const SizedBox(height: 16),
                         _buildDialogTextField(
                           label: 'Phone Number',
                           controller: phoneController,
-                          validator: (value) => value == null || value.trim().isEmpty
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
                               ? 'Phone number is required'
                               : null,
                         ),
@@ -3154,7 +3562,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               height: 40,
                               child: OutlineButton(
                                 text: 'Cancel',
-                                onPressed: isSubmitting ? null : () => Navigator.of(context).pop(),
+                                onPressed: isSubmitting
+                                    ? null
+                                    : () => Navigator.of(context).pop(),
                                 isFullWidth: true,
                               ),
                             ),
@@ -3166,7 +3576,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppColors.loginGreen,
                                   foregroundColor: AppColors.white,
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 10,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10),
                                   ),
@@ -3174,7 +3587,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 onPressed: isSubmitting
                                     ? null
                                     : () async {
-                                        if (!formKey.currentState!.validate()) return;
+                                        if (!formKey.currentState!.validate())
+                                          return;
                                         setState(() {
                                           isSubmitting = true;
                                           dialogError = null;
@@ -3182,40 +3596,51 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
                                         try {
                                           final positionValue =
-                                              (selectedPosition ?? admin['position'] ?? '').trim();
+                                              (selectedPosition ??
+                                                      admin['position'] ??
+                                                      '')
+                                                  .trim();
                                           await FirebaseFirestore.instance
                                               .collection('users')
                                               .doc(docId)
                                               .update({
-                                          'fullName': nameController.text.trim(),
-                                          'phoneNumber': phoneController.text.trim(),
-                                          'position':
-                                              positionValue.isNotEmpty ? positionValue : 'Admin',
-                                          'updatedAt': FieldValue.serverTimestamp(),
-                                          'role': 'admin',
-                                        });
-                                        if (mounted) {
-                                          await _loadAccounts();
-                                          Navigator.of(context).pop();
+                                                'fullName': nameController.text
+                                                    .trim(),
+                                                'phoneNumber': phoneController
+                                                    .text
+                                                    .trim(),
+                                                'position':
+                                                    positionValue.isNotEmpty
+                                                    ? positionValue
+                                                    : 'Admin',
+                                                'updatedAt':
+                                                    FieldValue.serverTimestamp(),
+                                                'role': 'admin',
+                                              });
+                                          if (mounted) {
+                                            await _loadAccounts();
+                                            Navigator.of(context).pop();
+                                          }
+                                        } catch (e) {
+                                          setState(() {
+                                            dialogError =
+                                                'Failed to update admin: $e';
+                                            isSubmitting = false;
+                                          });
                                         }
-                                      } catch (e) {
-                                        setState(() {
-                                          dialogError = 'Failed to update admin: $e';
-                                          isSubmitting = false;
-                                        });
-                                      }
-                                    },
-                              child: isSubmitting
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                          AppColors.white,
+                                      },
+                                child: isSubmitting
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                AppColors.white,
+                                              ),
                                         ),
-                                      ),
-                                    )
+                                      )
                                     : const Text('Save'),
                               ),
                             ),
@@ -3258,15 +3683,23 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       if (result.status == 'declined' && result.reapplyType != null) {
         updates['reapplyType'] = result.reapplyType!;
       }
-      await FirebaseFirestore.instance.collection('users').doc(docId).update(updates);
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(docId)
+          .update(updates);
       if (mounted) {
         await _loadAccounts();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${user['name']} status set to ${result.status ?? 'declined'}. They can log in to see the reason.')),
+          SnackBar(
+            content: Text(
+              '${user['name']} status set to ${result.status ?? 'declined'}. They can log in to see the reason.',
+            ),
+          ),
         );
       }
     } catch (e) {
-      if (mounted) setState(() => _errorMessage = 'Failed to update status: $e');
+      if (mounted)
+        setState(() => _errorMessage = 'Failed to update status: $e');
     }
   }
 
@@ -3294,15 +3727,23 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       if (result.status == 'declined' && result.reapplyType != null) {
         updates['reapplyType'] = result.reapplyType!;
       }
-      await FirebaseFirestore.instance.collection('users').doc(docId).update(updates);
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(docId)
+          .update(updates);
       if (mounted) {
         await _loadAccounts();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${admin['name']} status set to ${result.status ?? 'declined'}.')),
+          SnackBar(
+            content: Text(
+              '${admin['name']} status set to ${result.status ?? 'declined'}.',
+            ),
+          ),
         );
       }
     } catch (e) {
-      if (mounted) setState(() => _errorMessage = 'Failed to update status: $e');
+      if (mounted)
+        setState(() => _errorMessage = 'Failed to update status: $e');
     }
   }
 
@@ -3310,17 +3751,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final recordText = _activeTabIndex == 2
         ? '$_totalRecords Awaiting Approval'
         : _activeTabIndex == 3
-            ? '$_totalRecords Inactive'
-            : '$_totalRecords Records';
+        ? '$_totalRecords Inactive'
+        : '$_totalRecords Records';
 
     return Container(
       padding: const EdgeInsets.only(top: 24),
       decoration: BoxDecoration(
         border: Border(
-          top: BorderSide(
-            color: AppColors.inputBackground,
-            width: 1,
-          ),
+          top: BorderSide(color: AppColors.inputBackground, width: 1),
         ),
       ),
       child: Row(
@@ -3415,10 +3853,7 @@ class _ActionIcon extends StatefulWidget {
   final IconData icon;
   final VoidCallback onTap;
 
-  const _ActionIcon({
-    required this.icon,
-    required this.onTap,
-  });
+  const _ActionIcon({required this.icon, required this.onTap});
 
   @override
   State<_ActionIcon> createState() => _ActionIconState();
@@ -3438,9 +3873,7 @@ class _ActionIconState extends State<_ActionIcon> {
         child: Icon(
           widget.icon,
           size: 20,
-          color: _isHovered
-              ? AppColors.primaryGreen
-              : AppColors.darkGrey,
+          color: _isHovered ? AppColors.primaryGreen : AppColors.darkGrey,
         ),
       ),
     );
@@ -3487,9 +3920,7 @@ class _PaginationButtonState extends State<_PaginationButton> {
           widget.icon,
           size: 20,
           color: widget.isEnabled
-              ? (_isHovered
-                  ? AppColors.primaryGreen
-                  : AppColors.darkGrey)
+              ? (_isHovered ? AppColors.primaryGreen : AppColors.darkGrey)
               : AppColors.lightGrey,
         ),
       ),

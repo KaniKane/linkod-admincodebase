@@ -42,20 +42,34 @@ class DialogContainer extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.loginGreen,
-                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.loginGreen,
+                      ),
+                    ),
+                  ),
+                  MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: const Icon(
+                        Icons.close,
+                        color: AppColors.darkGrey,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 24),
-              Flexible(
-                child: SingleChildScrollView(
-                  child: child,
-                ),
-              ),
+              Flexible(child: SingleChildScrollView(child: child)),
               const SizedBox(height: 24),
               actions,
             ],
@@ -93,7 +107,9 @@ class DialogActionButton extends StatelessWidget {
       side = null;
     } else {
       bgColor = Colors.white;
-      fgColor = isDestructive ? AppColors.deleteRed : AppColors.darkGrey;
+      fgColor = isDestructive
+          ? AppColors.deleteRed
+          : AppColors.buttonTextOnLightStrong;
       side = BorderSide(
         color: isDestructive ? AppColors.deleteRed : AppColors.lightGrey,
         width: 1,
@@ -115,7 +131,14 @@ class DialogActionButton extends StatelessWidget {
             side: side ?? BorderSide.none,
           ),
         ),
-        child: Text(label),
+        child: DefaultTextStyle(
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: fgColor,
+          ),
+          child: Text(label),
+        ),
       ),
     );
   }
