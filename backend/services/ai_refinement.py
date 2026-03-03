@@ -11,156 +11,156 @@ OLLAMA_MODEL = "llama3.2:3b"
 FULL_PROMPT_TEMPLATE = """
 You are the official announcement editor of a Barangay in the Philippines.
 
-Below are real previous Barangay announcements written in Cebuano (Bisaya).
+Below are real previous Barangay announcements written in Cebuano (Bisaya). The previous announcements are different based on the type of announcements it is.
 Study their tone, structure, formatting, and writing style carefully.
 
+
+
 ---
-Maayong adlaw sa tanan.
+Akong gi awhag ang mga kabatan-onan nga gustong moapil sa basketball club nga mag-adto sa atong basketball court ugma alas 3 sa hapon tungod kay magpahigayon kita og miting bahin sa umaabot nga basketball tournament.
 
-Gusto namo ipahibalo sa tanang residente sa atong barangay nga tungod sa kalamidad nga atong giatubang karon, ginahanglan ang tanan nga mo-evacuate ug moadto dayon sa atong evacuation center alang sa inyong kaluwasan.
+Gikan kang: Marciano Dumanhog
+---
 
-Palihog dad-a ang mga importante nga butang sama sa pagkaon, tubig, tambal, ug personal nga gamit. Likayi ang pagpanik ug magtinabangay kita aron masiguro ang kaluwasan sa matag usa.
+---
+Tinahod kong mga barangayanon nagpakatakos ako sa pagpahibalo kaninyo alang sa tanang lumolupyo nga adunay atung pagahimuon nga pagputol o pag disconnect sa tubig karung uma-abot nga Sabado February 7, 2026. Kini nga pagpananggal o pag disconnect alang sa pagpangandam sa pagahimuon nga Level II Connection sa tubig. Kinahanglan nga mag pundo sa tubig ang matag panimalay alang sa panginahanglan.
 
-Salamat sa inyong kooperasyon ug pag-amping kanunay.
+Gipanghinaut ko ang inyung 100% nga kooperasyon.
+Daghang salamat.
 
-Kaninyu Matinahuron,
-ALBERTO C. PACHECO,
+Kaninyo matinahuron,
+
+HON. ALBERTO C. PACHECO
 Barangay Captain
 ---
 
 ---
-Maayong adlaw sa tanan.
+Tinahod kong mga baryuhanon nagpakatakos ako sa pagpahibalo kaninyu nga ang buhatan sa Municipal Civil Registrar magpahigayun sa BARANGAY FREE REGISTRATION alang sa tanang walay Live Birth, Marriage and Death Certificate karung uma-abot February 23, 2026 sa may alas 8:00 ang takna sa buntag diha sa atung Barangay Session Hall.
 
-Gusto namo ipahibalo sa tanang residente nga magsugod karong gabhiona ang pagpatuman sa curfew hours gikan alas 10:00 sa gabii hangtod alas 4:00 sa kaadlawon aron mapadayon ang kalinaw ug kahapsay sa atong barangay.
+Gipanghinaut ko ang inyung 100% nga kooperasyun sa pagtambong labina gayud ang tanang wala pay Live Birth, Marriage ug Death Certificate.
 
-Ang tanang menor de edad dili tugotan nga maglatagaw gawas sa ilang panimalay gawas kon adunay kauban nga ginikanan o guardian. Ang dili mosunod pagahatagan og silot sumala sa ordinansa sa barangay.
+Daghang salamat
 
-Salamat sa inyong pagsabot ug kooperasyon.
+Kaninyo matinahuron
 
-Kaninyu Matinahuron,
-ALBERTO C. PACHECO
+HON> ALBERTO C. PACHECO
 Barangay Captain
 ---
 
 ---
-Maayong adlaw sa tanan.
+Tinahod kong mga baryuhanon nagpakatakos ako sa pagpahibalo kaninyu alang sa tanan nga ang GALVES OPTICAL adunay pagahimuon nga FREE COMPUTERIZED EYE EXAMINATION. Karung umaabot nga Merkules  June 18, 2025 sa may alas 8:00 ngadtu sa alas 10:00 ang takna sa buntag diha sa atung barangay covered court.
 
-Gipahibalo namo nga magpahigayon ang atong barangay og Clean-Up Drive karong Sabado, alas 6:00 sa buntag. Giawhag ang tanang residente nga moapil aron mapadayon ang kalimpyo ug kahimsog sa atong komunidad.
+Gipanghinaut ko ang inyung 100%nga kooperasyon.
+Daghang salamat
 
-Palihog dad-a ang inyong kaugalingong kagamitan sama sa silhig, pala, ug sako. Ang panagtapok himuon sa Barangay Hall.
+Kaninyo matinahuron,
 
-Magtinabangay kita alang sa limpyo ug luwas nga palibot.
-
-Kaninyu Matinahuron,
-ALBERTO C. PACHECO
+HON. ALBERTO C. PACHECO
 Barangay Captain
 ---
 
 ---
-Maayong adlaw sa tanan.
+Tinahod kong mga baryuhanon nagpakatakos ako sa pagpahibalo kaninyo alang sa tanan nga ang atung ZERO OPEN DEFICATION (ZOD) EVALUATION sa matag panimalay. Gi schedule karung umaabot July 21-24, 2025. Ang Provicial ug Municipal Health Office kauban sa atung Municipal Staff ang maghimo niini nga Evaluation. Kini nga ZOD Evaluation magapukos sa matag panimalay sa:
 
-Gipahibalo ang tanang residente nga adunay temporaryo nga pagkawala sa kuryente (brownout) ugma gikan alas 8:00 sa buntag hangtod alas 5:00 sa hapon tungod sa maintenance work sa linya sa kuryente.
+1. Sanitary Toilet(CR)
+2. Blind Drainage
+3. Waste Segregation(MRF) with label
+4. Compost File/Compost Pit
+5. Perimeter Fence
+6. Backyard/Hanging GOOGLE_APPLICATION_CREDENTIALS
 
-Palihog andama ang inyong mga kinahanglanon ug siguroa nga naka-unplug ang mga appliances aron malikayan ang kadaot kung mobalik ang suplay sa kuryente.
+Ug giawhag usab ang tanan labina sa adunay buhi nga Iro sa paghukot niini, kinahanglan gayud nga dili kini Makita sa atung Kalsada nga naglatagaw.
 
-Salamat sa inyong pagsabot.
+Gipanghinaut ko ang inyung 100% nga kooperasyon.
+Daghang salamat
 
-Kaninyu Matinahuron,
-ALBERTO C. PACHECO
+Kaninyo matinahuron,
+
+HON. ALBERTO C. PACHECO
 Barangay Captain
 ---
 
 ---
-Maayong adlaw sa tanan.
+Pahibalo Alang sa Tanang Ginikanan ug Komunidad
 
-Giawhag ang tanang residente nga motambong sa atong Barangay Assembly karong Domingo, alas 2:00 sa hapon sa Barangay Covered Court.
+BRIGADA ESKWELA 2025
+Hunyo 9 Hangtod 13,2025
+[Cagbaoto Elementary School]
 
-Hisgutan ang mga proyekto, plano, ug mga isyu nga nakaapekto sa atong komunidad. Ang inyong presensya importante aron madungog ang inyong mga sugyot ug kabalaka.
+Gina-awhag ang tanang ginikanan, mga estudyante, ug mga miyembro sa komunidad nga motambong sa atong Brigada Eskwela karong umaabot nga Hunyo 9 hangtod 13.
 
-Naglaum kami sa inyong aktibong partisipasyon.
+Opening Parade:
+  -Hunyo 9, 2025(Lunes)
+  -Alas 6:00 sa buntag
+  -[Magsugod ang Parade sa Eskwelahan sa Cagbaoto Elementary School]
 
-Kaninyu Matinahuron,
-ALBERTO C. PACHECO
-Barangay Captain
+Mga Butang nga Dad-on:
+  -Guma(tire)
+  -Sako
+  -Silhig
+  -2 ka buok kawayan
+  -5 ka usok
+  -Martilyo
+
+Ang tanan nga partisipante gi awhag nga mag-uban ug magtinabangay alang sa kahapsay ug kalimpyo sa atong tunghaan isip pagpangandam sa pagsugod sa bag-ong tuig sa pag-eskwela.
+
+Ang inyong partisipasyon dako kaatong tabang sa kalampusan nga maong kalihukan!
+
+Daghang Salamang ug Magkita ta!
+
+Gikan kang: ELIZAR C. DUMANHOG
 ---
 
 ---
-Maayong adlaw sa tanan.
+Alang sa atong mga NEGOSYANTE:
 
-Gipahibalo sa tanang residente nga magpahigayon og Relief Distribution karong Biyernes, alas 9:00 sa buntag sa Barangay Hall alang sa mga pamilyang apektado sa bag-ong kalamidad.
+Buot kami magpahibalo nga ang BUSINESS-ONE-STOP-SHOP or BOSS nga pasiugdan sa Local Government Unit sa Bayabas ug uban pang mga ahensya sa gobierno pagahimoon karong ENERO 14 Hangtud 16, ug ENERO 19 hangtud 20. Ang petsa 14 paga himoon sa Barangay Panaosawon Gym, ug ang petsa 15 paga himoon sa Barangay La Paz Gym. Ang petsa 16, 19 ug 20 sa 2nd florr sa Balay Dangpanan/Balay Tun-anan.
 
-Palihog dad-a ang inyong quarantine pass o valid ID alang sa hustong pag-apod-apod. Likayi ang pagdagsa ug sundon ang linya ug mga instruksyon sa atong mga opisyal.
+Alang sa sayon ug paspas na pag proceso sa inyoong Business Permits, adunay mga requirements nga inyong tumanon o andaman sa dili pa ang maong schedule. Mao kini ang mga mosunod:
 
-Salamat sa inyong kooperasyon.
+  1. Municipal Health Office -  Kinahanglan mag advance sa pag kuha sa laboratory specimen sa Health center sama sa hukaw, ug magbayad alang sa Health Certifficate aron mapadali ang pag release sa business permit.
 
-Kaninyu Matinahuron,
-ALBERTO C. PACHECO
-Barangay Captain
+  2. Barangay - Magkuha daan ng Purok Certificate sa inyong tagsa-tagsa ka Barangay, isip usa ka requirements alang sa pagkuha sa online Barangay clearance.
+              - Maglukat usab ng bag-0 nga Cedula.
+
+  3. Municipyo - Magbayad og mag kuha sa Barangay Clearance.
+
+  4. MDRRMO - Sa mga operator o tag-iya sa Beach Resorts, palihog pakigkita sa atong MDRRMO alang sa recommended first aid ug basic rescue equipment, ug scchedule sa inspection.
+
+  5. DTI Certificate - Adunay mga personahe nga gikan sa DTI Provincial Office nga mutambong sa atong ipahigayon nga BOSS, alang sa pagkuha sa DTI Certificate.
+                     - Sa Cooperatiba, CDA Certificate.
+                     - Og sa Assosasyon, SEC Certificate.
+
+Daghang salamat sa inyong makanunayon nga pagtubag ug pagtuman sa tinuig nga mga buluhaton og obligasyon sa paghigayon sa mga negosyo dinhi sa atong lungsod.
+
+
+  Dugang pahibalo (Alang sa atong mga Mag-uuma ug Mangingisda):
+
+Ang Municipal Agriculture Office kauban usab sa business One Stop Shop nga mga schedules aron pag pahigayun sa Registry System for Basic Sectors in Agriculture (RSBSA) registration and updating og pag insure sa mga hayop (sama sa large cattles, baboy, kanding, manok), pre and post-harvest facilities, mga tanum o high value crops (sama sa lubi, humay, falcata, saging ug uban pa), ug pumpboats. Alang sa dugang impormasyon, magpakisayod lamang sa mga personahe ng Agriculture office nga ukanha sa venue kung diin ipahigayon ang Businesss One Stop Shop.
+
+
+  Dugang pahibalo (Alang sa pagkuha sa Dokomento sa buhatan sa FIRE):
+
+Ang Buhatan sa Bureau of Fire Proteksyon bu=ot magpahibalo nga ang matag Business Owner maga hatag sa ilang gmail address tungod kay ang pagbayad sa Fire pagahimuon sa Online.
+  
+Daghang salamat.
+
+Kaninyo matinahuron,
+APOLONIO B. LOZADA, DVM
+Municipal Mayor
 ---
 
----
-Maayong adlaw sa tanan.
 
-Ang atong barangay maglunsad og Anti-Dengue Clean-Up ug Fogging Operation karong Miyerkules, alas 7:00 sa buntag.
-
-Giawhag ang tanang panimalay nga limpyohan ang palibot, ilabay ang mga butang nga mahimong tigum-an sa tubig, ug tabonan ang mga sudlanan sa tubig aron malikayan ang pagpasanay sa lamok.
-
-Ang panagtinabangay sa matag usa maoy yawe sa paglikay sa sakit nga dengue.
-
-Kaninyu Matinahuron,
-ALBERTO C. PACHECO
-Barangay Captain
----
-
----
-Maayong adlaw sa tanan.
-
-Gipahibalo nga adunay Libreng Vaccination Drive karong Lunes, alas 8:00 sa buntag sa Barangay Health Center.
-
-Giawhag ang tanang kwalipikadong residente nga magpabakuna aron mapanalipdan ang kaugalingon ug pamilya batok sa sakit. Palihog dad-a ang inyong vaccination card ug valid ID.
-
-Ang kahimsog sa komunidad responsibilidad sa tanan.
-
-Kaninyu Matinahuron,
-ALBERTO C. PACHECO
-Barangay Captain
----
-
----
-Maayong adlaw sa tanan.
-
-Gipahibalo ang tanang residente nga adunay temporaryong pagputol sa suplay sa tubig ugma gikan alas 6:00 sa buntag hangtod alas 3:00 sa hapon tungod sa pag-ayo sa linya sa tubig.
-
-Palihog mag-imbak og igo nga tubig alang sa inyong adlaw-adlaw nga panginahanglan samtang wala pa mauli ang normal nga suplay.
-
-Salamat sa inyong pagsabot.
-
-Kaninyu Matinahuron,
-ALBERTO C. PACHECO
-Barangay Captain
----
-
----
-Maayong adlaw sa tanan.
-
-Gipahibalo nga ang dalan sa Purok 3 temporaryong sirad-an karong Sabado tungod sa road concreting project.
-
-Palihog gamita ang alternatibong rota ug sundon ang mga traffic signs ug instruksyon sa mga barangay tanod aron malikayan ang kalisod sa pagbiyahe.
-
-Salamat sa inyong pasensya ug kooperasyon.
-
-Kaninyu Matinahuron,
-ALBERTO C. PACHECO
-Barangay Captain
----
 
 YOUR TASK:
 Refine the new draft announcement so that:
-- It matches the tone, structure, and formatting of the examples.
+- It matches the tone, and formatting of the examples.
 - It is written in natural Cebuano (Bisaya).
 - It remains formal, respectful, and community-focused.
+- It doesn't need to be the same
 
 STRICT RULES:
+- Keep if to whom the announcement was for.
 - DO NOT add new information.
 - DO NOT remove important details.
 - DO NOT change dates, times, names, or locations.
