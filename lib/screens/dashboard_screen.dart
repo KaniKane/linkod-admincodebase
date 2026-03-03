@@ -43,7 +43,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             .doc(currentUser.uid)
             .get();
         if (userDoc.exists && mounted) {
-          final role = (userDoc.data()?['role'] as String? ?? 'admin').toLowerCase();
+          final role = (userDoc.data()?['role'] as String? ?? 'admin')
+              .toLowerCase();
           setState(() => _currentUserRole = role);
         }
       } catch (_) {
@@ -61,8 +62,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     int totalUsers = 0;
     int totalAwaiting = 0;
     try {
-      final usersSnapshot =
-          await FirebaseFirestore.instance.collection('users').get();
+      final usersSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .get();
       totalUsers = usersSnapshot.size;
     } catch (_) {
       // Admin cannot read users; show 0
@@ -84,7 +86,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .get();
 
       final activities = <Map<String, dynamic>>[];
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
 
       for (final doc in announcementsSnapshot.docs) {
         final d = doc.data();
@@ -96,7 +111,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (createdAt != null && createdAt is Timestamp) {
           final dt = createdAt.toDate();
           sortAt = dt;
-          timestamp = '${months[dt.month - 1]} ${dt.day}, ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+          timestamp =
+              '${months[dt.month - 1]} ${dt.day}, ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
         }
         activities.add({
           'description': '$postedBy posted an announcement titled $title',
@@ -122,7 +138,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (createdAt != null && createdAt is Timestamp) {
           final dt = createdAt.toDate();
           sortAt = dt;
-          timestamp = '${months[dt.month - 1]} ${dt.day}, ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+          timestamp =
+              '${months[dt.month - 1]} ${dt.day}, ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
         }
         activities.add({
           'description': description,
@@ -198,7 +215,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: const DraftSavedNotification(
-                        message: 'Only Super Admin can access this.'),
+                      message: 'Only Super Admin can access this.',
+                    ),
                     backgroundColor: Colors.transparent,
                     elevation: 0,
                     behavior: SnackBarBehavior.floating,
@@ -209,22 +227,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
               if (route == '/announcements') {
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => const AnnouncementsScreen(),
+                  PageRouteBuilder(
+                    pageBuilder: (context, animation, secondaryAnimation) =>
+                        const AnnouncementsScreen(),
+                    transitionDuration: Duration.zero,
+                    reverseTransitionDuration: Duration.zero,
+                    transitionsBuilder: (context, animation, secondaryAnimation,
+                            child) =>
+                        child,
                   ),
                 );
               } else if (route == '/approvals') {
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => const ApprovalsScreen(),
+                  PageRouteBuilder(
+                    pageBuilder: (context, animation, secondaryAnimation) =>
+                        const ApprovalsScreen(),
+                    transitionDuration: Duration.zero,
+                    reverseTransitionDuration: Duration.zero,
+                    transitionsBuilder: (context, animation, secondaryAnimation,
+                            child) =>
+                        child,
                   ),
                 );
               } else if (route == '/user-management') {
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => const UserManagementScreen(),
+                  PageRouteBuilder(
+                    pageBuilder: (context, animation, secondaryAnimation) =>
+                        const UserManagementScreen(),
+                    transitionDuration: Duration.zero,
+                    reverseTransitionDuration: Duration.zero,
+                    transitionsBuilder: (context, animation, secondaryAnimation,
+                            child) =>
+                        child,
                   ),
                 );
               }
@@ -294,28 +330,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             // Insight cards
                             LayoutBuilder(
                               builder: (context, constraints) {
-                                final isSmallScreen = constraints.maxWidth < 900;
+                                final isSmallScreen =
+                                    constraints.maxWidth < 900;
                                 return isSmallScreen
                                     ? Column(
                                         children: [
                                           InsightCard(
-                                            iconPath: 'assets/img/icon/gray_group_icon.png',
+                                            iconPath:
+                                                'assets/img/icon/gray_group_icon.png',
                                             label: 'Total Users',
                                             value: _totalUsers.toString(),
                                             change: '+ 0',
                                           ),
                                           const SizedBox(height: 16),
                                           InsightCard(
-                                            iconPath: 'assets/img/icon/gray_add_person_icon.png',
+                                            iconPath:
+                                                'assets/img/icon/gray_add_person_icon.png',
                                             label: 'Awaiting Approval',
                                             value: _awaitingApproval.toString(),
                                             change: '+ 0',
                                           ),
                                           const SizedBox(height: 16),
                                           InsightCard(
-                                            iconPath: 'assets/img/icon/gray_speaker_icon.png',
+                                            iconPath:
+                                                'assets/img/icon/gray_speaker_icon.png',
                                             label: 'Total Announcements',
-                                            value: _totalAnnouncements.toString(),
+                                            value: _totalAnnouncements
+                                                .toString(),
                                             change: '+ 0',
                                           ),
                                         ],
@@ -324,7 +365,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                         children: [
                                           Expanded(
                                             child: InsightCard(
-                                              iconPath: 'assets/img/icon/gray_group_icon.png',
+                                              iconPath:
+                                                  'assets/img/icon/gray_group_icon.png',
                                               label: 'Total Users',
                                               value: _totalUsers.toString(),
                                               change: '+ 0',
@@ -333,18 +375,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                           const SizedBox(width: 16),
                                           Expanded(
                                             child: InsightCard(
-                                              iconPath: 'assets/img/icon/gray_add_person_icon.png',
+                                              iconPath:
+                                                  'assets/img/icon/gray_add_person_icon.png',
                                               label: 'Awaiting Approval',
-                                              value: _awaitingApproval.toString(),
+                                              value: _awaitingApproval
+                                                  .toString(),
                                               change: '+ 0',
                                             ),
                                           ),
                                           const SizedBox(width: 16),
                                           Expanded(
                                             child: InsightCard(
-                                              iconPath: 'assets/img/icon/gray_speaker_icon.png',
+                                              iconPath:
+                                                  'assets/img/icon/gray_speaker_icon.png',
                                               label: 'Total Announcements',
-                                              value: _totalAnnouncements.toString(),
+                                              value: _totalAnnouncements
+                                                  .toString(),
                                               change: '+ 0',
                                             ),
                                           ),
@@ -365,9 +411,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ],
                             if (_isLoading) ...[
                               const SizedBox(height: 8),
-                              const Center(
-                                child: CircularProgressIndicator(),
-                              ),
+                              const Center(child: CircularProgressIndicator()),
                               const SizedBox(height: 32),
                             ] else
                               const SizedBox(height: 40),
@@ -402,11 +446,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       ),
                                     )
                                   else
-                                    ..._recentActivities.map((a) => ActivityItem(
-                                          description: a['description'] as String,
-                                          timestamp: a['timestamp'] as String,
-                                          boldText: a['boldText'] as String?,
-                                        )),
+                                    ..._recentActivities.map(
+                                      (a) => ActivityItem(
+                                        description: a['description'] as String,
+                                        timestamp: a['timestamp'] as String,
+                                        boldText: a['boldText'] as String?,
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),

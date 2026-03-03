@@ -93,6 +93,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   Future<void> _loadAccounts() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -204,6 +205,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         });
       }
 
+      if (!mounted) return;
       setState(() {
         _users = loadedUsers;
         _admins = loadedAdmins;
@@ -212,6 +214,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _errorMessage = 'Failed to load accounts: $e';
@@ -243,17 +246,38 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     if (route == '/dashboard') {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const DashboardScreen()),
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const DashboardScreen(),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              child,
+        ),
       );
     } else if (route == '/announcements') {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const AnnouncementsScreen()),
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const AnnouncementsScreen(),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              child,
+        ),
       );
     } else if (route == '/approvals') {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const ApprovalsScreen()),
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const ApprovalsScreen(),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              child,
+        ),
       );
     }
   }
@@ -3243,227 +3267,216 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
-            return Theme(
-              data: Theme.of(context).copyWith(
-                colorScheme: Theme.of(context).colorScheme.copyWith(
-                  onSurface: AppColors.buttonTextOnLightStrong,
-                  onSurfaceVariant: AppColors.buttonTextOnLightStrong,
-                ),
-              ),
-              child: Dialog(
-                backgroundColor: Colors.transparent,
-                insetPadding: const EdgeInsets.all(20),
-                child: Form(
-                  key: formKey,
-                  child: Center(
-                    child: Container(
-                      constraints: const BoxConstraints(maxWidth: 520),
-                      padding: const EdgeInsets.all(32),
-                      decoration: BoxDecoration(
-                        color: AppColors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.shadowColor,
-                            blurRadius: 10,
-                            offset: const Offset(0, 5),
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.all(20),
+              child: Form(
+                key: formKey,
+                child: Center(
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      color: AppColors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.shadowColor,
+                          blurRadius: 10,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          'Edit User',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.loginGreen,
                           ),
-                        ],
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const Text(
-                            'Edit User',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.loginGreen,
+                        ),
+                        const SizedBox(height: 24),
+                        _buildDialogTextField(
+                          label: 'Full Name',
+                          controller: nameController,
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
+                              ? 'Name is required'
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDialogTextField(
+                          label: 'Phone Number',
+                          controller: phoneController,
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
+                              ? 'Phone number is required'
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Account status',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.darkGrey,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<String>(
+                          value: selectedStatus,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
                             ),
                           ),
-                          const SizedBox(height: 24),
-                          _buildDialogTextField(
-                            label: 'Full Name',
-                            controller: nameController,
-                            validator: (value) =>
-                                value == null || value.trim().isEmpty
-                                ? 'Name is required'
-                                : null,
-                          ),
-                          const SizedBox(height: 16),
-                          _buildDialogTextField(
-                            label: 'Phone Number',
-                            controller: phoneController,
-                            validator: (value) =>
-                                value == null || value.trim().isEmpty
-                                ? 'Phone number is required'
-                                : null,
-                          ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'Account status',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.darkGrey,
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'active',
+                              child: Text('Active'),
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          DropdownButtonFormField<String>(
-                            value: selectedStatus,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
+                            DropdownMenuItem(
+                              value: 'declined',
+                              child: Text('Declined'),
                             ),
-                            items: const [
-                              DropdownMenuItem(
-                                value: 'active',
-                                child: Text('Active'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'declined',
-                                child: Text('Declined'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'suspended',
-                                child: Text('Suspended'),
-                              ),
-                            ],
-                            onChanged: isSubmitting
-                                ? null
-                                : (v) => setState(
-                                    () => selectedStatus = v ?? 'active',
-                                  ),
-                          ),
-                          const SizedBox(height: 16),
-                          _buildDialogTextField(
-                            label: 'Admin note (optional)',
-                            controller: adminNoteController,
-                            validator: (_) => null,
-                          ),
-                          const SizedBox(height: 16),
-                          _buildDemographicSelector(
-                            selectedCategories: selectedCategories,
-                            onToggle: (value) {
-                              setState(() {
-                                if (selectedCategories.contains(value)) {
-                                  selectedCategories.remove(value);
-                                } else {
-                                  selectedCategories.add(value);
-                                }
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          if (dialogError != null) ...[
-                            ErrorNotification(message: dialogError!),
-                            const SizedBox(height: 8),
+                            DropdownMenuItem(
+                              value: 'suspended',
+                              child: Text('Suspended'),
+                            ),
                           ],
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              SizedBox(
-                                width: 110,
-                                height: 40,
-                                child: OutlineButton(
-                                  text: 'Cancel',
-                                  onPressed: isSubmitting
-                                      ? null
-                                      : () => Navigator.of(context).pop(),
-                                  isFullWidth: true,
+                          onChanged: isSubmitting
+                              ? null
+                              : (v) => setState(
+                                  () => selectedStatus = v ?? 'active',
                                 ),
-                              ),
-                              const SizedBox(width: 12),
-                              SizedBox(
-                                width: 110,
-                                height: 40,
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.loginGreen,
-                                    foregroundColor: AppColors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 10,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                  ),
-                                  onPressed: isSubmitting
-                                      ? null
-                                      : () async {
-                                          if (!formKey.currentState!.validate())
-                                            return;
-                                          setState(() {
-                                            isSubmitting = true;
-                                            dialogError = null;
-                                          });
-
-                                          try {
-                                            await FirebaseFirestore.instance
-                                                .collection('users')
-                                                .doc(docId)
-                                                .update({
-                                                  'fullName': nameController
-                                                      .text
-                                                      .trim(),
-                                                  'phoneNumber': phoneController
-                                                      .text
-                                                      .trim(),
-                                                  'category':
-                                                      selectedCategories.isEmpty
-                                                      ? 'User'
-                                                      : selectedCategories.join(
-                                                          ', ',
-                                                        ),
-                                                  'categories':
-                                                      selectedCategories
-                                                          .toList(),
-                                                  'accountStatus':
-                                                      selectedStatus,
-                                                  'adminNote':
-                                                      adminNoteController.text
-                                                          .trim(),
-                                                  'lastUpdated':
-                                                      FieldValue.serverTimestamp(),
-                                                  'updatedAt':
-                                                      FieldValue.serverTimestamp(),
-                                                });
-                                            if (mounted) {
-                                              await _loadAccounts();
-                                              Navigator.of(context).pop();
-                                            }
-                                          } catch (e) {
-                                            setState(() {
-                                              dialogError =
-                                                  'Failed to update user: $e';
-                                              isSubmitting = false;
-                                            });
-                                          }
-                                        },
-                                  child: isSubmitting
-                                      ? const SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor:
-                                                AlwaysStoppedAnimation<Color>(
-                                                  AppColors.white,
-                                                ),
-                                          ),
-                                        )
-                                      : const Text('Save'),
-                                ),
-                              ),
-                            ],
-                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDialogTextField(
+                          label: 'Admin note (optional)',
+                          controller: adminNoteController,
+                          validator: (_) => null,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDemographicSelector(
+                          selectedCategories: selectedCategories,
+                          onToggle: (value) {
+                            setState(() {
+                              if (selectedCategories.contains(value)) {
+                                selectedCategories.remove(value);
+                              } else {
+                                selectedCategories.add(value);
+                              }
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        if (dialogError != null) ...[
+                          ErrorNotification(message: dialogError!),
+                          const SizedBox(height: 8),
                         ],
-                      ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            SizedBox(
+                              width: 110,
+                              height: 40,
+                              child: OutlineButton(
+                                text: 'Cancel',
+                                onPressed: isSubmitting
+                                    ? null
+                                    : () => Navigator.of(context).pop(),
+                                isFullWidth: true,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            SizedBox(
+                              width: 110,
+                              height: 40,
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.loginGreen,
+                                  foregroundColor: AppColors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 10,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                onPressed: isSubmitting
+                                    ? null
+                                    : () async {
+                                        if (!formKey.currentState!.validate())
+                                          return;
+                                        setState(() {
+                                          isSubmitting = true;
+                                          dialogError = null;
+                                        });
+
+                                        try {
+                                          await FirebaseFirestore.instance
+                                              .collection('users')
+                                              .doc(docId)
+                                              .update({
+                                                'fullName': nameController.text
+                                                    .trim(),
+                                                'phoneNumber': phoneController
+                                                    .text
+                                                    .trim(),
+                                                'category':
+                                                    selectedCategories.isEmpty
+                                                    ? 'User'
+                                                    : selectedCategories.join(
+                                                        ', ',
+                                                      ),
+                                                'categories': selectedCategories
+                                                    .toList(),
+                                                'accountStatus': selectedStatus,
+                                                'adminNote': adminNoteController
+                                                    .text
+                                                    .trim(),
+                                                'lastUpdated':
+                                                    FieldValue.serverTimestamp(),
+                                                'updatedAt':
+                                                    FieldValue.serverTimestamp(),
+                                              });
+                                          if (mounted) {
+                                            await _loadAccounts();
+                                            Navigator.of(context).pop();
+                                          }
+                                        } catch (e) {
+                                          setState(() {
+                                            dialogError =
+                                                'Failed to update user: $e';
+                                            isSubmitting = false;
+                                          });
+                                        }
+                                      },
+                                child: isSubmitting
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                AppColors.white,
+                                              ),
+                                        ),
+                                      )
+                                    : const Text('Save'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ),

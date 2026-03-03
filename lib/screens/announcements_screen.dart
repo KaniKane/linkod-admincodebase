@@ -45,7 +45,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
 
   // Currently edited draft id (if any)
   String? _currentDraftId;
-  
+
   // Current user role for permission checks
   String? _currentUserRole;
 
@@ -100,7 +100,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       }).toList();
       String role = (_currentUserRole ?? 'admin').toLowerCase();
       if (role == 'admin' && currentUser != null) {
-        list = list.where((a) => a['postedByUserId'] == currentUser.uid).toList();
+        list = list
+            .where((a) => a['postedByUserId'] == currentUser.uid)
+            .toList();
       }
       list.sort((a, b) {
         final aT = a['createdAt'] as DateTime? ?? DateTime(0);
@@ -112,7 +114,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       if (mounted) setState(() => _publishedAnnouncements = []);
     }
   }
-  
+
   Future<void> _loadCurrentUserRole() async {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser != null) {
@@ -122,7 +124,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             .doc(currentUser.uid)
             .get();
         if (userDoc.exists && mounted) {
-          final role = (userDoc.data()?['role'] as String? ?? 'admin').toLowerCase();
+          final role = (userDoc.data()?['role'] as String? ?? 'admin')
+              .toLowerCase();
           setState(() {
             _currentUserRole = role;
           });
@@ -151,7 +154,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const DraftSavedNotification(
-              message: 'Only Super Admin can access this.'),
+            message: 'Only Super Admin can access this.',
+          ),
           backgroundColor: Colors.transparent,
           elevation: 0,
           behavior: SnackBarBehavior.floating,
@@ -162,17 +166,38 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     if (route == '/dashboard') {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const DashboardScreen()),
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const DashboardScreen(),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          transitionsBuilder:
+              (context, animation, secondaryAnimation, child) => child,
+        ),
       );
     } else if (route == '/approvals') {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const ApprovalsScreen()),
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const ApprovalsScreen(),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          transitionsBuilder:
+              (context, animation, secondaryAnimation, child) => child,
+        ),
       );
     } else if (route == '/user-management') {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const UserManagementScreen()),
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const UserManagementScreen(),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          transitionsBuilder:
+              (context, animation, secondaryAnimation, child) => child,
+        ),
       );
     }
   }
@@ -193,7 +218,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const ErrorNotification(
-              message: 'Please enter content before refining.'),
+            message: 'Please enter content before refining.',
+          ),
           backgroundColor: Colors.transparent,
           elevation: 0,
           behavior: SnackBarBehavior.floating,
@@ -229,7 +255,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: const DraftSavedNotification(
-                  message: 'Audience suggestion unavailable. You can still select audiences manually.'),
+                message:
+                    'Audience suggestion unavailable. You can still select audiences manually.',
+              ),
               backgroundColor: Colors.transparent,
               elevation: 0,
               behavior: SnackBarBehavior.floating,
@@ -242,7 +270,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       setState(() => _isRefining = false);
       final message = e.statusCode == 503
           ? 'Refinement failed. Is the backend running and Ollama available (llama3.2:3b)?'
-          : (e.message.length > 80 ? 'Refinement failed. Check backend.' : e.message);
+          : (e.message.length > 80
+                ? 'Refinement failed. Check backend.'
+                : e.message);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: DraftSavedNotification(message: message),
@@ -342,9 +372,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
 
       final drafts = snapshot.docs.map((doc) {
         final data = doc.data();
-        final audiences = (data['audiences'] as List?)
-                ?.whereType<String>()
-                .toList() ??
+        final audiences =
+            (data['audiences'] as List?)?.whereType<String>().toList() ??
             <String>[];
         return AnnouncementDraft(
           id: doc.id,
@@ -379,7 +408,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const ErrorNotification(
-              message: 'Please enter title or content first to suggest demographics.'),
+            message:
+                'Please enter title or content first to suggest demographics.',
+          ),
           backgroundColor: Colors.transparent,
           elevation: 0,
           behavior: SnackBarBehavior.floating,
@@ -406,7 +437,10 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: DraftSavedNotification(
-              message: e.message.length > 80 ? 'Suggestion failed. Check backend.' : e.message),
+            message: e.message.length > 80
+                ? 'Suggestion failed. Check backend.'
+                : e.message,
+          ),
           backgroundColor: Colors.transparent,
           elevation: 0,
           behavior: SnackBarBehavior.floating,
@@ -430,14 +464,17 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     final title = _titleController.text.trim();
     final originalContent = _contentController.text.trim();
     final refinedContent = _aiRefinedController.text.trim();
-    final content =
-        _isAIRefined && refinedContent.isNotEmpty ? refinedContent : originalContent;
+    final content = _isAIRefined && refinedContent.isNotEmpty
+        ? refinedContent
+        : originalContent;
 
     if (title.isEmpty || content.isEmpty || _selectedAudiences.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const ErrorNotification(
-              message: 'Title, content, and at least one target audience are required to save draft'),
+            message:
+                'Title, content, and at least one target audience are required to save draft',
+          ),
           backgroundColor: Colors.transparent,
           elevation: 0,
           behavior: SnackBarBehavior.floating,
@@ -464,10 +501,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       } else {
         final docRef = await FirebaseFirestore.instance
             .collection('announcementDrafts')
-            .add({
-          ...data,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+            .add({...data, 'createdAt': FieldValue.serverTimestamp()});
         _currentDraftId = docRef.id;
       }
 
@@ -513,14 +547,17 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     final title = _titleController.text.trim();
     final originalContent = _contentController.text.trim();
     final refinedContent = _aiRefinedController.text.trim();
-    final content =
-        _isAIRefined && refinedContent.isNotEmpty ? refinedContent : originalContent;
+    final content = _isAIRefined && refinedContent.isNotEmpty
+        ? refinedContent
+        : originalContent;
 
     if (title.isEmpty || content.isEmpty || _selectedAudiences.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const ErrorNotification(
-              message: 'Title, content, and at least one target audience are required to post'),
+            message:
+                'Title, content, and at least one target audience are required to post',
+          ),
           backgroundColor: Colors.transparent,
           elevation: 0,
           behavior: SnackBarBehavior.floating,
@@ -535,7 +572,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       String? postedByUserId;
       String? postedByPosition;
       String currentUserRole = 'official'; // Default fallback
-      
+
       if (currentUser != null) {
         postedByUserId = currentUser.uid;
         final userDoc = await FirebaseFirestore.instance
@@ -546,10 +583,11 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           final userData = userDoc.data() ?? {};
           postedBy = (userData['fullName'] as String?) ?? postedBy;
           postedByPosition = userData['position'] as String?;
-          currentUserRole = ((userData['role'] as String?) ?? 'admin').toLowerCase();
+          currentUserRole = ((userData['role'] as String?) ?? 'admin')
+              .toLowerCase();
         }
       }
-      
+
       // Role-based status: SUPER ADMIN publishes directly, OFFICIAL creates as Pending
       final canPublishDirectly = currentUserRole == 'super_admin';
       final status = canPublishDirectly ? 'Approved' : 'Pending';
@@ -610,23 +648,27 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         );
       }
 
-    if (choice == null || choice == 'cancel') return;
-      
-      final announcementRef =
-          await FirebaseFirestore.instance.collection('announcements').add({
-        'title': title,
-        'content': content,
-        'originalContent': originalContent,
-        'aiRefinedContent': refinedContent.isNotEmpty ? refinedContent : null,
-        'audiences': _selectedAudiences.toList(),
-        'status': status,
-        'postedBy': postedBy,
-        if (postedByPosition != null && postedByPosition.isNotEmpty) 'postedByPosition': postedByPosition,
-        if (postedByUserId != null) 'postedByUserId': postedByUserId,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'isActive': true,
-      });
+      if (choice == null || choice == 'cancel') return;
+
+      final announcementRef = await FirebaseFirestore.instance
+          .collection('announcements')
+          .add({
+            'title': title,
+            'content': content,
+            'originalContent': originalContent,
+            'aiRefinedContent': refinedContent.isNotEmpty
+                ? refinedContent
+                : null,
+            'audiences': _selectedAudiences.toList(),
+            'status': status,
+            'postedBy': postedBy,
+            if (postedByPosition != null && postedByPosition.isNotEmpty)
+              'postedByPosition': postedByPosition,
+            if (postedByUserId != null) 'postedByUserId': postedByUserId,
+            'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+            'isActive': true,
+          });
 
       if (!mounted) return;
 
@@ -645,7 +687,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           }
           await FirebaseFirestore.instance.collection('adminActivities').add({
             'type': 'post_request',
-            'description': '$adminName submitted an announcement for approval: $title',
+            'description':
+                '$adminName submitted an announcement for approval: $title',
             'fullName': title,
             'createdAt': FieldValue.serverTimestamp(),
           });
@@ -671,12 +714,15 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           final String msg;
           if (result.tokenCount == 0) {
             if (result.userCount == 0) {
-              msg = 'No residents matched the selected audiences. Check User Management: role=resident, approved, active, and Demographic category (categories array) matches the chosen audiences.';
+              msg =
+                  'No residents matched the selected audiences. Check User Management: role=resident, approved, active, and Demographic category (categories array) matches the chosen audiences.';
             } else {
-              msg = 'No valid tokens. ${result.userCount} resident(s) matched but none have FCM tokens. Ensure the mobile app has been opened after login on the target device(s).';
+              msg =
+                  'No valid tokens. ${result.userCount} resident(s) matched but none have FCM tokens. Ensure the mobile app has been opened after login on the target device(s).';
             }
           } else {
-            msg = 'Push sent: ${result.successCount}/${result.tokenCount} token(s).';
+            msg =
+                'Push sent: ${result.successCount}/${result.tokenCount} token(s).';
           }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -702,7 +748,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       final successMessage = canPublishDirectly
           ? 'Announcement is posted successfully'
           : 'Announcement submitted for approval. It will appear after admin approval.';
-      
+
       showDialog(
         context: context,
         barrierColor: Colors.transparent,
@@ -712,9 +758,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             backgroundColor: Colors.transparent,
             elevation: 0,
             insetPadding: const EdgeInsets.all(20),
-            child: SuccessNotification(
-              message: successMessage,
-            ),
+            child: SuccessNotification(message: successMessage),
           );
         },
       );
@@ -728,7 +772,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: ErrorNotification(message: 'Failed to post announcement: $e'),
+          content: ErrorNotification(
+            message: 'Failed to post announcement: $e',
+          ),
           backgroundColor: Colors.transparent,
           elevation: 0,
           behavior: SnackBarBehavior.floating,
@@ -793,8 +839,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                               child: _activeTabIndex == 0
                                   ? _buildComposeTab()
                                   : _activeTabIndex == 1
-                                      ? _buildDraftTab()
-                                      : _buildPostsTab(),
+                                  ? _buildDraftTab()
+                                  : _buildPostsTab(),
                             ),
                           ),
                         ],
@@ -815,10 +861,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 0),
       decoration: const BoxDecoration(
         border: Border(
-          bottom: BorderSide(
-            color: AppColors.inputBackground,
-            width: 1,
-          ),
+          bottom: BorderSide(color: AppColors.inputBackground, width: 1),
         ),
       ),
       child: Row(
@@ -921,10 +964,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             ),
             child: TextField(
               controller: _titleController,
-              style: const TextStyle(
-                fontSize: 16,
-                color: AppColors.darkGrey,
-              ),
+              style: const TextStyle(fontSize: 16, color: AppColors.darkGrey),
               decoration: const InputDecoration(
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.symmetric(
@@ -954,10 +994,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               controller: _contentController,
               minLines: 5,
               maxLines: null,
-              style: const TextStyle(
-                fontSize: 16,
-                color: AppColors.darkGrey,
-              ),
+              style: const TextStyle(fontSize: 16, color: AppColors.darkGrey),
               decoration: const InputDecoration(
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.all(15),
@@ -994,7 +1031,10 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                   child: GestureDetector(
                     onTap: _handleEditOriginal,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.white,
                         borderRadius: BorderRadius.circular(8),
@@ -1021,19 +1061,13 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               decoration: BoxDecoration(
                 color: AppColors.white,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: AppColors.aiRefinedBorder,
-                  width: 2,
-                ),
+                border: Border.all(color: AppColors.aiRefinedBorder, width: 2),
               ),
               child: TextField(
                 controller: _aiRefinedController,
                 minLines: 5,
                 maxLines: null,
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: AppColors.darkGrey,
-                ),
+                style: const TextStyle(fontSize: 16, color: AppColors.darkGrey),
                 decoration: const InputDecoration(
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.all(15),
@@ -1085,7 +1119,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                     spacing: 12,
                     runSpacing: 12,
                     children: _suggestedAudiences.map((audience) {
-                      final isAlreadySelected = _selectedAudiences.contains(audience);
+                      final isAlreadySelected = _selectedAudiences.contains(
+                        audience,
+                      );
                       return MouseRegion(
                         cursor: SystemMouseCursors.click,
                         child: GestureDetector(
@@ -1095,7 +1131,10 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                             }
                           },
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               color: AppColors.white,
                               borderRadius: BorderRadius.circular(20),
@@ -1248,10 +1287,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           decoration: BoxDecoration(
             color: AppColors.white,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: AppColors.mediumGrey,
-              width: 1,
-            ),
+            border: Border.all(color: AppColors.mediumGrey, width: 1),
           ),
           child: const Text(
             'Save as draft',
@@ -1271,7 +1307,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     if (_currentUserRole == 'staff') {
       return const SizedBox.shrink();
     }
-    
+
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
@@ -1284,7 +1320,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           ),
           child: Text(
             // Show different text for OFFICIAL (pending approval) vs SUPER ADMIN (direct publish)
-            _currentUserRole == 'super_admin' ? 'Post Announcement' : 'Submit for Approval',
+            _currentUserRole == 'super_admin'
+                ? 'Post Announcement'
+                : 'Submit for Approval',
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.normal,
@@ -1387,10 +1425,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             _currentUserRole == 'super_admin'
                 ? 'All approved announcements. Tap "View readers" to see who read each post.'
                 : 'Your approved announcements. Tap "View readers" to see who read each post.',
-            style: const TextStyle(
-              fontSize: 14,
-              color: AppColors.mediumGrey,
-            ),
+            style: const TextStyle(fontSize: 14, color: AppColors.mediumGrey),
           ),
           const SizedBox(height: 24),
           if (_publishedAnnouncements.isEmpty)
@@ -1418,7 +1453,10 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                 final title = a['title'] as String? ?? '';
                 final createdAt = a['createdAt'] as DateTime?;
                 final dateStr = createdAt != null
-                    ? createdAt.toIso8601String().substring(0, 16).replaceFirst('T', ' ')
+                    ? createdAt
+                          .toIso8601String()
+                          .substring(0, 16)
+                          .replaceFirst('T', ' ')
                     : '—';
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 16),
@@ -1475,7 +1513,10 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     );
   }
 
-  Future<void> _showViewReadersModal(String announcementId, String title) async {
+  Future<void> _showViewReadersModal(
+    String announcementId,
+    String title,
+  ) async {
     final snapshot = await FirebaseFirestore.instance
         .collection('announcements')
         .doc(announcementId)
@@ -1484,10 +1525,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     final readers = snapshot.docs.map((doc) {
       final d = doc.data();
       final viewedAt = _parseTimestamp(d['viewedAt']);
-      return {
-        'userId': d['userId'] as String? ?? doc.id,
-        'viewedAt': viewedAt,
-      };
+      return {'userId': d['userId'] as String? ?? doc.id, 'viewedAt': viewedAt};
     }).toList();
 
     final readersWithNames = <Map<String, dynamic>>[];
@@ -1549,7 +1587,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            r['fullName'] as String? ?? r['userId'] as String? ?? '',
+                            r['fullName'] as String? ??
+                                r['userId'] as String? ??
+                                '',
                             style: const TextStyle(fontSize: 13),
                             overflow: TextOverflow.ellipsis,
                           ),

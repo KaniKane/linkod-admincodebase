@@ -4,6 +4,7 @@ import '../utils/app_colors.dart';
 class AppSidebar extends StatelessWidget {
   final String currentRoute;
   final Function(String) onNavigate;
+
   /// When non-null, Approvals and User Management are grayed out for non–Super Admin (e.g. Admin). Only Super Admin can access all features; Admin is limited to Dashboard and Announcements (need approval).
   final String? currentUserRole;
 
@@ -108,8 +109,6 @@ class _NavItem extends StatefulWidget {
 }
 
 class _NavItemState extends State<_NavItem> {
-  bool _isHovered = false;
-
   @override
   Widget build(BuildContext context) {
     final disabled = widget.isDisabled;
@@ -120,48 +119,39 @@ class _NavItemState extends State<_NavItem> {
     final iconColor = effectiveActive
         ? AppColors.white
         : (disabled ? AppColors.lightGrey : AppColors.darkGrey);
-    final hoverBg = !disabled && _isHovered && !widget.isActive
-        ? AppColors.primaryGreen.withOpacity(0.1)
-        : Colors.transparent;
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      cursor: disabled ? SystemMouseCursors.basic : SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: EdgeInsets.symmetric(
-            horizontal: widget.isSmallScreen ? 12 : 16,
-            vertical: 12,
-          ),
-          decoration: BoxDecoration(
-            color: effectiveActive ? AppColors.primaryGreen : hoverBg,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            children: [
-              Image.asset(
-                widget.iconPath,
-                width: 24,
-                height: 24,
-                color: iconColor,
-              ),
-              const SizedBox(width: 12),
-              Flexible(
-                child: Text(
-                  widget.label,
-                  style: TextStyle(
-                    fontSize: widget.isSmallScreen ? 14 : 16,
-                    fontWeight: FontWeight.normal,
-                    color: textColor,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: widget.isSmallScreen ? 12 : 16,
+          vertical: 12,
+        ),
+        decoration: BoxDecoration(
+          color: effectiveActive ? AppColors.primaryGreen : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            Image.asset(
+              widget.iconPath,
+              width: 24,
+              height: 24,
+              color: iconColor,
+            ),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                widget.label,
+                style: TextStyle(
+                  fontSize: widget.isSmallScreen ? 14 : 16,
+                  fontWeight: FontWeight.normal,
+                  color: textColor,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

@@ -33,7 +33,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
   List<Map<String, dynamic>> _pendingAnnouncements = [];
   List<Map<String, dynamic>> _pendingProducts = [];
   List<Map<String, dynamic>> _pendingTasks = [];
-  
+
   // Current user role for permission checks
   String? _currentUserRole;
   bool _autoApproveAnnouncements = false;
@@ -59,7 +59,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     await _loadAutoApproveSettings();
     await _loadData();
   }
-  
+
   Future<void> _loadCurrentUserRole() async {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser != null) {
@@ -69,7 +69,8 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
             .doc(currentUser.uid)
             .get();
         if (userDoc.exists && mounted) {
-          final role = (userDoc.data()?['role'] as String? ?? 'admin').toLowerCase();
+          final role = (userDoc.data()?['role'] as String? ?? 'admin')
+              .toLowerCase();
           setState(() {
             _currentUserRole = role;
           });
@@ -95,10 +96,8 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
         setState(() {
           _autoApproveAnnouncements =
               data['autoApproveAnnouncements'] as bool? ?? false;
-          _autoApproveProducts =
-              data['autoApproveProducts'] as bool? ?? false;
-          _autoApproveTasks =
-              data['autoApproveTasks'] as bool? ?? false;
+          _autoApproveProducts = data['autoApproveProducts'] as bool? ?? false;
+          _autoApproveTasks = data['autoApproveTasks'] as bool? ?? false;
         });
       }
     } catch (_) {
@@ -111,15 +110,12 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       await FirebaseFirestore.instance
           .collection('adminSettings')
           .doc('approvals')
-          .set(
-        {
-          'autoApproveAnnouncements': _autoApproveAnnouncements,
-          'autoApproveProducts': _autoApproveProducts,
-          'autoApproveTasks': _autoApproveTasks,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+          .set({
+            'autoApproveAnnouncements': _autoApproveAnnouncements,
+            'autoApproveProducts': _autoApproveProducts,
+            'autoApproveTasks': _autoApproveTasks,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -141,7 +137,8 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const DraftSavedNotification(
-              message: 'Only Super Admin can access this.'),
+            message: 'Only Super Admin can access this.',
+          ),
           backgroundColor: Colors.transparent,
           elevation: 0,
           behavior: SnackBarBehavior.floating,
@@ -152,17 +149,38 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     if (route == '/dashboard') {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const DashboardScreen()),
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const DashboardScreen(),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          transitionsBuilder:
+              (context, animation, secondaryAnimation, child) => child,
+        ),
       );
     } else if (route == '/announcements') {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const AnnouncementsScreen()),
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const AnnouncementsScreen(),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          transitionsBuilder:
+              (context, animation, secondaryAnimation, child) => child,
+        ),
       );
     } else if (route == '/user-management') {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const UserManagementScreen()),
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const UserManagementScreen(),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          transitionsBuilder:
+              (context, animation, secondaryAnimation, child) => child,
+        ),
       );
     } else if (route == '/approvals') {
       // Already here
@@ -177,6 +195,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -200,7 +219,9 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
         }
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Failed to load: $e');
+      if (mounted) {
+        setState(() => _errorMessage = 'Failed to load: $e');
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -280,25 +301,39 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
 
   Future<void> _markAsApproved(String collection, String id) async {
     try {
-      final updates = <String, dynamic>{'updatedAt': FieldValue.serverTimestamp()};
+      final updates = <String, dynamic>{
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
       if (collection == 'tasks') {
         updates['approvalStatus'] = 'Approved';
       } else {
         updates['status'] = 'Approved';
       }
-      await FirebaseFirestore.instance.collection(collection).doc(id).update(updates);
+      await FirebaseFirestore.instance
+          .collection(collection)
+          .doc(id)
+          .update(updates);
 
       // When approving an announcement, send push now (official's post was Pending; push was not sent on submit).
       if (collection == 'announcements' && mounted) {
         try {
-          final doc = await FirebaseFirestore.instance.collection('announcements').doc(id).get();
+          final doc = await FirebaseFirestore.instance
+              .collection('announcements')
+              .doc(id)
+              .get();
           if (doc.exists) {
             final d = doc.data() ?? {};
             final title = d['title'] as String? ?? '';
             final content = d['content'] as String? ?? '';
-            final audiences = (d['audiences'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? <String>[];
+            final audiences =
+                (d['audiences'] as List<dynamic>?)
+                    ?.map((e) => e.toString())
+                    .toList() ??
+                <String>[];
             final postedByUserId = d['postedByUserId'] as String?;
-            final body = content.length > 140 ? '${content.substring(0, 140)}...' : content;
+            final body = content.length > 140
+                ? '${content.substring(0, 140)}...'
+                : content;
             await sendAnnouncementPush(
               announcementId: id,
               title: title,
@@ -311,7 +346,9 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: ErrorNotification(message: 'Approved; push send failed: $pushError'),
+                content: ErrorNotification(
+                  message: 'Approved; push send failed: $pushError',
+                ),
                 backgroundColor: Colors.transparent,
                 elevation: 0,
                 behavior: SnackBarBehavior.floating,
@@ -324,7 +361,9 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const SuccessNotification(message: 'Approved successfully'),
+            content: const SuccessNotification(
+              message: 'Approved successfully',
+            ),
             backgroundColor: Colors.transparent,
             elevation: 0,
             behavior: SnackBarBehavior.floating,
@@ -356,7 +395,10 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       } else {
         updates['status'] = 'Declined';
       }
-      await FirebaseFirestore.instance.collection(collection).doc(id).update(updates);
+      await FirebaseFirestore.instance
+          .collection(collection)
+          .doc(id)
+          .update(updates);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -392,8 +434,9 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     for (final a in items) {
       final id = a['id'] as String;
       try {
-        final docRef =
-            FirebaseFirestore.instance.collection('announcements').doc(id);
+        final docRef = FirebaseFirestore.instance
+            .collection('announcements')
+            .doc(id);
         await docRef.update({
           'status': 'Approved',
           'updatedAt': FieldValue.serverTimestamp(),
@@ -404,13 +447,15 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
           final d = doc.data() ?? <String, dynamic>{};
           final title = d['title'] as String? ?? '';
           final content = d['content'] as String? ?? '';
-          final audiences = (d['audiences'] as List<dynamic>?)
+          final audiences =
+              (d['audiences'] as List<dynamic>?)
                   ?.map((e) => e.toString())
                   .toList() ??
               <String>[];
           final postedByUserId = d['postedByUserId'] as String?;
-          final body =
-              content.length > 140 ? '${content.substring(0, 140)}...' : content;
+          final body = content.length > 140
+              ? '${content.substring(0, 140)}...'
+              : content;
 
           await sendAnnouncementPush(
             announcementId: id,
@@ -535,7 +580,9 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     final content = a['content'] as String? ?? '';
     final postedBy = a['postedBy'] as String? ?? '';
     final createdAt = a['createdAt'] as DateTime?;
-    final dateStr = createdAt != null ? createdAt.toIso8601String().substring(0, 16) : '—';
+    final dateStr = createdAt != null
+        ? createdAt.toIso8601String().substring(0, 16)
+        : '—';
     showDialog(
       context: context,
       builder: (ctx) => DialogContainer(
@@ -547,7 +594,10 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
             _detailRow('Posted by', postedBy),
             _detailRow('Date', dateStr),
             const SizedBox(height: 8),
-            const Text('Content', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+            const Text(
+              'Content',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+            ),
             const SizedBox(height: 4),
             Text(content, style: const TextStyle(fontSize: 14)),
           ],
@@ -593,8 +643,15 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     final sellerName = p['sellerName'] as String? ?? '';
     final category = p['category'] as String? ?? 'General';
     final createdAt = p['createdAt'] as DateTime?;
-    final dateStr = createdAt != null ? createdAt.toIso8601String().substring(0, 16) : '—';
-    final imageUrls = (p['imageUrls'] as List<dynamic>?)?.map((e) => e.toString()).where((s) => s.isNotEmpty).toList() ?? <String>[];
+    final dateStr = createdAt != null
+        ? createdAt.toIso8601String().substring(0, 16)
+        : '—';
+    final imageUrls =
+        (p['imageUrls'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .where((s) => s.isNotEmpty)
+            .toList() ??
+        <String>[];
     showDialog(
       context: context,
       builder: (ctx) => DialogContainer(
@@ -622,7 +679,11 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                         width: 160,
                         height: 160,
                         color: AppColors.inputBackground,
-                        child: const Icon(Icons.image_not_supported_outlined, color: AppColors.lightGrey, size: 40),
+                        child: const Icon(
+                          Icons.image_not_supported_outlined,
+                          color: AppColors.lightGrey,
+                          size: 40,
+                        ),
                       ),
                     ),
                   ),
@@ -635,7 +696,10 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
             _detailRow('Posted', dateStr),
             if (description.isNotEmpty) ...[
               const SizedBox(height: 8),
-              const Text('Description', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+              const Text(
+                'Description',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+              ),
               const SizedBox(height: 4),
               Text(description, style: const TextStyle(fontSize: 14)),
             ],
@@ -650,12 +714,19 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                   ),
                   child: const Row(
                     children: [
-                      Icon(Icons.warning_amber_rounded, size: 20, color: AppColors.mediumGrey),
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        size: 20,
+                        color: AppColors.mediumGrey,
+                      ),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Health & Wellness: medicines must be strictly checked before approval.',
-                          style: TextStyle(fontSize: 12, color: AppColors.darkGrey),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.darkGrey,
+                          ),
                         ),
                       ),
                     ],
@@ -704,7 +775,9 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     final description = t['description'] as String? ?? '';
     final requesterName = t['requesterName'] as String? ?? '';
     final createdAt = t['createdAt'] as DateTime?;
-    final dateStr = createdAt != null ? createdAt.toIso8601String().substring(0, 16) : '—';
+    final dateStr = createdAt != null
+        ? createdAt.toIso8601String().substring(0, 16)
+        : '—';
     showDialog(
       context: context,
       builder: (ctx) => DialogContainer(
@@ -716,7 +789,10 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
             _detailRow('Posted by', requesterName),
             _detailRow('Date', dateStr),
             const SizedBox(height: 8),
-            const Text('Description', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+            const Text(
+              'Description',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+            ),
             const SizedBox(height: 4),
             Text(description, style: const TextStyle(fontSize: 14)),
           ],
@@ -761,14 +837,28 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 80, child: Text(label, style: const TextStyle(fontSize: 12, color: AppColors.lightGrey))),
-          Expanded(child: Text(value.isEmpty ? '—' : value, style: const TextStyle(fontSize: 14))),
+          SizedBox(
+            width: 80,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 12, color: AppColors.lightGrey),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value.isEmpty ? '—' : value,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Future<void> _showViewReadersModal(String announcementId, String title) async {
+  Future<void> _showViewReadersModal(
+    String announcementId,
+    String title,
+  ) async {
     final snapshot = await FirebaseFirestore.instance
         .collection('announcements')
         .doc(announcementId)
@@ -777,12 +867,9 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     final readers = snapshot.docs.map((doc) {
       final d = doc.data();
       final viewedAt = _parseTimestamp(d['viewedAt']);
-      return {
-        'userId': d['userId'] as String? ?? doc.id,
-        'viewedAt': viewedAt,
-      };
+      return {'userId': d['userId'] as String? ?? doc.id, 'viewedAt': viewedAt};
     }).toList();
-    
+
     // Fetch user names for each reader
     final readersWithNames = <Map<String, dynamic>>[];
     for (final reader in readers) {
@@ -811,13 +898,13 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
         }
       }
     }
-    
+
     readersWithNames.sort((a, b) {
       final aT = a['viewedAt'] as DateTime? ?? DateTime(0);
       final bT = b['viewedAt'] as DateTime? ?? DateTime(0);
       return bT.compareTo(aT);
     });
-    
+
     if (!mounted) return;
     showDialog(
       context: context,
@@ -825,7 +912,10 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
         title: 'View Readers: ${title.isNotEmpty ? title : announcementId}',
         maxWidth: 480,
         child: readersWithNames.isEmpty
-            ? const Text('No readers yet.', style: TextStyle(color: AppColors.mediumGrey))
+            ? const Text(
+                'No readers yet.',
+                style: TextStyle(color: AppColors.mediumGrey),
+              )
             : ListView.builder(
                 shrinkWrap: true,
                 itemCount: readersWithNames.length,
@@ -841,12 +931,20 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            r['fullName'] as String? ?? r['userId'] as String? ?? '',
+                            r['fullName'] as String? ??
+                                r['userId'] as String? ??
+                                '',
                             style: const TextStyle(fontSize: 13),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        Text(viewedStr, style: const TextStyle(fontSize: 12, color: AppColors.mediumGrey)),
+                        Text(
+                          viewedStr,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.mediumGrey,
+                          ),
+                        ),
                       ],
                     ),
                   );
@@ -855,7 +953,14 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
         actions: Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            SizedBox(width: 110, child: OutlineButton(text: 'Close', onPressed: () => Navigator.of(context).pop(), isFullWidth: true)),
+            SizedBox(
+              width: 110,
+              child: OutlineButton(
+                text: 'Close',
+                onPressed: () => Navigator.of(context).pop(),
+                isFullWidth: true,
+              ),
+            ),
           ],
         ),
       ),
@@ -915,7 +1020,8 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                                 'Errand Approvals',
                               ],
                               activeIndex: _activeTabIndex,
-                              onTabChanged: (i) => setState(() => _activeTabIndex = i),
+                              onTabChanged: (i) =>
+                                  setState(() => _activeTabIndex = i),
                             ),
                           ),
                           if (_currentUserRole == 'super_admin')
@@ -930,8 +1036,8 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                                       value: _activeTabIndex == 0
                                           ? _autoApproveAnnouncements
                                           : _activeTabIndex == 1
-                                              ? _autoApproveProducts
-                                              : _autoApproveTasks,
+                                          ? _autoApproveProducts
+                                          : _autoApproveTasks,
                                       onChanged: (val) {
                                         if (val == null) return;
                                         setState(() {
@@ -951,8 +1057,8 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                                       _activeTabIndex == 0
                                           ? 'Auto-approve posts'
                                           : _activeTabIndex == 1
-                                              ? 'Auto-approve marketplace'
-                                              : 'Auto-approve errands',
+                                          ? 'Auto-approve marketplace'
+                                          : 'Auto-approve errands',
                                       style: const TextStyle(
                                         fontSize: 12,
                                         color: AppColors.mediumGrey,
@@ -971,12 +1077,21 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                                   color: AppColors.errorBannerBg,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: Text(_errorMessage!, style: const TextStyle(color: AppColors.deleteRed)),
+                                child: Text(
+                                  _errorMessage!,
+                                  style: const TextStyle(
+                                    color: AppColors.deleteRed,
+                                  ),
+                                ),
                               ),
                             ),
                           Expanded(
                             child: _isLoading
-                                ? const Center(child: CircularProgressIndicator(color: AppColors.primaryGreen))
+                                ? const Center(
+                                    child: CircularProgressIndicator(
+                                      color: AppColors.primaryGreen,
+                                    ),
+                                  )
                                 : SingleChildScrollView(
                                     padding: const EdgeInsets.all(32),
                                     child: _buildTabContent(),
@@ -1012,7 +1127,10 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     if (_pendingAnnouncements.isEmpty) {
       return const Padding(
         padding: EdgeInsets.only(top: 24),
-        child: Text('No pending announcements.', style: TextStyle(color: AppColors.mediumGrey)),
+        child: Text(
+          'No pending announcements.',
+          style: TextStyle(color: AppColors.mediumGrey),
+        ),
       );
     }
     return Column(
@@ -1020,7 +1138,11 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       children: [
         const Text(
           'Announcements awaiting approval',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.darkGrey),
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: AppColors.darkGrey,
+          ),
         ),
         const SizedBox(height: 16),
         ..._pendingAnnouncements.map((a) {
@@ -1031,14 +1153,22 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
               : (a['content'] as String? ?? '');
           final postedBy = a['postedBy'] as String? ?? '';
           final createdAt = a['createdAt'] as DateTime?;
-          final dateStr = createdAt != null ? '${createdAt.toIso8601String().substring(0, 10)}' : '—';
+          final dateStr = createdAt != null
+              ? '${createdAt.toIso8601String().substring(0, 10)}'
+              : '—';
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: AppColors.white,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: AppColors.shadowColor, blurRadius: 4, offset: const Offset(0, 2))],
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.shadowColor,
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Row(
               children: [
@@ -1046,11 +1176,31 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
                       const SizedBox(height: 4),
-                      Text(excerpt, style: const TextStyle(fontSize: 13, color: AppColors.mediumGrey), maxLines: 2, overflow: TextOverflow.ellipsis),
+                      Text(
+                        excerpt,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.mediumGrey,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       const SizedBox(height: 4),
-                      Text('By $postedBy · $dateStr', style: const TextStyle(fontSize: 12, color: AppColors.lightGrey)),
+                      Text(
+                        'By $postedBy · $dateStr',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.lightGrey,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1087,8 +1237,14 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primaryGreen,
                         foregroundColor: AppColors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -1110,7 +1266,10 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     if (_pendingProducts.isEmpty) {
       return const Padding(
         padding: EdgeInsets.only(top: 24),
-        child: Text('No pending marketplace items.', style: TextStyle(color: AppColors.mediumGrey)),
+        child: Text(
+          'No pending marketplace items.',
+          style: TextStyle(color: AppColors.mediumGrey),
+        ),
       );
     }
     return Column(
@@ -1118,7 +1277,11 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       children: [
         const Text(
           'Marketplace items awaiting approval',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.darkGrey),
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: AppColors.darkGrey,
+          ),
         ),
         const SizedBox(height: 16),
         ..._pendingProducts.map((p) {
@@ -1127,14 +1290,22 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
           final sellerName = p['sellerName'] as String? ?? '—';
           final category = p['category'] as String? ?? 'General';
           final createdAt = p['createdAt'] as DateTime?;
-          final dateStr = createdAt != null ? '${createdAt.toIso8601String().substring(0, 10)}' : '—';
+          final dateStr = createdAt != null
+              ? '${createdAt.toIso8601String().substring(0, 10)}'
+              : '—';
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: AppColors.white,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: AppColors.shadowColor, blurRadius: 4, offset: const Offset(0, 2))],
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.shadowColor,
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Row(
               children: [
@@ -1142,8 +1313,20 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
-                      Text('$sellerName · $category · $dateStr', style: const TextStyle(fontSize: 13, color: AppColors.mediumGrey)),
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Text(
+                        '$sellerName · $category · $dateStr',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.mediumGrey,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1166,8 +1349,14 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primaryGreen,
                         foregroundColor: AppColors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -1189,7 +1378,10 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     if (_pendingTasks.isEmpty) {
       return const Padding(
         padding: EdgeInsets.only(top: 24),
-        child: Text('No pending errands.', style: TextStyle(color: AppColors.mediumGrey)),
+        child: Text(
+          'No pending errands.',
+          style: TextStyle(color: AppColors.mediumGrey),
+        ),
       );
     }
     return Column(
@@ -1197,7 +1389,11 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       children: [
         const Text(
           'Errands awaiting approval',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.darkGrey),
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: AppColors.darkGrey,
+          ),
         ),
         const SizedBox(height: 16),
         ..._pendingTasks.map((t) {
@@ -1205,14 +1401,22 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
           final title = t['title'] as String;
           final requesterName = t['requesterName'] as String? ?? '—';
           final createdAt = t['createdAt'] as DateTime?;
-          final dateStr = createdAt != null ? '${createdAt.toIso8601String().substring(0, 10)}' : '—';
+          final dateStr = createdAt != null
+              ? '${createdAt.toIso8601String().substring(0, 10)}'
+              : '—';
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: AppColors.white,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: AppColors.shadowColor, blurRadius: 4, offset: const Offset(0, 2))],
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.shadowColor,
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Row(
               children: [
@@ -1220,8 +1424,20 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
-                      Text('$requesterName · $dateStr', style: const TextStyle(fontSize: 13, color: AppColors.mediumGrey)),
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Text(
+                        '$requesterName · $dateStr',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.mediumGrey,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1244,8 +1460,14 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primaryGreen,
                         foregroundColor: AppColors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
