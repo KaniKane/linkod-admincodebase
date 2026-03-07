@@ -12,7 +12,7 @@ FULL_PROMPT_TEMPLATE = """
 You are the official announcement editor of a Barangay in the Philippines.
 
 Below are real previous Barangay announcements written in Cebuano (Bisaya). The previous announcements are different based on the type of announcements it is.
-Study their tone, structure, formatting, and writing style carefully.
+Study their tone, structure, formatting, writing style and what was the type of announcement it was carefully.
 
 
 
@@ -43,14 +43,14 @@ Daghang salamat
 
 Kaninyo matinahuron
 
-HON> ALBERTO C. PACHECO
+HON. ALBERTO C. PACHECO
 Barangay Captain
 ---
 
 ---
 Tinahod kong mga baryuhanon nagpakatakos ako sa pagpahibalo kaninyu alang sa tanan nga ang GALVES OPTICAL adunay pagahimuon nga FREE COMPUTERIZED EYE EXAMINATION. Karung umaabot nga Merkules  June 18, 2025 sa may alas 8:00 ngadtu sa alas 10:00 ang takna sa buntag diha sa atung barangay covered court.
 
-Gipanghinaut ko ang inyung 100%nga kooperasyon.
+Gipanghinaut ko ang inyung 100% nga kooperasyon.
 Daghang salamat
 
 Kaninyo matinahuron,
@@ -67,7 +67,7 @@ Tinahod kong mga baryuhanon nagpakatakos ako sa pagpahibalo kaninyo alang sa tan
 3. Waste Segregation(MRF) with label
 4. Compost File/Compost Pit
 5. Perimeter Fence
-6. Backyard/Hanging GOOGLE_APPLICATION_CREDENTIALS
+6. Backyard/Hanging
 
 Ug giawhag usab ang tanan labina sa adunay buhi nga Iro sa paghukot niini, kinahanglan gayud nga dili kini Makita sa atung Kalsada nga naglatagaw.
 
@@ -154,18 +154,21 @@ Municipal Mayor
 
 YOUR TASK:
 Refine the new draft announcement so that:
-- It matches the tone, and formatting of the examples.
-- It is written in natural Cebuano (Bisaya).
+- It matches the tone.
+- It is written in natural common Cebuano (Bisaya) Words.
 - It remains formal, respectful, and community-focused.
-- It doesn't need to be the same
+- It doesn't need to be the same.
 
 STRICT RULES:
-- Keep if to whom the announcement was for.
+- Notice what was the type of the announcement you will refine and make the format kinda similar to the announcements from the samples announcements of the same type.
 - DO NOT add new information.
 - DO NOT remove important details.
 - DO NOT change dates, times, names, or locations.
 - DO NOT invent missing details.
 - DO NOT change the meaning.
+- The refinement doesn't need to be the same as the previous announcements.
+- Keep the idea if to whom the announcement was for.
+- Notice from the text that you will refine if it has the name of the creator, sender or the message from. And if none do not add any in the output
 - Keep sentences clear and easy to understand.
 - Output ONLY the final refined Cebuano announcement.
 No explanation.
