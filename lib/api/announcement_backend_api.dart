@@ -4,13 +4,26 @@
 /// - POST /recommend-audiences: rule-based audience recommendation
 ///
 /// Base URL: local backend, e.g. http://localhost:8000
+/// Push endpoints can use [kPushApiBaseUrl] (Cloud Function) so you don't need to run the local backend.
 
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-/// Base URL for the local FastAPI backend. Change if backend runs elsewhere.
+/// Base URL for the local FastAPI backend (refine, recommend-audiences). Change if backend runs elsewhere.
 const String kAnnouncementBackendBaseUrl = 'http://localhost:8000';
+
+/// Base URL for push endpoints (send-announcement-push, send-account-approval, send-user-push).
+/// When set, the admin app calls this URL for push so you don't need to run the Python backend.
+/// Use your deployed Cloud Function URL, e.g. https://us-central1-linkod-db.cloudfunctions.net/api
+/// (Replace region if your functions are in another region; see Firebase Console > Functions.)
+/// If null or empty, push requests use [kAnnouncementBackendBaseUrl] (requires local backend on port 8000).
+const String? kPushApiBaseUrl = 'https://us-central1-linkod-db.cloudfunctions.net/api';
+
+String get _pushBaseUrl =>
+    (kPushApiBaseUrl != null && kPushApiBaseUrl!.trim().isNotEmpty)
+        ? kPushApiBaseUrl!.trim()
+        : kAnnouncementBackendBaseUrl;
 
 /// Result of POST /refine: original and refined text.
 class RefineResponse {
@@ -144,6 +157,33 @@ class SendAccountApprovalResponse {
   final Map<String, int> errorCounts;
 }
 
+/// Result of POST /send-user-push (single-user push, e.g. product/task approved).
+class SendUserPushResponse {
+  const SendUserPushResponse({
+    required this.tokenCount,
+    required this.successCount,
+    required this.failureCount,
+    required this.errorCounts,
+  });
+
+  factory SendUserPushResponse.fromJson(Map<String, dynamic> json) {
+    return SendUserPushResponse(
+      tokenCount: json['token_count'] as int? ?? 0,
+      successCount: json['success_count'] as int? ?? 0,
+      failureCount: json['failure_count'] as int? ?? 0,
+      errorCounts: (json['error_counts'] as Map<String, dynamic>?)?.map(
+            (k, v) => MapEntry(k, (v as num?)?.toInt() ?? 0),
+          ) ??
+          const {},
+    );
+  }
+
+  final int tokenCount;
+  final int successCount;
+  final int failureCount;
+  final Map<String, int> errorCounts;
+}
+
 /// Calls POST /send-account-approval to notify the approved user (single-user push).
 /// Fetches fcmTokens from awaitingApproval on the backend. Non-blocking: do not fail approval if this throws.
 Future<SendAccountApprovalResponse> sendAccountApprovalPush({
@@ -152,7 +192,7 @@ Future<SendAccountApprovalResponse> sendAccountApprovalPush({
   required String title,
   required String body,
 }) async {
-  final uri = Uri.parse('$kAnnouncementBackendBaseUrl/send-account-approval');
+  final uri = Uri.parse('$_pushBaseUrl/send-account-approval');
   final response = await http
       .post(
         uri,
@@ -179,6 +219,42 @@ Future<SendAccountApprovalResponse> sendAccountApprovalPush({
     throw AnnouncementBackendException('Empty response from send-account-approval');
   }
   return SendAccountApprovalResponse.fromJson(json);
+}
+
+/// Calls POST /send-user-push to notify a single user (e.g. product approved, task approved).
+Future<SendUserPushResponse> sendUserPush({
+  required String userId,
+  required String title,
+  required String body,
+  Map<String, String>? data,
+}) async {
+  final uri = Uri.parse('$_pushBaseUrl/send-user-push');
+  final response = await http
+      .post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'user_id': userId,
+          'title': title,
+          'body': body,
+          if (data != null && data.isNotEmpty) 'data': data,
+        }),
+      )
+      .timeout(const Duration(seconds: 15));
+
+  if (response.statusCode != 200) {
+    final body = response.body;
+    throw AnnouncementBackendException(
+      body.isNotEmpty ? body : 'Send user push failed (${response.statusCode})',
+      response.statusCode,
+    );
+  }
+
+  final json = jsonDecode(response.body) as Map<String, dynamic>?;
+  if (json == null) {
+    throw AnnouncementBackendException('Empty response from send-user-push');
+  }
+  return SendUserPushResponse.fromJson(json);
 }
 
 /// Calls POST /refine with [rawText]. Returns original and refined text.
@@ -248,7 +324,7 @@ Future<SendAnnouncementPushResponse> sendAnnouncementPush({
   String? requestedByUserId,
   Map<String, String>? data,
 }) async {
-  final uri = Uri.parse('$kAnnouncementBackendBaseUrl/send-announcement-push');
+  final uri = Uri.parse('$_pushBaseUrl/send-announcement-push');
   final response = await http
       .post(
         uri,

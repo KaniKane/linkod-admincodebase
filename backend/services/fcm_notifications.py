@@ -344,6 +344,75 @@ def get_approval_fcm_tokens_with_fallback(request_id: str, user_id: str) -> List
     return tokens
 
 
+def get_tokens_for_user(user_id: str) -> List[str]:
+    """
+    Get FCM tokens for a single user (e.g. for product/task approval push).
+    Reads from users/{user_id}.fcmTokens and users/{user_id}/devices.
+    Returns empty list if user missing or no tokens.
+    """
+    if not user_id or not user_id.strip():
+        return []
+    db = _firestore_client()
+    user_doc = db.collection("users").document(user_id.strip()).get()
+    if not user_doc.exists:
+        return []
+    tokens, _ = _collect_tokens([user_doc])
+    return tokens
+
+
+def send_user_push(
+    *,
+    user_id: str,
+    title: str,
+    body: str,
+    data: Optional[Dict[str, str]] = None,
+) -> ApprovalSendResult:
+    """
+    Send a push to a single user's devices (e.g. product approved, task approved).
+    Payload data is passed through to FCM data (all values must be string).
+    """
+    _init_firebase_admin()
+    fcm_tokens = get_tokens_for_user(user_id)
+    if not fcm_tokens:
+        return ApprovalSendResult(
+            token_count=0,
+            success_count=0,
+            failure_count=0,
+            error_counts={},
+        )
+    base_data: Dict[str, str] = {
+        "userId": user_id,
+    }
+    if data:
+        base_data.update({str(k): str(v) for k, v in data.items()})
+    if "type" not in base_data:
+        base_data["type"] = "notification"
+    total_success = 0
+    total_failure = 0
+    error_counter: Counter[str] = Counter()
+    for token_batch in _chunked(fcm_tokens, MAX_TOKENS_PER_BATCH):
+        message = messaging.MulticastMessage(
+            tokens=token_batch,
+            notification=messaging.Notification(title=title, body=body),
+            data=base_data,
+        )
+        batch_response = messaging.send_each_for_multicast(message)
+        total_success += batch_response.success_count
+        total_failure += batch_response.failure_count
+        for resp in batch_response.responses:
+            if resp.success:
+                continue
+            exc = resp.exception
+            code = type(exc).__name__ if exc is not None else "UnknownError"
+            error_counter[code] += 1
+    return ApprovalSendResult(
+        token_count=len(fcm_tokens),
+        success_count=total_success,
+        failure_count=total_failure,
+        error_counts=dict(error_counter),
+    )
+
+
 def send_account_approval_push(
     *,
     user_id: str,

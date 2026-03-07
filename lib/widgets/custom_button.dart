@@ -7,6 +7,7 @@ class CustomButton extends StatefulWidget {
   final bool isFullWidth;
   final double? fontSize;
   final FontWeight? fontWeight;
+  final bool isLoading;
 
   const CustomButton({
     super.key,
@@ -15,6 +16,7 @@ class CustomButton extends StatefulWidget {
     this.isFullWidth = true,
     this.fontSize,
     this.fontWeight,
+    this.isLoading = false,
   });
 
   @override
@@ -43,17 +45,28 @@ class _CustomButtonState extends State<CustomButton> {
             borderRadius: BorderRadius.circular(10),
           ),
           child: Center(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                widget.text,
-                style: TextStyle(
-                  fontSize: widget.fontSize ?? 18,
-                  fontWeight: widget.fontWeight ?? FontWeight.bold,
-                  color: AppColors.white,
-                ),
-              ),
-            ),
+            child: widget.isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.white,
+                      ),
+                    ),
+                  )
+                : FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      widget.text,
+                      style: TextStyle(
+                        fontSize: widget.fontSize ?? 18,
+                        fontWeight: widget.fontWeight ?? FontWeight.bold,
+                        color: AppColors.white,
+                      ),
+                    ),
+                  ),
           ),
         ),
       ),

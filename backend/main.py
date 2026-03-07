@@ -20,8 +20,10 @@ from services.audience_rules import recommend_audiences, DEFAULT_AUDIENCE
 from services.fcm_notifications import (
     FirebaseNotConfiguredError,
     get_approval_fcm_tokens_with_fallback,
+    get_tokens_for_user,
     send_account_approval_push,
     send_announcement_push,
+    send_user_push,
 )
 
 app = FastAPI(
@@ -116,6 +118,25 @@ class SendAccountApprovalRequest(BaseModel):
 
 
 class SendAccountApprovalResponse(BaseModel):
+    token_count: int
+    success_count: int
+    failure_count: int
+    error_counts: dict[str, int]
+
+
+class SendUserPushRequest(BaseModel):
+    """Send push to a single user (e.g. product approved, task approved)."""
+
+    user_id: str = Field(..., min_length=1, description="Firebase Auth UID of the target user")
+    title: str = Field(..., min_length=1, description="Notification title")
+    body: str = Field(..., min_length=1, description="Notification body")
+    data: Optional[dict[str, str]] = Field(
+        default=None,
+        description="FCM data payload (e.g. type, productId, taskId); all values must be string",
+    )
+
+
+class SendUserPushResponse(BaseModel):
     token_count: int
     success_count: int
     failure_count: int
@@ -237,6 +258,39 @@ def post_send_account_approval(request: SendAccountApprovalRequest) -> SendAccou
         ) from e
 
     return SendAccountApprovalResponse(
+        token_count=result.token_count,
+        success_count=result.success_count,
+        failure_count=result.failure_count,
+        error_counts=result.error_counts,
+    )
+
+
+@app.post("/send-user-push", response_model=SendUserPushResponse)
+def post_send_user_push(request: SendUserPushRequest) -> SendUserPushResponse:
+    """
+    Send a push notification to a single user's devices (e.g. product approved, task approved).
+    Fetches FCM tokens from users/{user_id}/devices and users/{user_id}.fcmTokens.
+    """
+    try:
+        result = send_user_push(
+            user_id=request.user_id,
+            title=request.title,
+            body=request.body,
+            data=request.data,
+        )
+    except FirebaseNotConfiguredError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=str(e) + " See backend README for setup.",
+        ) from e
+    except DefaultCredentialsError as e:
+        raise HTTPException(
+            status_code=503,
+            detail="Firebase credentials not found. Set FIREBASE_SERVICE_ACCOUNT_PATH or "
+            "GOOGLE_APPLICATION_CREDENTIALS to your service account JSON path. See backend README.",
+        ) from e
+
+    return SendUserPushResponse(
         token_count=result.token_count,
         success_count=result.success_count,
         failure_count=result.failure_count,

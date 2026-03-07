@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/app_colors.dart';
 import '../widgets/custom_link.dart';
@@ -25,6 +26,27 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _passwordObscure = true;
 
   @override
+  void initState() {
+    super.initState();
+    _loadSavedPhoneNumber();
+  }
+
+  Future<void> _loadSavedPhoneNumber() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedPhone = prefs.getString('last_phone_number');
+    if (savedPhone != null && savedPhone.isNotEmpty) {
+      setState(() {
+        _phoneController.text = savedPhone;
+      });
+    }
+  }
+
+  Future<void> _savePhoneNumber(String phone) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('last_phone_number', phone);
+  }
+
+  @override
   void dispose() {
     _phoneController.dispose();
     _passwordController.dispose();
@@ -42,6 +64,9 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final phone = _phoneController.text.trim();
       final password = _passwordController.text;
+
+      // Save phone number for next login (but not password)
+      await _savePhoneNumber(phone);
 
       // Map phone number to an email-style identifier for Firebase Auth,
       // e.g. "+1234567890" -> "+1234567890@linkod.com"
@@ -102,12 +127,18 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const DashboardScreen(),
-        ),
-      );
+      // Workaround: Firebase Auth on Windows sends channel messages from a
+      // non-platform thread after sign-in, which can crash. Defer navigation
+      // to the next frame so it runs on the platform thread.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const DashboardScreen(),
+          ),
+        );
+      });
     } catch (e) {
       setState(() {
         _errorMessage = 'Login failed: $e';
@@ -207,7 +238,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildLoginCard() {
     return Container(
       constraints: const BoxConstraints(maxWidth: 400),
-      margin: const EdgeInsets.only(left: 60, right: 20, top: 20, bottom: 20),
+      margin: const EdgeInsets.only(left: 0, right: 200, top: 20, bottom: 20),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 50),
         decoration: BoxDecoration(
@@ -348,6 +379,7 @@ class _LoginScreenState extends State<LoginScreen> {
               // Login Button
               _LoginButton(
                 text: 'Login',
+                isLoading: _isLoading,
                 onPressed: _isLoading ? null : _handleLogin,
               ),
               const SizedBox(height: 30),
@@ -381,10 +413,12 @@ class _LoginScreenState extends State<LoginScreen> {
 class _LoginButton extends StatefulWidget {
   final String text;
   final VoidCallback? onPressed;
+  final bool isLoading;
 
   const _LoginButton({
     required this.text,
     this.onPressed,
+    this.isLoading = false,
   });
 
   @override
@@ -397,30 +431,47 @@ class _LoginButtonState extends State<_LoginButton> {
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      cursor: SystemMouseCursors.click,
+      onEnter: (_) {
+        if (!widget.isLoading) setState(() => _isHovered = true);
+      },
+      onExit: (_) {
+        if (!widget.isLoading) setState(() => _isHovered = false);
+      },
+      cursor: widget.onPressed != null && !widget.isLoading
+          ? SystemMouseCursors.click
+          : SystemMouseCursors.basic,
       child: GestureDetector(
-        onTap: widget.onPressed,
+        onTap: widget.isLoading ? null : widget.onPressed,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           width: double.infinity,
           height: 50,
           decoration: BoxDecoration(
-            color: _isHovered
-                ? AppColors.gradientBottomLeft
-                : AppColors.loginGreen,
+            color: widget.isLoading
+                ? AppColors.loginGreen.withOpacity(0.7)
+                : (_isHovered
+                    ? AppColors.gradientBottomLeft
+                    : AppColors.loginGreen),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Center(
-            child: Text(
-              widget.text,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: AppColors.white,
-              ),
-            ),
+            child: widget.isLoading
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.white),
+                    ),
+                  )
+                : Text(
+                    widget.text,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.white,
+                    ),
+                  ),
           ),
         ),
       ),

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../services/admin_notification_service.dart';
 import '../widgets/app_sidebar.dart';
 import '../widgets/insight_card.dart';
 import '../widgets/activity_item.dart';
@@ -22,16 +23,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _totalUsers = 0;
   int _awaitingApproval = 0;
   int _totalAnnouncements = 0;
+  int _usersAddedThisMonth = 0;
+  int _approvalsThisMonth = 0;
+  int _announcementsThisMonth = 0;
   bool _isLoading = false;
   String? _errorMessage;
   String? _currentUserRole;
   final List<Map<String, dynamic>> _recentActivities = [];
+
+  // Pending counts for sidebar badges
+  int _pendingApprovalsCount = 0;
+  int _pendingUsersCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadCurrentUserRole();
     _loadDashboardData();
+    // Initialize admin notification service after login (real-time alerts for new registrations)
+    AdminNotificationService().initialize();
   }
 
   Future<void> _loadCurrentUserRole() async {
@@ -61,11 +71,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     int totalUsers = 0;
     int totalAwaiting = 0;
+    int usersAddedThisMonth = 0;
+    int approvalsThisMonth = 0;
+    int announcementsThisMonth = 0;
+
+    // Calculate start of month
+    final now = DateTime.now();
+    final startOfMonth = DateTime(now.year, now.month, 1);
+
     try {
       final usersSnapshot = await FirebaseFirestore.instance
           .collection('users')
           .get();
       totalUsers = usersSnapshot.size;
+      
+      // Count users added this month
+      for (final doc in usersSnapshot.docs) {
+        final data = doc.data();
+        final createdAt = data['createdAt'];
+        if (createdAt is Timestamp) {
+          if (createdAt.toDate().isAfter(startOfMonth)) {
+            usersAddedThisMonth++;
+          }
+        }
+      }
     } catch (_) {
       // Admin cannot read users; show 0
     }
@@ -74,6 +103,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .collection('awaitingApproval')
           .get();
       totalAwaiting = awaitingSnapshot.size;
+      
+      // Count approvals added this month
+      for (final doc in awaitingSnapshot.docs) {
+        final data = doc.data();
+        final createdAt = data['createdAt'];
+        if (createdAt is Timestamp) {
+          if (createdAt.toDate().isAfter(startOfMonth)) {
+            approvalsThisMonth++;
+          }
+        }
+      }
     } catch (_) {
       // Admin cannot read awaitingApproval; show 0
     }
@@ -84,6 +124,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .orderBy('createdAt', descending: true)
           .limit(10)
           .get();
+
+      // Load pending counts for sidebar badges
+      int pendingAnnouncements = 0;
+      int pendingProducts = 0;
+      int pendingTasks = 0;
+      try {
+        final pendingAnnouncementsSnap = await FirebaseFirestore.instance
+            .collection('announcements')
+            .where('status', isEqualTo: 'Pending')
+            .count()
+            .get();
+        pendingAnnouncements = pendingAnnouncementsSnap.count ?? 0;
+      } catch (_) {}
+      try {
+        final pendingProductsSnap = await FirebaseFirestore.instance
+            .collection('products')
+            .where('status', isEqualTo: 'Pending')
+            .count()
+            .get();
+        pendingProducts = pendingProductsSnap.count ?? 0;
+      } catch (_) {}
+      try {
+        final pendingTasksSnap = await FirebaseFirestore.instance
+            .collection('tasks')
+            .where('approvalStatus', isEqualTo: 'Pending')
+            .count()
+            .get();
+        pendingTasks = pendingTasksSnap.count ?? 0;
+      } catch (_) {}
 
       final activities = <Map<String, dynamic>>[];
       const months = [
@@ -103,9 +172,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       for (final doc in announcementsSnapshot.docs) {
         final d = doc.data();
+        // Count announcements created this month
+        final createdAt = d['createdAt'];
+        if (createdAt is Timestamp) {
+          if (createdAt.toDate().isAfter(startOfMonth)) {
+            announcementsThisMonth++;
+          }
+        }
         final title = d['title'] as String? ?? 'Announcement';
         final postedBy = d['postedBy'] as String? ?? 'Barangay';
-        final createdAt = d['createdAt'];
         String timestamp = '';
         DateTime? sortAt;
         if (createdAt != null && createdAt is Timestamp) {
@@ -163,6 +238,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _totalUsers = totalUsers;
         _totalAnnouncements = announcementsSnapshot.size;
         _awaitingApproval = totalAwaiting;
+        _usersAddedThisMonth = usersAddedThisMonth;
+        _approvalsThisMonth = approvalsThisMonth;
+        _announcementsThisMonth = announcementsThisMonth;
+        _pendingApprovalsCount = pendingAnnouncements + pendingProducts + pendingTasks;
+        _pendingUsersCount = totalAwaiting;
         _recentActivities
           ..clear()
           ..addAll(activities);
@@ -209,6 +289,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           AppSidebar(
             currentRoute: '/dashboard',
             currentUserRole: _currentUserRole,
+            pendingApprovalsCount: _pendingApprovalsCount,
+            pendingUsersCount: _pendingUsersCount,
             onNavigate: (route) {
               if ((_currentUserRole ?? '').toLowerCase() != 'super_admin' &&
                   (route == '/approvals' || route == '/user-management')) {
@@ -340,7 +422,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                                 'assets/img/icon/gray_group_icon.png',
                                             label: 'Total Users',
                                             value: _totalUsers.toString(),
-                                            change: '+ 0',
+                                            change: '+ $_usersAddedThisMonth',
                                           ),
                                           const SizedBox(height: 16),
                                           InsightCard(
@@ -348,7 +430,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                                 'assets/img/icon/gray_add_person_icon.png',
                                             label: 'Awaiting Approval',
                                             value: _awaitingApproval.toString(),
-                                            change: '+ 0',
+                                            change: '+ $_approvalsThisMonth',
                                           ),
                                           const SizedBox(height: 16),
                                           InsightCard(
@@ -357,7 +439,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                             label: 'Total Announcements',
                                             value: _totalAnnouncements
                                                 .toString(),
-                                            change: '+ 0',
+                                            change: '+ $_announcementsThisMonth',
                                           ),
                                         ],
                                       )
@@ -369,7 +451,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                                   'assets/img/icon/gray_group_icon.png',
                                               label: 'Total Users',
                                               value: _totalUsers.toString(),
-                                              change: '+ 0',
+                                              change: '+ $_usersAddedThisMonth',
                                             ),
                                           ),
                                           const SizedBox(width: 16),
@@ -380,7 +462,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                               label: 'Awaiting Approval',
                                               value: _awaitingApproval
                                                   .toString(),
-                                              change: '+ 0',
+                                              change: '+ $_approvalsThisMonth',
                                             ),
                                           ),
                                           const SizedBox(width: 16),
@@ -391,7 +473,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                               label: 'Total Announcements',
                                               value: _totalAnnouncements
                                                   .toString(),
-                                              change: '+ 0',
+                                              change: '+ $_announcementsThisMonth',
                                             ),
                                           ),
                                         ],

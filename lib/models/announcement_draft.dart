@@ -6,6 +6,8 @@ class AnnouncementDraft {
   final String? originalContent;
   final Set<String> selectedAudiences;
   final String? aiRefinedContent;
+  /// URLs of images attached to the announcement (from draft or after upload).
+  final List<String> imageUrls;
 
   AnnouncementDraft({
     required this.id,
@@ -14,5 +16,6 @@ class AnnouncementDraft {
     this.originalContent,
     required this.selectedAudiences,
     this.aiRefinedContent,
+    this.imageUrls = const [],
   });
 }

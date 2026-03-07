@@ -54,11 +54,50 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   // Current user role for permission checks
   String? _currentUserRole;
 
+  // Pending counts for sidebar badges
+  int _pendingApprovalsCount = 0;
+
   @override
   void initState() {
     super.initState();
     _loadAccounts();
     _loadCurrentUserRole();
+    _loadPendingApprovalsCount();
+  }
+
+  Future<void> _loadPendingApprovalsCount() async {
+    int pendingAnnouncements = 0;
+    int pendingProducts = 0;
+    int pendingTasks = 0;
+    try {
+      final pendingAnnouncementsSnap = await FirebaseFirestore.instance
+          .collection('announcements')
+          .where('status', isEqualTo: 'Pending')
+          .count()
+          .get();
+      pendingAnnouncements = pendingAnnouncementsSnap.count ?? 0;
+    } catch (_) {}
+    try {
+      final pendingProductsSnap = await FirebaseFirestore.instance
+          .collection('products')
+          .where('status', isEqualTo: 'Pending')
+          .count()
+          .get();
+      pendingProducts = pendingProductsSnap.count ?? 0;
+    } catch (_) {}
+    try {
+      final pendingTasksSnap = await FirebaseFirestore.instance
+          .collection('tasks')
+          .where('approvalStatus', isEqualTo: 'Pending')
+          .count()
+          .get();
+      pendingTasks = pendingTasksSnap.count ?? 0;
+    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _pendingApprovalsCount = pendingAnnouncements + pendingProducts + pendingTasks;
+      });
+    }
   }
 
   Future<void> _loadCurrentUserRole() async {
@@ -424,6 +463,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           AppSidebar(
             currentRoute: '/user-management',
             currentUserRole: _currentUserRole,
+            pendingApprovalsCount: _pendingApprovalsCount,
+            pendingUsersCount: _awaitingApproval.length,
             onNavigate: _navigateTo,
           ),
           // Main content
@@ -600,7 +641,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             _buildTab('Admins', 1),
             const SizedBox(width: 32),
           ],
-          _buildTab('Awaiting Approval', 2),
+          _buildTab('Awaiting Approval', 2, badgeCount: _awaitingApproval.length),
           const SizedBox(width: 32),
           _buildTab('Inactive', 3),
         ],
@@ -608,7 +649,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     );
   }
 
-  Widget _buildTab(String label, int index) {
+  Widget _buildTab(String label, int index, {int badgeCount = 0}) {
     final isActive = _activeTabIndex == index;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -630,13 +671,36 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               ),
             ),
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.normal,
-              color: isActive ? AppColors.darkGrey : AppColors.mediumGrey,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.normal,
+                  color: isActive ? AppColors.darkGrey : AppColors.mediumGrey,
+                ),
+              ),
+              if (badgeCount > 0) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isActive ? AppColors.primaryGreen : AppColors.deleteRed,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    badgeCount.toString(),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),
@@ -1989,46 +2053,56 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           ),
           Expanded(
             flex: 1,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: status == 'suspended'
-                    ? Colors.red.shade50
-                    : Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                status == 'suspended' ? 'Suspended' : 'Declined',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: status == 'suspended'
-                      ? Colors.red.shade700
-                      : Colors.orange.shade700,
-                ),
-              ),
-            ),
-          ),
-          if (canEdit)
-            Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                SizedBox(
-                  width: 100,
-                  height: 36,
-                  child: OutlineButton(
-                    text: 'Reactivate',
-                    onPressed: () => _reactivateUser(item),
-                    isFullWidth: true,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: status == 'suspended'
+                        ? Colors.red.shade50
+                        : Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(6),
                   ),
-                ),
-                const SizedBox(width: 8),
-                _ActionIcon(
-                  icon: Icons.edit,
-                  onTap: () => _showEditUserDialog(item),
+                  child: Text(
+                    status == 'suspended' ? 'Suspended' : 'Declined',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: status == 'suspended'
+                          ? Colors.red.shade700
+                          : Colors.orange.shade700,
+                    ),
+                  ),
                 ),
               ],
             ),
+          ),
+          if (canEdit)
+            SizedBox(
+              width: 180,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 100,
+                    height: 36,
+                    child: OutlineButton(
+                      text: 'Reactivate',
+                      onPressed: () => _reactivateUser(item),
+                      isFullWidth: true,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _ActionIcon(
+                    icon: Icons.edit,
+                    onTap: () => _showEditUserDialog(item),
+                  ),
+                ],
+              ),
+            )
+          else
+            const SizedBox(width: 180),
         ],
       ),
     );
@@ -2044,14 +2118,23 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         content: Text(
           'Set ${item['name']} to active? They will be able to sign in again.',
         ),
+        actionsAlignment: MainAxisAlignment.center,
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Reactivate'),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              OutlineButton(
+                text: 'Cancel',
+                onPressed: () => Navigator.pop(ctx, false),
+                isFullWidth: false,
+              ),
+              const SizedBox(width: 12),
+              CustomButton(
+                text: 'Reactivate',
+                isFullWidth: false,
+                onPressed: () => Navigator.pop(ctx, true),
+              ),
+            ],
           ),
         ],
       ),
@@ -2497,15 +2580,38 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         content: const Text(
           'This will create the user\'s account. You will stay logged in. Continue?',
         ),
+        actionsAlignment: MainAxisAlignment.center,
         actions: [
-          OutlineButton(
-            text: 'Cancel',
-            onPressed: () => Navigator.pop(context, false),
-          ),
-          CustomButton(
-            text: 'Approve',
-            isFullWidth: false,
-            onPressed: () => Navigator.pop(context, true),
+          StatefulBuilder(
+            builder: (context, setButtonState) {
+              bool isLoading = false;
+              return SizedBox(
+                width: 270,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CustomButton(
+                      text: 'Approve',
+                      isFullWidth: false,
+                      isLoading: isLoading,
+                      onPressed: isLoading
+                          ? null
+                          : () {
+                              setButtonState(() => isLoading = true);
+                              Navigator.pop(context, true);
+                            },
+                    ),
+                    const SizedBox(height: 12),
+                    OutlineButton(
+                      text: 'Cancel',
+                      onPressed: isLoading
+                          ? null
+                          : () => Navigator.pop(context, false),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -2523,15 +2629,38 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         content: const Text(
           'This will set the account to active. The resident can use the app again. Continue?',
         ),
+        actionsAlignment: MainAxisAlignment.center,
         actions: [
-          OutlineButton(
-            text: 'Cancel',
-            onPressed: () => Navigator.pop(context, false),
-          ),
-          CustomButton(
-            text: 'Approve',
-            isFullWidth: false,
-            onPressed: () => Navigator.pop(context, true),
+          StatefulBuilder(
+            builder: (context, setButtonState) {
+              bool isLoading = false;
+              return SizedBox(
+                width: 270,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CustomButton(
+                      text: 'Approve',
+                      isFullWidth: false,
+                      isLoading: isLoading,
+                      onPressed: isLoading
+                          ? null
+                          : () {
+                              setButtonState(() => isLoading = true);
+                              Navigator.pop(context, true);
+                            },
+                    ),
+                    const SizedBox(height: 12),
+                    OutlineButton(
+                      text: 'Cancel',
+                      onPressed: isLoading
+                          ? null
+                          : () => Navigator.pop(context, false),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -2969,6 +3098,47 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         'fullName': fullName,
         'createdAt': FieldValue.serverTimestamp(),
       });
+
+      // Send decline push notification to the user
+      try {
+        String? declinedUserId;
+        if (item != null && item['source'] == 'users') {
+          declinedUserId = docId;
+        } else {
+          // For new registrations, get the uid from the users doc we just created
+          final doc = await FirebaseFirestore.instance
+              .collection('awaitingApproval')
+              .doc(docId)
+              .get();
+          if (doc.exists) {
+            declinedUserId = doc.data()?['uid'] as String?;
+          }
+        }
+        if (declinedUserId != null && declinedUserId.isNotEmpty) {
+          await sendUserPush(
+            userId: declinedUserId,
+            title: 'Account Declined',
+            body: reason.isNotEmpty
+                ? 'Your account request was declined. Reason: $reason'
+                : 'Your account request was declined.',
+            data: {'type': 'account_declined', 'reason': reason},
+          );
+        }
+      } catch (pushError) {
+        // Non-blocking: decline succeeded; only push failed
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: ErrorNotification(
+                message: 'Declined; push notification failed: $pushError',
+              ),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
 
       if (mounted) await _loadAccounts();
     } catch (e) {

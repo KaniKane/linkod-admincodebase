@@ -48,6 +48,13 @@ service cloud.firestore {
       allow read, write: if isSuperAdmin();
     }
 
+    // ========= publicSettings =========
+    // Auto-approve flags (approvals doc). Read by mobile app; write by Super Admin from Approvals screen.
+    match /publicSettings/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
     // ========= users collection =========
 
     match /users/{userId} {

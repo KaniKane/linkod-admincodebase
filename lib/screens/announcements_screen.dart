@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../api/announcement_backend_api.dart';
 import '../widgets/app_sidebar.dart';
 import '../widgets/user_header.dart';
@@ -46,8 +50,18 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   // Currently edited draft id (if any)
   String? _currentDraftId;
 
+  // Announcement images: existing URLs (from loaded draft) and newly picked files
+  List<String> _announcementImageUrls = [];
+  List<XFile> _pickedImages = [];
+
   // Current user role for permission checks
   String? _currentUserRole;
+
+  bool _isPostingAnnouncement = false;
+
+  // Pending counts for sidebar badges
+  int _pendingApprovalsCount = 0;
+  int _pendingUsersCount = 0;
 
   final List<String> _audienceOptions = [
     'General Residents',
@@ -71,6 +85,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     _loadDrafts();
     _loadCurrentUserRole();
     _loadPublishedAnnouncements();
+    _loadPendingCounts();
   }
 
   static DateTime? _parseTimestamp(dynamic t) {
@@ -78,6 +93,50 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     if (t is Timestamp) return t.toDate();
     if (t is DateTime) return t;
     return null;
+  }
+
+  Future<void> _loadPendingCounts() async {
+    int pendingAnnouncements = 0;
+    int pendingProducts = 0;
+    int pendingTasks = 0;
+    int pendingUsers = 0;
+    try {
+      final pendingAnnouncementsSnap = await FirebaseFirestore.instance
+          .collection('announcements')
+          .where('status', isEqualTo: 'Pending')
+          .count()
+          .get();
+      pendingAnnouncements = pendingAnnouncementsSnap.count ?? 0;
+    } catch (_) {}
+    try {
+      final pendingProductsSnap = await FirebaseFirestore.instance
+          .collection('products')
+          .where('status', isEqualTo: 'Pending')
+          .count()
+          .get();
+      pendingProducts = pendingProductsSnap.count ?? 0;
+    } catch (_) {}
+    try {
+      final pendingTasksSnap = await FirebaseFirestore.instance
+          .collection('tasks')
+          .where('approvalStatus', isEqualTo: 'Pending')
+          .count()
+          .get();
+      pendingTasks = pendingTasksSnap.count ?? 0;
+    } catch (_) {}
+    try {
+      final pendingUsersSnap = await FirebaseFirestore.instance
+          .collection('awaitingApproval')
+          .count()
+          .get();
+      pendingUsers = pendingUsersSnap.count ?? 0;
+    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _pendingApprovalsCount = pendingAnnouncements + pendingProducts + pendingTasks;
+        _pendingUsersCount = pendingUsers;
+      });
+    }
   }
 
   Future<void> _loadPublishedAnnouncements() async {
@@ -317,6 +376,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       _isAIRefined = hasRefined;
       _aiRefinedController.text = draft.aiRefinedContent ?? '';
       _currentDraftId = draft.id;
+      _announcementImageUrls = List.from(draft.imageUrls);
+      _pickedImages = [];
       _activeTabIndex = 0; // Switch to Compose tab
       _hasTriggeredAudienceSuggestion = true;
     });
@@ -375,6 +436,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         final audiences =
             (data['audiences'] as List?)?.whereType<String>().toList() ??
             <String>[];
+        final imageUrlsRaw = data['imageUrls'] as List<dynamic>?;
+        final imageUrls = imageUrlsRaw?.whereType<String>().toList() ?? <String>[];
         return AnnouncementDraft(
           id: doc.id,
           title: (data['title'] ?? '') as String,
@@ -382,6 +445,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           originalContent: data['originalContent'] as String?,
           selectedAudiences: audiences.toSet(),
           aiRefinedContent: data['aiRefinedContent'] as String?,
+          imageUrls: imageUrls,
         );
       }).toList();
 
@@ -483,12 +547,38 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       return;
     }
 
+    List<String> imageUrls = List.from(_announcementImageUrls);
+    if (_pickedImages.isNotEmpty) {
+      try {
+        final newUrls = await _uploadAnnouncementImages(_pickedImages);
+        imageUrls = [..._announcementImageUrls, ...newUrls];
+        if (mounted) {
+          setState(() {
+            _announcementImageUrls = imageUrls;
+            _pickedImages = [];
+          });
+        }
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: ErrorNotification(message: 'Failed to upload images: $e'),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+    }
+
     final data = <String, dynamic>{
       'title': title,
       'content': content,
       'originalContent': originalContent,
       'aiRefinedContent': refinedContent.isNotEmpty ? refinedContent : null,
       'audiences': _selectedAudiences.toList(),
+      'imageUrls': imageUrls,
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
@@ -565,6 +655,10 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       );
       return;
     }
+
+    if (_isPostingAnnouncement) return;
+    if (!mounted) return;
+    setState(() => _isPostingAnnouncement = true);
 
     try {
       final currentUser = FirebaseAuth.instance.currentUser;
@@ -648,7 +742,16 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         );
       }
 
-      if (choice == null || choice == 'cancel') return;
+      if (choice == null || choice == 'cancel') {
+        if (mounted) setState(() => _isPostingAnnouncement = false);
+        return;
+      }
+
+      List<String> imageUrls = List.from(_announcementImageUrls);
+      if (_pickedImages.isNotEmpty) {
+        final newUrls = await _uploadAnnouncementImages(_pickedImages);
+        imageUrls = [..._announcementImageUrls, ...newUrls];
+      }
 
       final announcementRef = await FirebaseFirestore.instance
           .collection('announcements')
@@ -660,6 +763,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                 ? refinedContent
                 : null,
             'audiences': _selectedAudiences.toList(),
+            'imageUrls': imageUrls,
             'status': status,
             'postedBy': postedBy,
             if (postedByPosition != null && postedByPosition.isNotEmpty)
@@ -780,6 +884,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           behavior: SnackBarBehavior.floating,
         ),
       );
+    } finally {
+      if (mounted) setState(() => _isPostingAnnouncement = false);
     }
   }
 
@@ -793,6 +899,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           AppSidebar(
             currentRoute: '/announcements',
             currentUserRole: _currentUserRole,
+            pendingApprovalsCount: _pendingApprovalsCount,
+            pendingUsersCount: _pendingUsersCount,
             onNavigate: _navigateTo,
           ),
           // Main content
@@ -1193,6 +1301,18 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             ),
           ),
           const SizedBox(height: 32),
+          // Images section (optional)
+          const Text(
+            'Images (optional)',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.normal,
+              color: AppColors.darkGrey,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildAnnouncementImagesSection(),
+          const SizedBox(height: 32),
           // Footer buttons
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
@@ -1264,7 +1384,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                     valueColor: AlwaysStoppedAnimation<Color>(AppColors.white),
                   ),
                 )
-              : const Text(
+              :               const Text(
                   'Suggest demographic',
                   style: TextStyle(
                     fontSize: 16,
@@ -1272,6 +1392,253 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                     color: AppColors.white,
                   ),
                 ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAnnouncementImages() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickMultiImage();
+    if (picked.isEmpty || !mounted) return;
+    setState(() {
+      _pickedImages.addAll(picked);
+    });
+  }
+
+  void _removeAnnouncementImageUrl(int index) {
+    setState(() {
+      _announcementImageUrls.removeAt(index);
+    });
+  }
+
+  void _removePickedImage(int index) {
+    setState(() {
+      _pickedImages.removeAt(index);
+    });
+  }
+
+  /// Upload [files] to Firebase Storage announcement_images/ and return their download URLs.
+  Future<List<String>> _uploadAnnouncementImages(List<XFile> files) async {
+    if (files.isEmpty) return [];
+    final ref = FirebaseStorage.instance.ref();
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final urls = <String>[];
+    for (var i = 0; i < files.length; i++) {
+      final path = 'announcement_images/${userId}_${ts}_$i.jpg';
+      final file = File(files[i].path);
+      final uploadRef = ref.child(path);
+      await uploadRef.putFile(
+        file,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+      final url = await uploadRef.getDownloadURL();
+      urls.add(url);
+    }
+    return urls;
+  }
+
+  Widget _buildAnnouncementImagesSection() {
+    final totalCount = _announcementImageUrls.length + _pickedImages.length;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.mediumGrey.withOpacity(0.5), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: _pickAnnouncementImages,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryGreen.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.primaryGreen.withOpacity(0.4)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add_photo_alternate_outlined, color: AppColors.primaryGreen, size: 22),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Add image(s)',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.darkGrey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (totalCount > 0) ...[
+                const SizedBox(width: 12),
+                Text(
+                  '$totalCount image(s)',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.lightGrey,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (totalCount > 0) ...[
+            const SizedBox(height: 16),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ...List.generate(_announcementImageUrls.length, (i) {
+                    final url = _announcementImageUrls[i];
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: _buildImageThumbnail(
+                        key: ValueKey('url_$i'),
+                        child: Image.network(
+                          url,
+                          width: 96,
+                          height: 96,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, size: 40),
+                        ),
+                        onRemove: () => _removeAnnouncementImageUrl(i),
+                        onTap: () => _showFullScreenImage(url),
+                      ),
+                    );
+                  }),
+                  ...List.generate(_pickedImages.length, (i) {
+                    final xfile = _pickedImages[i];
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: _buildImageThumbnail(
+                        key: ValueKey('file_$i'),
+                        child: Image.file(
+                          File(xfile.path),
+                          width: 96,
+                          height: 96,
+                          fit: BoxFit.cover,
+                        ),
+                        onRemove: () => _removePickedImage(i),
+                        onTap: () => _showFullScreenFile(xfile.path),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImageThumbnail({
+    required Key key,
+    required Widget child,
+    required VoidCallback onRemove,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      key: key,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.mediumGrey.withOpacity(0.5)),
+        color: AppColors.mediumGrey.withOpacity(0.1),
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          GestureDetector(
+            onTap: onTap,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox(
+                width: 96,
+                height: 96,
+                child: child,
+              ),
+            ),
+          ),
+          Positioned(
+            top: -6,
+            right: -6,
+            child: GestureDetector(
+              onTap: onRemove,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(
+                  color: AppColors.primaryGreen,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.close, color: AppColors.white, size: 16),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showFullScreenImage(String url) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            InteractiveViewer(
+              child: Image.network(url, fit: BoxFit.contain),
+            ),
+            Positioned(
+              top: -8,
+              right: -8,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                onPressed: () => Navigator.of(ctx).pop(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showFullScreenFile(String path) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            InteractiveViewer(
+              child: Image.file(File(path), fit: BoxFit.contain),
+            ),
+            Positioned(
+              top: -8,
+              right: -8,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                onPressed: () => Navigator.of(ctx).pop(),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1309,26 +1676,34 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     }
 
     return MouseRegion(
-      cursor: SystemMouseCursors.click,
+      cursor: _isPostingAnnouncement ? SystemMouseCursors.basic : SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: _handlePostAnnouncement,
+        onTap: _isPostingAnnouncement ? null : _handlePostAnnouncement,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           decoration: BoxDecoration(
-            color: AppColors.primaryGreen,
+            color: _isPostingAnnouncement ? AppColors.mediumGrey : AppColors.primaryGreen,
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Text(
-            // Show different text for OFFICIAL (pending approval) vs SUPER ADMIN (direct publish)
-            _currentUserRole == 'super_admin'
-                ? 'Post Announcement'
-                : 'Submit for Approval',
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.normal,
-              color: AppColors.white,
-            ),
-          ),
+          child: _isPostingAnnouncement
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.white),
+                  ),
+                )
+              : Text(
+                  _currentUserRole == 'super_admin'
+                      ? 'Post Announcement'
+                      : 'Submit for Approval',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.normal,
+                    color: AppColors.white,
+                  ),
+                ),
         ),
       ),
     );

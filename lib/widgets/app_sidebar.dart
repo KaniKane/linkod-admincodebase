@@ -8,11 +8,17 @@ class AppSidebar extends StatelessWidget {
   /// When non-null, Approvals and User Management are grayed out for non–Super Admin (e.g. Admin). Only Super Admin can access all features; Admin is limited to Dashboard and Announcements (need approval).
   final String? currentUserRole;
 
+  /// Pending counts for badges
+  final int pendingApprovalsCount;
+  final int pendingUsersCount;
+
   const AppSidebar({
     super.key,
     required this.currentRoute,
     required this.onNavigate,
     this.currentUserRole,
+    this.pendingApprovalsCount = 0,
+    this.pendingUsersCount = 0,
   });
 
   /// Gray out Approvals and User Management for everyone except Super Admin.
@@ -68,6 +74,7 @@ class AppSidebar extends StatelessWidget {
                   onTap: () => onNavigate('/approvals'),
                   isSmallScreen: isSmallScreen,
                   isDisabled: _isAdminRestricted,
+                  badgeCount: pendingApprovalsCount,
                 ),
                 const SizedBox(height: 8),
                 _NavItem(
@@ -77,6 +84,7 @@ class AppSidebar extends StatelessWidget {
                   onTap: () => onNavigate('/user-management'),
                   isSmallScreen: isSmallScreen,
                   isDisabled: _isAdminRestricted,
+                  badgeCount: pendingUsersCount,
                 ),
               ],
             ),
@@ -94,6 +102,7 @@ class _NavItem extends StatefulWidget {
   final VoidCallback onTap;
   final bool isSmallScreen;
   final bool isDisabled;
+  final int badgeCount;
 
   const _NavItem({
     required this.iconPath,
@@ -102,6 +111,7 @@ class _NavItem extends StatefulWidget {
     required this.onTap,
     this.isSmallScreen = false,
     this.isDisabled = false,
+    this.badgeCount = 0,
   });
 
   @override
@@ -151,6 +161,24 @@ class _NavItemState extends State<_NavItem> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (widget.badgeCount > 0) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: effectiveActive ? AppColors.white : AppColors.deleteRed,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  widget.badgeCount.toString(),
+                  style: TextStyle(
+                    fontSize: widget.isSmallScreen ? 10 : 12,
+                    fontWeight: FontWeight.bold,
+                    color: effectiveActive ? AppColors.primaryGreen : AppColors.white,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

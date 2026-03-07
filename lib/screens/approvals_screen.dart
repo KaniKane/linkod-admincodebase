@@ -41,6 +41,9 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
   bool _autoApproveProducts = false;
   bool _autoApproveTasks = false;
 
+  // Pending counts for sidebar badges
+  int _pendingUsersCount = 0;
+
   @override
   void initState() {
     super.initState();
@@ -59,6 +62,23 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     }
     await _loadAutoApproveSettings();
     await _loadData();
+    await _loadPendingUsersCount();
+  }
+
+  Future<void> _loadPendingUsersCount() async {
+    try {
+      final pendingUsersSnap = await FirebaseFirestore.instance
+          .collection('awaitingApproval')
+          .count()
+          .get();
+      if (mounted) {
+        setState(() {
+          _pendingUsersCount = pendingUsersSnap.count ?? 0;
+        });
+      }
+    } catch (_) {
+      // Ignore count errors
+    }
   }
 
   Future<void> _loadCurrentUserRole() async {
@@ -89,7 +109,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
   Future<void> _loadAutoApproveSettings() async {
     try {
       final doc = await FirebaseFirestore.instance
-          .collection('adminSettings')
+          .collection('publicSettings')
           .doc('approvals')
           .get();
       if (doc.exists && mounted) {
@@ -109,7 +129,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
   Future<void> _saveAutoApproveSettings() async {
     try {
       await FirebaseFirestore.instance
-          .collection('adminSettings')
+          .collection('publicSettings')
           .doc('approvals')
           .set({
             'autoApproveAnnouncements': _autoApproveAnnouncements,
@@ -284,12 +304,17 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
         .get();
     final list = snapshot.docs.map((doc) {
       final d = doc.data();
+      final imageUrls = (d['imageUrls'] as List<dynamic>?)
+          ?.map((e) => e.toString())
+          .where((s) => s.isNotEmpty)
+          .toList() ?? <String>[];
       return {
         'id': doc.id,
         'title': d['title'] as String? ?? '',
         'description': d['description'] as String? ?? '',
         'requesterName': d['requesterName'] as String? ?? '',
         'createdAt': _parseTimestamp(d['createdAt']),
+        'imageUrls': imageUrls,
       };
     }).toList();
     list.sort((a, b) {
@@ -342,6 +367,76 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
               audiences: audiences,
               requestedByUserId: postedByUserId,
             );
+          }
+        } catch (pushError) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: ErrorNotification(
+                  message: 'Approved; push send failed: $pushError',
+                ),
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      }
+
+      // When approving a product, send push to seller.
+      if (collection == 'products' && mounted) {
+        try {
+          final doc = await FirebaseFirestore.instance
+              .collection('products')
+              .doc(id)
+              .get();
+          if (doc.exists) {
+            final d = doc.data() ?? {};
+            final sellerId = d['sellerId'] as String?;
+            if (sellerId != null && sellerId.isNotEmpty) {
+              await sendUserPush(
+                userId: sellerId,
+                title: 'Listing approved',
+                body: 'Your marketplace listing was approved.',
+                data: {'type': 'product_approved', 'productId': id},
+              );
+            }
+          }
+        } catch (pushError) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: ErrorNotification(
+                  message: 'Approved; push send failed: $pushError',
+                ),
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      }
+
+      // When approving a task/errand, send push to requester.
+      if (collection == 'tasks' && mounted) {
+        try {
+          final doc = await FirebaseFirestore.instance
+              .collection('tasks')
+              .doc(id)
+              .get();
+          if (doc.exists) {
+            final d = doc.data() ?? {};
+            final requesterId = d['requesterId'] as String?;
+            if (requesterId != null && requesterId.isNotEmpty) {
+              await sendUserPush(
+                userId: requesterId,
+                title: 'Errand approved',
+                body: 'Your errand was approved.',
+                data: {'type': 'task_approved', 'taskId': id},
+              );
+            }
           }
         } catch (pushError) {
           if (mounted) {
@@ -791,6 +886,10 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     final description = t['description'] as String? ?? '';
     final requesterName = t['requesterName'] as String? ?? '';
     final createdAt = t['createdAt'] as DateTime?;
+    final imageUrls = (t['imageUrls'] as List<dynamic>?)
+        ?.map((e) => e.toString())
+        .where((s) => s.isNotEmpty)
+        .toList() ?? <String>[];
     final dateStr = createdAt != null
         ? createdAt.toIso8601String().substring(0, 16)
         : '—';
@@ -802,6 +901,51 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (imageUrls.isNotEmpty) ...[
+              SizedBox(
+                height: 160,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: imageUrls.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) => GestureDetector(
+                    onTap: () => openFullScreenImage(ctx, imageUrls[i]),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        imageUrls[i],
+                        width: 160,
+                        height: 160,
+                        fit: BoxFit.cover,
+                        cacheWidth: 320,
+                        cacheHeight: 320,
+                        loadingBuilder: (_, child, progress) {
+                          if (progress == null) return child;
+                          return Container(
+                            width: 160,
+                            height: 160,
+                            color: AppColors.inputBackground,
+                            alignment: Alignment.center,
+                            child: const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          );
+                        },
+                        errorBuilder: (_, __, ___) => Container(
+                          width: 160,
+                          height: 160,
+                          color: AppColors.inputBackground,
+                          child: const Icon(Icons.image_not_supported_outlined, color: AppColors.lightGrey, size: 40),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             _detailRow('Posted by', requesterName),
             _detailRow('Date', dateStr),
             const SizedBox(height: 8),
@@ -983,6 +1127,110 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     );
   }
 
+  Widget _buildAutoApproveDropdown() {
+    return PopupMenuButton<void>(
+      offset: const Offset(0, 40),
+      constraints: const BoxConstraints(minWidth: 200),
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          enabled: false,
+          child: StatefulBuilder(
+            builder: (context, setLocalState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _autoApproveAnnouncements,
+                        onChanged: (val) {
+                          if (val == null) return;
+                          setLocalState(() {
+                            _autoApproveAnnouncements = val;
+                          });
+                          setState(() {});
+                          _saveAutoApproveSettings();
+                        },
+                      ),
+                      const Text(
+                        'Auto-approve posts',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _autoApproveProducts,
+                        onChanged: (val) {
+                          if (val == null) return;
+                          setLocalState(() {
+                            _autoApproveProducts = val;
+                          });
+                          setState(() {});
+                          _saveAutoApproveSettings();
+                        },
+                      ),
+                      const Text(
+                        'Auto-approve marketplace',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _autoApproveTasks,
+                        onChanged: (val) {
+                          if (val == null) return;
+                          setLocalState(() {
+                            _autoApproveTasks = val;
+                          });
+                          setState(() {});
+                          _saveAutoApproveSettings();
+                        },
+                      ),
+                      const Text(
+                        'Auto-approve errands',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.lightGrey),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Auto-approve',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.darkGrey,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.arrow_drop_down,
+              size: 18,
+              color: AppColors.mediumGrey,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -992,6 +1240,8 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
           AppSidebar(
             currentRoute: '/approvals',
             currentUserRole: _currentUserRole,
+            pendingApprovalsCount: _pendingAnnouncements.length + _pendingProducts.length + _pendingTasks.length,
+            pendingUsersCount: _pendingUsersCount,
             onNavigate: _navigateTo,
           ),
           Expanded(
@@ -1029,61 +1279,25 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                         children: [
                           Padding(
                             padding: const EdgeInsets.fromLTRB(32, 24, 32, 0),
-                            child: CustomTabs(
-                              tabs: const [
-                                'Post Approvals',
-                                'Marketplace Approvals',
-                                'Errand Approvals',
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: CustomTabs(
+                                    tabs: const [
+                                      'Post Approvals',
+                                      'Marketplace Approvals',
+                                      'Errand Approvals',
+                                    ],
+                                    activeIndex: _activeTabIndex,
+                                    onTabChanged: (i) =>
+                                        setState(() => _activeTabIndex = i),
+                                  ),
+                                ),
+                                if (_currentUserRole == 'super_admin')
+                                  _buildAutoApproveDropdown(),
                               ],
-                              activeIndex: _activeTabIndex,
-                              onTabChanged: (i) =>
-                                  setState(() => _activeTabIndex = i),
                             ),
                           ),
-                          if (_currentUserRole == 'super_admin')
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(32, 8, 32, 0),
-                              child: Align(
-                                alignment: Alignment.centerRight,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Checkbox(
-                                      value: _activeTabIndex == 0
-                                          ? _autoApproveAnnouncements
-                                          : _activeTabIndex == 1
-                                          ? _autoApproveProducts
-                                          : _autoApproveTasks,
-                                      onChanged: (val) {
-                                        if (val == null) return;
-                                        setState(() {
-                                          if (_activeTabIndex == 0) {
-                                            _autoApproveAnnouncements = val;
-                                          } else if (_activeTabIndex == 1) {
-                                            _autoApproveProducts = val;
-                                          } else {
-                                            _autoApproveTasks = val;
-                                          }
-                                        });
-                                        _saveAutoApproveSettings();
-                                      },
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      _activeTabIndex == 0
-                                          ? 'Auto-approve posts'
-                                          : _activeTabIndex == 1
-                                          ? 'Auto-approve marketplace'
-                                          : 'Auto-approve errands',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.mediumGrey,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
                           if (_errorMessage != null)
                             Padding(
                               padding: const EdgeInsets.all(32),
