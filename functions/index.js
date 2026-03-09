@@ -321,6 +321,46 @@ exports.onProductMessageCreated = functions.firestore
     });
   });
 
+// --- Firestore triggers: task volunteer and volunteer acceptance (Phase 1 fix) ---
+
+exports.onTaskVolunteerCreated = functions.firestore
+  .document('tasks/{taskId}/volunteers/{volunteerId}')
+  .onCreate(async (snap, context) => {
+    const { taskId } = context.params;
+    const volunteerData = snap.data() || {};
+    const volunteerId = volunteerData.volunteerId;
+    const taskSnap = await db.collection('tasks').doc(taskId).get();
+    if (!taskSnap.exists) return;
+    const task = taskSnap.data() || {};
+    const requesterId = task.requesterId;
+    if (!requesterId || requesterId === volunteerId) return;
+    const volunteerName = volunteerData.volunteerName || 'Someone';
+    await sendPushToUser(requesterId, 'New volunteer', `${volunteerName} volunteered for your errand`, {
+      type: 'task_volunteer',
+      taskId,
+    });
+  });
+
+exports.onVolunteerAccepted = functions.firestore
+  .document('tasks/{taskId}/volunteers/{volunteerDocId}')
+  .onUpdate(async (change, context) => {
+    const { taskId } = context.params;
+    const beforeData = change.before.data() || {};
+    const afterData = change.after.data() || {};
+    const beforeStatus = beforeData.status;
+    const afterStatus = afterData.status;
+    // Only trigger when status changes to 'accepted'
+    if (beforeStatus === 'accepted' || afterStatus !== 'accepted') return;
+    const volunteerId = afterData.volunteerId;
+    if (!volunteerId) return;
+    const taskSnap = await db.collection('tasks').doc(taskId).get();
+    if (!taskSnap.exists) return;
+    await sendPushToUser(volunteerId, 'Volunteer accepted', 'You were accepted as volunteer for an errand', {
+      type: 'volunteer_accepted',
+      taskId,
+    });
+  });
+
 // --- Callable: deleteAuthUser (unchanged) ---
 
 /**

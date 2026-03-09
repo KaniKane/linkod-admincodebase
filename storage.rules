@@ -11,10 +11,12 @@ service firebase.storage {
         && request.resource.size < 10 * 1024 * 1024  // 10 MB
         && request.resource.contentType.matches('image/.*');
     }
-    // Profile images: users can write their own profile image
-    match /profiles/{userId} {
+    // Profile images: any authenticated user (mobile or admin) can write their own profile image
+    // Path: profiles/{uid}.jpg - only the user with matching UID can write
+    match /profiles/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId
+      allow write: if request.auth != null
+        && fileName.matches(request.auth.uid + '.jpg')
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
     }

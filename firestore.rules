@@ -59,7 +59,7 @@ service cloud.firestore {
     // ========= users collection =========
 
     match /users/{userId} {
-      // Super Admin: full access to all profiles
+      // SUPER ADMIN: full access to all profiles
       allow read, write: if isSuperAdmin();
 
       // Owner: can read and update own profile (includes declined users re-applying: accountStatus, proofOfResidenceUrl, etc.)
@@ -70,6 +70,14 @@ service cloud.firestore {
 
       // Create user docs: only Super Admin
       allow create: if isSuperAdmin();
+
+      // Allow other signed-in users to bump unreadNotificationCount for this user
+      // (e.g. when creating a like/comment notification). Only this single field
+      // may change in this rule.
+      allow update: if isSignedIn()
+        && request.auth.uid != userId
+        && request.resource.data.diff(resource.data).changedKeys()
+             .hasOnly(['unreadNotificationCount']);
 
       // Devices subcollection: FCM tokens
       match /devices/{deviceId} {
@@ -84,17 +92,17 @@ service cloud.firestore {
     // ========= awaitingApproval =========
     // Sign-up / verification requests (mobile creates without Auth; Super Admin approves later)
 
-     match /awaitingApproval/{docId} {
+    match /awaitingApproval/{docId} {
       // Only Super Admin can list/read all. Applicant can read their own doc.
       allow read: if isSuperAdmin()
-        || (isSignedIn() && resource.data.uid == request.auth.uid);
+        || (isSignedIn() && resource.data.requestedByUid == request.auth.uid);
 
       // Mobile create-account does NOT sign in first — allow unauthenticated create so registration works
       allow create: if true;
 
       // Update: only Super Admin or the applicant (e.g. add fcmTokens, resubmit)
       allow update: if isSuperAdmin()
-        || (isSignedIn() && resource.data.uid == request.auth.uid);
+        || (isSignedIn() && resource.data.requestedByUid == request.auth.uid);
 
       // Delete: Super Admin (approve/decline flow) or applicant (original email-style mapping)
       allow delete: if isSuperAdmin()
@@ -113,7 +121,9 @@ service cloud.firestore {
 
       // Update:
       // - SUPER ADMIN can fully update (approve/decline, edit)
-      allow update: if isSuperAdmin();
+      // - ADMIN can update their own announcements (postedByUserId matches)
+      allow update: if isSuperAdmin()
+        || (isAdminPanelUser() && resource.data.postedByUserId == request.auth.uid);
 
       // Special case: legacy behavior where non-admins update only viewCount/updatedAt.
       // Keep this for backward compatibility, but restrict to signed-in non-admin-panel users.
@@ -316,23 +326,42 @@ service cloud.firestore {
         && request.resource.data.senderId == request.auth.uid
         && request.resource.data.userId is string
         && (
-          // Feed posts: receiver is post.userId
+          // Feed posts: like — receiver is post.userId
           (
             request.resource.data.postId is string
+            && request.resource.data.type == 'like'
             && get(/databases/$(database)/documents/posts/$(request.resource.data.postId)).data.userId
                  == request.resource.data.userId
           )
           ||
-          // Marketplace: receiver is products.sellerId
+          // Feed posts: comment — receiver is post.userId
+          (
+            request.resource.data.postId is string
+            && request.resource.data.type == 'comment'
+            && get(/databases/$(database)/documents/posts/$(request.resource.data.postId)).data.userId
+                 == request.resource.data.userId
+          )
+          ||
+          // Feed posts: reply — receiver is post.userId
+          (
+            request.resource.data.postId is string
+            && request.resource.data.type == 'reply'
+            && get(/databases/$(database)/documents/posts/$(request.resource.data.postId)).data.userId
+                 == request.resource.data.userId
+          )
+          ||
+          // Marketplace: product_message — receiver is products.sellerId
           (
             request.resource.data.productId is string
+            && request.resource.data.type == 'product_message'
             && get(/databases/$(database)/documents/products/$(request.resource.data.productId)).data.sellerId
                  == request.resource.data.userId
           )
           ||
-          // Tasks/errands: receiver is tasks.requesterId
+          // Tasks: volunteer application — receiver is the task requester (owner)
           (
             request.resource.data.taskId is string
+            && request.resource.data.type == 'task_volunteer'
             && get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.requesterId
                  == request.resource.data.userId
           )
@@ -372,6 +401,17 @@ service cloud.firestore {
 
       // Only Super Admin can create notifications for any user (e.g. account approval)
       allow create: if isSuperAdmin();
+    }
+
+    // ========= pushSendLogs =========
+    // Logs of push notification sends (backend writes, admin reads)
+
+    match /pushSendLogs/{logId} {
+      // Admin panel users can read logs
+      allow read: if isAdminPanelUser();
+      
+      // Backend service account writes logs (via Admin SDK, bypasses rules)
+      allow write: if false;  // Only via Admin SDK
     }
 
     // ========= user_task_interactions =========

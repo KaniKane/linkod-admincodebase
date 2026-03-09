@@ -1,9 +1,12 @@
 """
-LINKod Admin Backend - Local REST API.
+LINKod Admin Backend - Local AI Service Only.
 
 Provides:
 1. AI-based text refinement (Ollama, llama3.2:3b) — refine only; no new info, no audience.
 2. Rule-based audience recommendation — keyword rules from config; transparent, no AI.
+
+Note: Push notification functionality has been moved to Firebase Cloud Functions.
+This backend is now AI-only. Do not add push notification code here.
 
 Human-in-the-loop: Admin reviews and edits AI output and audience suggestions before publishing.
 No auto-publish; Flutter app calls these endpoints then publishes via Firestore when admin confirms.
@@ -11,25 +14,17 @@ No auto-publish; Flutter app calls these endpoints then publishes via Firestore 
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from google.auth.exceptions import DefaultCredentialsError
 from pydantic import BaseModel, Field
 from typing import Optional
 
 from services.ai_refinement import refine_text
 from services.audience_rules import recommend_audiences, DEFAULT_AUDIENCE
-from services.fcm_notifications import (
-    FirebaseNotConfiguredError,
-    get_approval_fcm_tokens_with_fallback,
-    get_tokens_for_user,
-    send_account_approval_push,
-    send_announcement_push,
-    send_user_push,
-)
 
 app = FastAPI(
-    title="LINKod Admin API",
-    description="AI text refinement and rule-based audience recommendation for announcements.",
-    version="1.0.0",
+    title="LINKod Admin AI Service",
+    description="AI text refinement and rule-based audience recommendation. "
+                "Push notifications are handled by Firebase Cloud Functions.",
+    version="1.1.0",
 )
 
 # Allow Flutter (Windows) app to call this API
@@ -42,7 +37,7 @@ app.add_middleware(
 )
 
 
-# --- Request/Response models ---
+# --- Request/Response models (AI only) ---
 
 
 class RefineRequest(BaseModel):
@@ -85,65 +80,7 @@ class RecommendAudiencesResponse(BaseModel):
     )
 
 
-class SendAnnouncementPushRequest(BaseModel):
-    """Admin-triggered push send (human-in-the-loop)."""
-
-    announcement_id: str = Field(..., min_length=1, description="Firestore announcements/{id}")
-    title: str = Field(..., min_length=1, description="Notification title")
-    body: str = Field(..., min_length=1, description="Notification body")
-    audiences: list[str] = Field(default_factory=list, description="Audience group names")
-    requested_by_user_id: Optional[str] = Field(
-        default=None, description="Optional admin user id for evaluation logs"
-    )
-    data: Optional[dict[str, str]] = Field(
-        default=None, description="Optional extra FCM data payload (string:string)"
-    )
-
-
-class SendAnnouncementPushResponse(BaseModel):
-    user_count: int
-    token_count: int
-    success_count: int
-    failure_count: int
-    error_counts: dict[str, int]
-
-
-class SendAccountApprovalRequest(BaseModel):
-    """Admin-triggered account approval push (single user)."""
-
-    request_id: str = Field(..., min_length=1, description="awaitingApproval doc id to fetch fcmTokens from")
-    user_id: str = Field(..., min_length=1, description="Firebase Auth UID of the approved user")
-    title: str = Field(..., min_length=1, description="Notification title")
-    body: str = Field(..., min_length=1, description="Notification body")
-
-
-class SendAccountApprovalResponse(BaseModel):
-    token_count: int
-    success_count: int
-    failure_count: int
-    error_counts: dict[str, int]
-
-
-class SendUserPushRequest(BaseModel):
-    """Send push to a single user (e.g. product approved, task approved)."""
-
-    user_id: str = Field(..., min_length=1, description="Firebase Auth UID of the target user")
-    title: str = Field(..., min_length=1, description="Notification title")
-    body: str = Field(..., min_length=1, description="Notification body")
-    data: Optional[dict[str, str]] = Field(
-        default=None,
-        description="FCM data payload (e.g. type, productId, taskId); all values must be string",
-    )
-
-
-class SendUserPushResponse(BaseModel):
-    token_count: int
-    success_count: int
-    failure_count: int
-    error_counts: dict[str, int]
-
-
-# --- Endpoints ---
+# --- Endpoints (AI only) ---
 
 
 @app.post("/refine", response_model=RefineResponse)
@@ -188,120 +125,10 @@ def post_recommend_audiences(request: RecommendAudiencesRequest) -> RecommendAud
     )
 
 
-@app.post("/send-announcement-push", response_model=SendAnnouncementPushResponse)
-def post_send_announcement_push(request: SendAnnouncementPushRequest) -> SendAnnouncementPushResponse:
-    """
-    Send a push notification for an approved/published announcement.
-
-    - Human-in-the-loop: called by the Admin app only after admin confirmation.
-    - Targeted: queries Firestore residents based on audience categories.
-    - Sends ONLY to collected FCM tokens.
-    - Logs results for evaluation (counts + error codes).
-    """
-    try:
-        result = send_announcement_push(
-            announcement_id=request.announcement_id,
-            title=request.title,
-            body=request.body,
-            audiences=request.audiences,
-            requested_by=request.requested_by_user_id,
-            data=request.data,
-        )
-    except FirebaseNotConfiguredError as e:
-        raise HTTPException(
-            status_code=503,
-            detail=str(e) + " See backend README for setup.",
-        ) from e
-    except DefaultCredentialsError as e:
-        raise HTTPException(
-            status_code=503,
-            detail="Firebase credentials not found. Set FIREBASE_SERVICE_ACCOUNT_PATH or "
-            "GOOGLE_APPLICATION_CREDENTIALS to your service account JSON path. See backend README.",
-        ) from e
-
-    return SendAnnouncementPushResponse(
-        user_count=result.user_count,
-        token_count=result.token_count,
-        success_count=result.success_count,
-        failure_count=result.failure_count,
-        error_counts=result.error_counts,
-    )
-
-
-@app.post("/send-account-approval", response_model=SendAccountApprovalResponse)
-def post_send_account_approval(request: SendAccountApprovalRequest) -> SendAccountApprovalResponse:
-    """
-    Send account-approved push to the approved user's devices.
-    Fetches fcmTokens from awaitingApproval/{request_id}; sends only to those tokens.
-    Does not crash if no tokens (returns 0 counts).
-    """
-    try:
-        tokens = get_approval_fcm_tokens_with_fallback(
-            request.request_id, request.user_id
-        )
-        result = send_account_approval_push(
-            user_id=request.user_id,
-            fcm_tokens=tokens,
-            title=request.title,
-            body=request.body,
-        )
-    except FirebaseNotConfiguredError as e:
-        raise HTTPException(
-            status_code=503,
-            detail=str(e) + " See backend README for setup.",
-        ) from e
-    except DefaultCredentialsError as e:
-        raise HTTPException(
-            status_code=503,
-            detail="Firebase credentials not found. Set FIREBASE_SERVICE_ACCOUNT_PATH or "
-            "GOOGLE_APPLICATION_CREDENTIALS to your service account JSON path. See backend README.",
-        ) from e
-
-    return SendAccountApprovalResponse(
-        token_count=result.token_count,
-        success_count=result.success_count,
-        failure_count=result.failure_count,
-        error_counts=result.error_counts,
-    )
-
-
-@app.post("/send-user-push", response_model=SendUserPushResponse)
-def post_send_user_push(request: SendUserPushRequest) -> SendUserPushResponse:
-    """
-    Send a push notification to a single user's devices (e.g. product approved, task approved).
-    Fetches FCM tokens from users/{user_id}/devices and users/{user_id}.fcmTokens.
-    """
-    try:
-        result = send_user_push(
-            user_id=request.user_id,
-            title=request.title,
-            body=request.body,
-            data=request.data,
-        )
-    except FirebaseNotConfiguredError as e:
-        raise HTTPException(
-            status_code=503,
-            detail=str(e) + " See backend README for setup.",
-        ) from e
-    except DefaultCredentialsError as e:
-        raise HTTPException(
-            status_code=503,
-            detail="Firebase credentials not found. Set FIREBASE_SERVICE_ACCOUNT_PATH or "
-            "GOOGLE_APPLICATION_CREDENTIALS to your service account JSON path. See backend README.",
-        ) from e
-
-    return SendUserPushResponse(
-        token_count=result.token_count,
-        success_count=result.success_count,
-        failure_count=result.failure_count,
-        error_counts=result.error_counts,
-    )
-
-
 @app.get("/health")
 def health() -> dict:
     """Simple health check for deployment."""
-    return {"status": "ok", "service": "linkod-admin-api"}
+    return {"status": "ok", "service": "linkod-admin-ai-service"}
 
 
 if __name__ == "__main__":
