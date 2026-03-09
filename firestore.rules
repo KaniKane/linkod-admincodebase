@@ -49,7 +49,8 @@ service cloud.firestore {
     }
 
     // ========= publicSettings =========
-    // Auto-approve flags (approvals doc). Read by mobile app; write by Super Admin from Approvals screen.
+    // Auto-approve flags for residents (products/tasks). Read by mobile app so
+    // new listings can be created as Approved when enabled. Write by Super Admin only.
     match /publicSettings/{docId} {
       allow read: if isSignedIn();
       allow write: if isSuperAdmin();
@@ -83,17 +84,17 @@ service cloud.firestore {
     // ========= awaitingApproval =========
     // Sign-up / verification requests (mobile creates without Auth; Super Admin approves later)
 
-    match /awaitingApproval/{docId} {
+     match /awaitingApproval/{docId} {
       // Only Super Admin can list/read all. Applicant can read their own doc.
       allow read: if isSuperAdmin()
-        || (isSignedIn() && resource.data.requestedByUid == request.auth.uid);
+        || (isSignedIn() && resource.data.uid == request.auth.uid);
 
       // Mobile create-account does NOT sign in first — allow unauthenticated create so registration works
       allow create: if true;
 
-      // Update: only Super Admin or the applicant (e.g. add fcmTokens)
+      // Update: only Super Admin or the applicant (e.g. add fcmTokens, resubmit)
       allow update: if isSuperAdmin()
-        || (isSignedIn() && resource.data.requestedByUid == request.auth.uid);
+        || (isSignedIn() && resource.data.uid == request.auth.uid);
 
       // Delete: Super Admin (approve/decline flow) or applicant (original email-style mapping)
       allow delete: if isSuperAdmin()
@@ -124,7 +125,7 @@ service cloud.firestore {
       // No client-side delete except SUPER ADMIN
       allow delete: if isSuperAdmin();
 
-      // Subcollection: views (reader list)
+      // Subcollection: views (reader list) – new behavior
       match /views/{viewId} {
         // Any signed-in user can mark as read
         allow create: if isSignedIn();
@@ -150,6 +151,28 @@ service cloud.firestore {
 
     match /adminActivities/{docId} {
       allow read, write: if isAdminPanelUser();
+    }
+
+    // ========= barangayCategories =========
+    // Barangay information categories (created by admin)
+
+    match /barangayCategories/{docId} {
+      // Any signed-in user can read categories (for mobile app)
+      allow read: if isSignedIn();
+      
+      // Only admin panel users can create/update/delete categories
+      allow create, update, delete: if isAdminPanelUser();
+    }
+
+    // ========= barangayPostings =========
+    // Postings within barangay information categories
+
+    match /barangayPostings/{docId} {
+      // Any signed-in user can read postings (for mobile app)
+      allow read: if isSignedIn();
+      
+      // Only admin panel users can create/update/delete postings
+      allow create, update, delete: if isAdminPanelUser();
     }
 
     // ========= posts =========
@@ -199,6 +222,10 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read, write: if isSignedIn();
       }
+
+      match /message_read/{userId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
     }
 
     // ========= tasks (errands) =========
@@ -216,6 +243,12 @@ service cloud.firestore {
             || resource.data.assignedTo == request.auth.uid)
         && request.resource.data.approvalStatus == resource.data.approvalStatus;
 
+      // Volunteer flow: any signed-in user may update only volunteersCount,
+      // pendingVolunteersCount and updatedAt (increment on volunteer, decrement on cancel/reject)
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['volunteersCount', 'pendingVolunteersCount', 'updatedAt']);
+
       // Participants can delete their own tasks? (Keep legacy behavior)
       allow delete: if isSignedIn()
         && (resource.data.requesterId == request.auth.uid
@@ -226,9 +259,13 @@ service cloud.firestore {
         allow create: if isSignedIn();
         allow update: if isSignedIn()
           && get(/databases/$(database)/documents/tasks/$(taskId)).data.requesterId == request.auth.uid;
+        // Volunteer can cancel their own pending request
         allow delete: if isSignedIn()
           && resource.data.volunteerId == request.auth.uid
           && resource.data.status == 'pending';
+        // Task owner can remove any volunteer (pending or accepted)
+        allow delete: if isSignedIn()
+          && get(/databases/$(database)/documents/tasks/$(taskId)).data.requesterId == request.auth.uid;
       }
 
       match /chat_messages/{messageId} {
@@ -246,6 +283,21 @@ service cloud.firestore {
     }
 
     // ========= notifications =========
+    // Schema (typical):
+    // {
+    //   userId: string,          // receiver
+    //   senderId: string,        // actor (creator of the notification)
+    //   type: string,            // e.g. "comment" | "like" | "message" | "task"
+    //   postId: string?,
+    //   productId: string?,
+    //   taskId: string?,
+    //   commentId: string?,
+    //   messageId: string?,
+    //   announcementId: string?,
+    //   message: string?,
+    //   isRead: bool,
+    //   createdAt: timestamp
+    // }
 
     match /notifications/{notificationId} {
       // Owner can read/update/delete their own notifications
@@ -256,8 +308,126 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && request.resource.data.userId == request.auth.uid;
 
+      // Mobile app: allow users to create notifications for other users when
+      // they are the sender and the receiver is the owner/requester/seller
+      // of the related resource (post/product/task). This supports likes,
+      // comments, marketplace messages, and task events without Cloud Functions.
+      allow create: if isSignedIn()
+        && request.resource.data.senderId == request.auth.uid
+        && request.resource.data.userId is string
+        && (
+          // Feed posts: receiver is post.userId
+          (
+            request.resource.data.postId is string
+            && get(/databases/$(database)/documents/posts/$(request.resource.data.postId)).data.userId
+                 == request.resource.data.userId
+          )
+          ||
+          // Marketplace: receiver is products.sellerId
+          (
+            request.resource.data.productId is string
+            && get(/databases/$(database)/documents/products/$(request.resource.data.productId)).data.sellerId
+                 == request.resource.data.userId
+          )
+          ||
+          // Tasks/errands: receiver is tasks.requesterId
+          (
+            request.resource.data.taskId is string
+            && get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.requesterId
+                 == request.resource.data.userId
+          )
+          ||
+          // Tasks chat: allow notifying the other participant (requester <-> assigned volunteer)
+          (
+            request.resource.data.taskId is string
+            && request.resource.data.type == 'task_chat_message'
+            && (
+              get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.requesterId
+                == request.auth.uid
+              || get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.assignedTo
+                == request.auth.uid
+            )
+            && request.resource.data.userId != request.auth.uid
+            && (
+              request.resource.data.userId
+                == get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.requesterId
+              || (
+                get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.assignedTo is string
+                && request.resource.data.userId
+                  == get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.assignedTo
+              )
+            )
+          )
+          ||
+          // Tasks: volunteer accepted — receiver is the assigned volunteer
+          (
+            request.resource.data.taskId is string
+            && request.resource.data.type == 'volunteer_accepted'
+            && get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.requesterId
+                 == request.auth.uid
+            && get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.assignedTo
+                 == request.resource.data.userId
+          )
+        );
+
       // Only Super Admin can create notifications for any user (e.g. account approval)
       allow create: if isSuperAdmin();
+    }
+
+    // ========= user_task_interactions =========
+    // Tracks which tasks a user has interacted with (for Activity Log)
+    // Document ID format: {userId}_{taskId}
+
+    match /user_task_interactions/{interactionId} {
+      // Helper: check if document belongs to current user (by ID prefix or field)
+      function isOwner() {
+        return (resource.data != null && resource.data.userId == request.auth.uid)
+          || interactionId.matches(request.auth.uid + "_.*");
+      }
+      function willBeOwner() {
+        return request.resource.data.userId == request.auth.uid
+          || interactionId.matches(request.auth.uid + "_.*");
+      }
+
+      // Users can read their own interactions
+      allow read: if isSignedIn() && isOwner();
+
+      // Users can create interactions for themselves
+      allow create: if isSignedIn() && willBeOwner();
+
+      // Users can update their own interactions (e.g., unreadReplyCount)
+      allow update: if isSignedIn() && isOwner();
+
+      // Users can delete their own interactions
+      allow delete: if isSignedIn() && isOwner();
+    }
+
+    // ========= user_product_interactions =========
+    // Tracks which products a user has interacted with (for Activity Log)
+    // Document ID format: {userId}_{productId}
+
+    match /user_product_interactions/{interactionId} {
+      // Helper: check if document belongs to current user (by ID prefix or field)
+      function isOwner() {
+        return (resource.data != null && resource.data.userId == request.auth.uid)
+          || interactionId.matches(request.auth.uid + "_.*");
+      }
+      function willBeOwner() {
+        return request.resource.data.userId == request.auth.uid
+          || interactionId.matches(request.auth.uid + "_.*");
+      }
+
+      // Users can read their own interactions
+      allow read: if isSignedIn() && isOwner();
+
+      // Users can create interactions for themselves
+      allow create: if isSignedIn() && willBeOwner();
+
+      // Users can update their own interactions (e.g., unreadReplyCount)
+      allow update: if isSignedIn() && isOwner();
+
+      // Users can delete their own interactions
+      allow delete: if isSignedIn() && isOwner();
     }
 
     // ========= userAnnouncementReads =========

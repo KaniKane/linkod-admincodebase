@@ -16,6 +16,7 @@ import '../api/announcement_backend_api.dart';
 import 'dashboard_screen.dart';
 import 'announcements_screen.dart';
 import 'user_management_screen.dart';
+import 'barangay_information_screen.dart';
 
 /// Approvals screen: Post Approvals, Marketplace Approvals, Errand Approvals.
 /// Human-in-the-loop: Admin is the final decision maker (Facebook-style review).
@@ -205,6 +206,18 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       );
     } else if (route == '/approvals') {
       // Already here
+    } else if (route == '/barangay-information') {
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              BarangayInformationScreen(),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          transitionsBuilder:
+              (context, animation, secondaryAnimation, child) => child,
+        ),
+      );
     }
   }
 

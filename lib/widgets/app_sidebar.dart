@@ -69,6 +69,14 @@ class AppSidebar extends StatelessWidget {
                 const SizedBox(height: 8),
                 _NavItem(
                   iconPath: 'assets/img/icon/boxes.png',
+                  label: 'Barangay Information',
+                  isActive: currentRoute == '/barangay-information',
+                  onTap: () => onNavigate('/barangay-information'),
+                  isSmallScreen: isSmallScreen,
+                ),
+                const SizedBox(height: 8),
+                _NavItem(
+                  iconPath: 'assets/img/icon/boxes.png',
                   label: 'Approvals',
                   isActive: currentRoute == '/approvals',
                   onTap: () => onNavigate('/approvals'),

@@ -21,6 +21,7 @@ import 'dashboard_screen.dart';
 import 'announcements_screen.dart';
 import 'approvals_screen.dart';
 import 'login_screen.dart';
+import 'barangay_information_screen.dart';
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -313,6 +314,18 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) =>
               const ApprovalsScreen(),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              child,
+        ),
+      );
+    } else if (route == '/barangay-information') {
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              BarangayInformationScreen(),
           transitionDuration: Duration.zero,
           reverseTransitionDuration: Duration.zero,
           transitionsBuilder: (context, animation, secondaryAnimation, child) =>
@@ -3310,24 +3323,36 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            OutlineButton(
-                              text: 'Cancel',
-                              onPressed: isSubmitting
-                                  ? null
-                                  : () => Navigator.of(context).pop(),
+                            SizedBox(
+                              width: 110,
+                              height: 40,
+                              child: OutlineButton(
+                                text: 'Cancel',
+                                onPressed: isSubmitting
+                                    ? null
+                                    : () => Navigator.of(context).pop(),
+                                isFullWidth: true,
+                              ),
                             ),
                             const SizedBox(width: 8),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.loginGreen,
-                                foregroundColor: AppColors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
+                            SizedBox(
+                              width: 110,
+                              height: 40,
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.loginGreen,
+                                  foregroundColor: AppColors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 10,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
                                 ),
-                              ),
-                              onPressed: isSubmitting
-                                  ? null
-                                  : () async {
+                                onPressed: isSubmitting
+                                    ? null
+                                    : () async {
                                       if (!formKey.currentState!.validate())
                                         return;
                                       if (isAdmin && selectedPosition == null) {
@@ -3389,19 +3414,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                         });
                                       }
                                     },
-                              child: isSubmitting
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                              AppColors.white,
-                                            ),
-                                      ),
-                                    )
-                                  : const Text('Save'),
+                                child: isSubmitting
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                AppColors.white,
+                                              ),
+                                        ),
+                                      )
+                                    : const Text('Save'),
+                              ),
                             ),
                           ],
                         ),

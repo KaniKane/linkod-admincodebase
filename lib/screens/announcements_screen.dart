@@ -21,6 +21,7 @@ import '../utils/app_colors.dart';
 import 'dashboard_screen.dart';
 import 'approvals_screen.dart';
 import 'user_management_screen.dart';
+import 'barangay_information_screen.dart';
 
 class AnnouncementsScreen extends StatefulWidget {
   const AnnouncementsScreen({super.key});
@@ -252,6 +253,18 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) =>
               const UserManagementScreen(),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          transitionsBuilder:
+              (context, animation, secondaryAnimation, child) => child,
+        ),
+      );
+    } else if (route == '/barangay-information') {
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              BarangayInformationScreen(),
           transitionDuration: Duration.zero,
           reverseTransitionDuration: Duration.zero,
           transitionsBuilder:
