@@ -25,22 +25,38 @@ String get _pushBaseUrl =>
         ? kPushApiBaseUrl!.trim()
         : kAnnouncementBackendBaseUrl;
 
-/// Result of POST /refine: original and refined text.
+/// Result of POST /refine: original and refined text with explicit success/error state.
+/// 
+/// Check [success] to determine if refinement succeeded.
+/// If [success] is false, [refinedText] will be empty and [error] contains the reason.
 class RefineResponse {
   const RefineResponse({
+    required this.success,
     required this.originalText,
     required this.refinedText,
+    this.error,
   });
 
   factory RefineResponse.fromJson(Map<String, dynamic> json) {
     return RefineResponse(
+      success: json['success'] as bool? ?? false,
       originalText: json['original_text'] as String? ?? '',
       refinedText: json['refined_text'] as String? ?? '',
+      error: json['error'] as String?,
     );
   }
 
+  /// True if refinement succeeded, false if it failed
+  final bool success;
+  
+  /// The original text that was sent for refinement
   final String originalText;
+  
+  /// The refined text (empty if success is false)
   final String refinedText;
+  
+  /// Error message if refinement failed (null on success)
+  final String? error;
 }
 
 /// Result of POST /recommend-audiences: suggested audiences and matched rules.

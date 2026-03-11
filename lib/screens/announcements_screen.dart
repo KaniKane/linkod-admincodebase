@@ -313,12 +313,32 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     try {
       final result = await refineAnnouncementText(original);
       if (!mounted) return;
+      
+      // Only proceed if refinement succeeded and has valid output
+      if (!result.success || result.refinedText.trim().isEmpty) {
+        setState(() => _isRefining = false);
+        final errorMsg = result.error?.isNotEmpty == true
+            ? result.error!
+            : 'Refinement failed. Please try again.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: DraftSavedNotification(message: errorMsg),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+      
       setState(() {
         _aiRefinedController.text = result.refinedText;
         _isAIRefined = true;
         _isRefining = false;
       });
+      
       // Rule-based audience recommendation from refined text (no AI; transparent)
+      // Only call if we have valid refined text
       try {
         final audienceResult = await recommendAudiences(result.refinedText);
         if (!mounted) return;
