@@ -43,6 +43,15 @@ venv/
 # Environment files
 .env
 .env.*
+*test.env
+openai_test.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
 
 
 

@@ -1,0 +1,251 @@
+{
+  "_comment": "Tandaganon dialect lexicon for conservative refinement. Terms marked with high confidence (0.8+) are safe to use. Lower confidence terms should be avoided.",
+  "version": "1.0.0",
+  "last_updated": "2024-06-15",
+  "dialect": "Tandaganon (Surigaonon variant)",
+  "region": "Surigao del Sur, Philippines",
+  "description": "Curated lexicon of Tandaganon terms for formal barangay announcements. Confidence scores reflect authenticity verification.",
+  
+  "terms": {
+    "kaigsuonan": {
+      "cebuano_alternatives": ["barangayanon", "katawhan", "lumolupyo"],
+      "meaning": "fellow residents / community members / neighbors",
+      "confidence": 0.95,
+      "contexts": ["formal", "general"],
+      "formality": "formal",
+      "example_usage": "Tinahod kong mga kaigsuonan...",
+      "usage_notes": "Formal opening for barangay captain addresses. Replaces 'mga kabayan' or 'mga lumolupyo' in Tandaganon contexts.",
+      "avoid_when": ["informal", "youth_audience"],
+      "sources": ["Captain Pacheco speeches", "verified local texts"]
+    },
+    
+    "gihulagway": {
+      "cebuano_alternatives": ["gipahibalo", "gisulti", "giingon"],
+      "meaning": "hereby announced / formally declared / proclaimed",
+      "confidence": 0.90,
+      "contexts": ["formal", "legal", "ordinance"],
+      "formality": "formal",
+      "example_usage": "Gihulagway ko ang tanan...",
+      "usage_notes": "Formal announcement verb used by barangay officials. More formal than standard 'gipahibalo'.",
+      "avoid_when": ["informal", "simple_reminders"],
+      "sources": ["Barangay Bayabas official announcements"]
+    },
+    
+    "ayaw": {
+      "cebuano_alternatives": ["ayaw na", "dili", "dili na"],
+      "meaning": "don't / stop / cease",
+      "confidence": 0.85,
+      "contexts": ["prohibitions", "warnings", "formal"],
+      "formality": "neutral",
+      "example_usage": "Ayaw paglabay og basura sa kalsada.",
+      "usage_notes": "Standalone 'ayaw' (without 'na') is Tandaganon usage. In Cebuano, typically 'ayaw na' or 'dili'.",
+      "avoid_when": ["positive_announcements", "invitations"],
+      "sources": ["Common local usage", "street signs"]
+    },
+    
+    "katiguwang": {
+      "cebuano_alternatives": ["katigulang", "tigulang", "senior citizen"],
+      "meaning": "elderly people / senior citizens",
+      "confidence": 0.90,
+      "contexts": ["formal", "health", "social_service"],
+      "formality": "formal",
+      "example_usage": "Alang sa atong mga katiguwang...",
+      "usage_notes": "Respectful term for senior citizens in Tandaganon. Used in formal health and social service announcements.",
+      "avoid_when": ["informal"],
+      "sources": ["Municipal health office communications"]
+    },
+    
+    "tabang": {
+      "cebuano_alternatives": ["tabangan", "tabang ay", "pagtabang"],
+      "meaning": "help / assistance (standalone noun)",
+      "confidence": 0.80,
+      "contexts": ["formal", "social_service", "4ps"],
+      "formality": "formal",
+      "example_usage": "Ang tabang alang sa 4Ps...",
+      "usage_notes": "In Tandaganon, 'tabang' can stand alone as a noun. In Cebuano, typically needs 'pagtabang' or 'tabangan'.",
+      "avoid_when": ["imperative_sentences"],
+      "sources": ["DSWD local communications"]
+    },
+    
+    "purga": {
+      "cebuano_alternatives": ["purgahay", "pagpuga", "deworming"],
+      "meaning": "deworming / purge (health context)",
+      "confidence": 0.75,
+      "contexts": ["health", "parent"],
+      "formality": "neutral",
+      "example_usage": "Libreng purga para sa mga bata.",
+      "usage_notes": "Shorter form used in Tandaganon health announcements. Cebuano typically uses 'purgahay'.",
+      "avoid_when": ["non_health_contexts"],
+      "sources": ["Rural health unit announcements"]
+    },
+    
+    "inahan": {
+      "cebuano_alternatives": ["nanay", "mama", "mamay"],
+      "meaning": "mother (formal)",
+      "confidence": 0.85,
+      "contexts": ["formal", "parent", "health"],
+      "formality": "formal",
+      "example_usage": "Giawhag ang tanang inahan...",
+      "usage_notes": "Formal term for mother in official contexts. More respectful than 'nanay'.",
+      "avoid_when": ["informal", "youth_audience"],
+      "sources": ["Formal health program announcements"]
+    },
+    
+    "amahan": {
+      "cebuano_alternatives": ["tatay", "papa", "papay"],
+      "meaning": "father (formal)",
+      "confidence": 0.85,
+      "contexts": ["formal", "parent", "health"],
+      "formality": "formal",
+      "example_usage": "Alang sa tanang amahan...",
+      "usage_notes": "Formal term for father in official contexts. More respectful than 'tatay'.",
+      "avoid_when": ["informal", "youth_audience"],
+      "sources": ["Formal health program announcements"]
+    },
+    
+    "hinumdum": {
+      "cebuano_alternatives": ["pahinumdom", "handumanan", "paghinumdom"],
+      "meaning": "remembrance / reminder / note",
+      "confidence": 0.80,
+      "contexts": ["formal", "reminder"],
+      "formality": "formal",
+      "example_usage": "Usa ka hinumdum alang sa tanan...",
+      "usage_notes": "Used in formal reminder contexts. Slightly different from Cebuano usage.",
+      "avoid_when": ["informal"],
+      "sources": ["Official reminder notices"]
+    },
+    
+    "buntag": {
+      "cebuano_alternatives": ["buntag", "kaadlawon"],
+      "meaning": "morning",
+      "confidence": 0.95,
+      "contexts": ["general", "time"],
+      "formality": "neutral",
+      "example_usage": "Alas 8:00 sa buntag",
+      "usage_notes": "Same as Cebuano. High confidence as it's widely shared.",
+      "avoid_when": [],
+      "sources": ["Common usage"]
+    },
+    
+    "hapon": {
+      "cebuano_alternatives": ["hapon", "kahaponon"],
+      "meaning": "afternoon",
+      "confidence": 0.95,
+      "contexts": ["general", "time"],
+      "formality": "neutral",
+      "example_usage": "Alas 3:00 sa hapon",
+      "usage_notes": "Same as Cebuano. High confidence as it's widely shared.",
+      "avoid_when": [],
+      "sources": ["Common usage"]
+    },
+    
+    "gabii": {
+      "cebuano_alternatives": ["gabii", " kagabhion"],
+      "meaning": "evening / night",
+      "confidence": 0.95,
+      "contexts": ["general", "time"],
+      "formality": "neutral",
+      "example_usage": "Alas 7:00 sa gabii",
+      "usage_notes": "Same as Cebuano. High confidence as it's widely shared.",
+      "avoid_when": [],
+      "sources": ["Common usage"]
+    },
+    
+    "kalsada": {
+      "cebuano_alternatives": ["kalye", "dalan", "agihan"],
+      "meaning": "road / street",
+      "confidence": 0.90,
+      "contexts": ["general", "infrastructure"],
+      "formality": "neutral",
+      "example_usage": "Ayaw paglabay sa kalsada.",
+      "usage_notes": "Preferred term in Tandaganon over 'kalye'. Same meaning.",
+      "avoid_when": [],
+      "sources": ["Municipal ordinance texts"]
+    },
+    
+    "barangayanon": {
+      "cebuano_alternatives": ["barangayanon", "taga-barangay"],
+      "meaning": "barangay resident / member of the barangay",
+      "confidence": 0.95,
+      "contexts": ["formal", "general"],
+      "formality": "formal",
+      "example_usage": "Ang tanang barangayanon...",
+      "usage_notes": "Standard Cebuano term that works in Tandaganon contexts. Safe default.",
+      "avoid_when": [],
+      "sources": ["Common formal usage"]
+    }
+  },
+  
+  "phrases": {
+    "gihulagway_ko": {
+      "meaning": "I hereby announce / I formally declare",
+      "confidence": 0.90,
+      "contexts": ["formal_opening", "official_announcements"],
+      "structure": "Gihulagway ko ang/nga...",
+      "example": "Gihulagway ko ang tanan nga adunay miting...",
+      "sources": ["Barangay official documents"],
+      "notes": "Standard opening for barangay captain announcements."
+    },
+    
+    "tinahod_kong": {
+      "meaning": "Respected / Honored (opening address)",
+      "confidence": 0.90,
+      "contexts": ["formal_opening"],
+      "structure": "Tinahod kong [group]...",
+      "example": "Tinahod kong mga kaigsuonan...",
+      "sources": ["Formal speeches"],
+      "notes": "Respectful opening. Can be combined with 'mga kaigsuonan' or 'mga barangayanon'."
+    },
+    
+    "gipanghinaut": {
+      "meaning": "It is hoped / We hope",
+      "confidence": 0.85,
+      "contexts": ["formal", "closing"],
+      "structure": "Gipanghinaut ko ang inyong...",
+      "example": "Gipanghinaut ko ang inyong kooperasyon.",
+      "sources": ["Official letters"],
+      "notes": "Formal expression of hope or expectation. Common in closing paragraphs."
+    },
+    
+    "kaninyo_matinahuron": {
+      "meaning": "Yours respectfully / Respectfully yours",
+      "confidence": 0.90,
+      "contexts": ["formal_closing"],
+      "structure": "Kaninyo matinahuron,",
+      "example": "Kaninyo matinahuron, [Name]",
+      "sources": ["Formal letters", "Official announcements"],
+      "notes": "Standard formal closing before signature. Always followed by comma and official's name."
+    }
+  },
+  
+  "usage_guidelines": {
+    "high_confidence_threshold": 0.85,
+    "medium_confidence_threshold": 0.70,
+    "default_dialect": "cebuano",
+    "conservative_mode": {
+      "description": "Only use terms with confidence >= 0.85",
+      "recommended_terms": ["kaigsuonan", "gihulagway", "katiguwang", "tinahod_kong", "kaninyo_matinahuron"]
+    },
+    "moderate_mode": {
+      "description": "Use terms with confidence >= 0.70",
+      "additional_terms": ["ayaw", "tabang", "inahan", "amahan", "hinumdum"]
+    },
+    "avoid_when_uncertain": {
+      "description": "When in doubt, use Cebuano equivalents",
+      "principle": "Factual preservation > dialect authenticity"
+    }
+  },
+  
+  "metadata": {
+    "curator": "LINKod Admin Platform",
+    "review_status": "partial",
+    "reviewers": ["local_language_consultant_pending"],
+    "sources": [
+      "Barangay Bayabas official announcements",
+      "Municipal Civil Registrar communications",
+      "Local health office announcements",
+      "Surigao del Sur provincial documents"
+    ],
+    "disclaimer": "This lexicon is a living document. Confidence scores may be adjusted as more native speakers review the terms. When uncertain, prefer standard Cebuano."
+  }
+}

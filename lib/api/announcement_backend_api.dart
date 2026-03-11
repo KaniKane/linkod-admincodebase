@@ -25,22 +25,31 @@ String get _pushBaseUrl =>
         ? kPushApiBaseUrl!.trim()
         : kAnnouncementBackendBaseUrl;
 
-/// Result of POST /refine: original and refined text.
+/// Result of POST /refine: original and refined text with provider metadata.
 class RefineResponse {
   const RefineResponse({
     required this.originalText,
     required this.refinedText,
+    this.providerUsed = 'unknown',
+    this.fallbackUsed = false,
+    this.warning,
   });
 
   factory RefineResponse.fromJson(Map<String, dynamic> json) {
     return RefineResponse(
       originalText: json['original_text'] as String? ?? '',
       refinedText: json['refined_text'] as String? ?? '',
+      providerUsed: json['provider_used'] as String? ?? 'unknown',
+      fallbackUsed: json['fallback_used'] as bool? ?? false,
+      warning: json['warning'] as String?,
     );
   }
 
   final String originalText;
   final String refinedText;
+  final String providerUsed;
+  final bool fallbackUsed;
+  final String? warning;
 }
 
 /// Result of POST /recommend-audiences: suggested audiences and matched rules.

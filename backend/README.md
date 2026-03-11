@@ -1,18 +1,22 @@
 # LINKod Admin Backend (FastAPI)
 
-Local REST API for the LINKod Admin system: **AI-based text refinement**, **rule-based audience recommendation**, and **admin-triggered push notifications (FCM)**.
+Local REST API for the LINKod Admin system: **AI-based text refinement** (dual-provider: OpenAI + Ollama), **rule-based audience recommendation**, and **admin-triggered push notifications (FCM)**.
 
 ## Architecture
 
-- **AI logic** (Ollama, llama3.2:3b): isolated in `services/ai_refinement.py`. Only refines text; does not add information or decide audience.
-- **Rule-based logic**: isolated in `services/audience_rules.py`. Keyword rules loaded from `config/audience_rules.json`; no AI.
-- **Human-in-the-loop**: Endpoints return data only. The Flutter admin app shows refined text and suggested audiences; the admin reviews and edits before publishing. No auto-publish.
+- **AI logic**: Dual-provider architecture supporting both OpenAI (cloud) and Ollama (local).
+  - Provider selection via `AI_PROVIDER` environment variable (no code changes needed)
+  - OpenAI provider: `providers/openai_provider.py` - cloud-based refinement
+  - Ollama provider: `providers/ollama_provider.py` - local LLaMA refinement
+  - Refinement orchestration: `services/refinement_service.py` - handles fallback and validation
+- **Rule-based logic**: `services/audience_rules.py`. Keyword rules from `config/audience_rules.json`; no AI.
+- **Human-in-the-loop**: Endpoints return data only. Flutter admin app shows refined text and suggested audiences; admin reviews before publishing.
 
 ## Requirements
 
 - Python 3.9+
-- [Ollama](https://ollama.ai) installed and running locally
-- Model pulled: `ollama pull llama3.2:3b` (suitable for ~8 GB RAM)
+- For Ollama mode: [Ollama](https://ollama.ai) installed with `llama3.2:3b` pulled
+- For OpenAI mode: Valid OpenAI API key with billing enabled
 
 ## Install
 
@@ -21,23 +25,71 @@ cd backend
 pip install -r requirements.txt
 ```
 
+## Configure
+
+Copy `env.example` to `.env` and set your provider mode:
+
+```bash
+cp env.example .env
+```
+
+**For thesis defense / offline demo (Ollama only):**
+```env
+AI_PROVIDER=ollama
+```
+
+**For deployment (OpenAI cloud):**
+```env
+AI_PROVIDER=openai
+OPENAI_API_KEY=your_key_here
+```
+
+**For auto-fallback (OpenAI primary, Ollama fallback):**
+```env
+AI_PROVIDER=auto
+OPENAI_API_KEY=your_key_here
+FALLBACK_TO_OLLAMA=true
+```
+
 ## Run
 
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 8000
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 Or: `python main.py`
+
+## Provider Modes
+
+The `AI_PROVIDER` environment variable exclusively controls which AI provider is used:
+
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| `ollama` | Use local Ollama/Llama3.2 only | Thesis defense, offline demo, no API costs |
+| `openai` | Use OpenAI GPT-4o-mini only | Deployment, faster responses, best quality |
+| `auto` | Try OpenAI first, fallback to Ollama | Production with resilience, cost-aware |
+
+**Switching modes:** Just change `AI_PROVIDER` in `.env` and restart. No code changes required.
 
 ## Endpoints
 
 ### POST /refine
 
-Refines raw announcement text using local LLaMA 3.2 3B.
+Refines raw announcement text using the configured AI provider.
 
 - **Request:** `{ "raw_text": "Adonday libre check up sa sabado..." }`
-- **Response:** `{ "original_text": "...", "refined_text": "..." }`
-- **Validation:** Empty `raw_text` → 400. Ollama unreachable or empty response → 503.
+- **Response:**
+  ```json
+  {
+    "original_text": "...",
+    "refined_text": "...",
+    "provider_used": "openai",
+    "fallback_used": false,
+    "warning": null
+  }
+  ```
+- **Provider metadata**: `provider_used` shows which AI was used; `fallback_used` indicates if fallback was triggered
+- **Validation:** Empty `raw_text` → 400. All providers fail → 503.
 
 ### POST /recommend-audiences
 
@@ -48,9 +100,23 @@ Rule-based audience recommendation from text (typically the refined announcement
 - If no rule matches: `audiences` = `["General Residents"]`, `default_used` = true.
 - **Rules:** Edit `config/audience_rules.json` to add/change keyword → audience mappings.
 
+### GET /health/ai
+
+AI provider health check with provider status.
+
+- **Response:**
+  ```json
+  {
+    "status": "healthy",
+    "mode": "openai",
+    "primary_healthy": true,
+    "fallback_healthy": true
+  }
+  ```
+
 ### GET /health
 
-Health check: `{ "status": "ok", "service": "linkod-admin-api" }`
+Basic health check: `{ "status": "ok", "service": "linkod-admin-api" }`
 
 ### POST /send-announcement-push
 
@@ -115,11 +181,17 @@ So: **announcement is posted** (Firestore write) is separate from **push sent** 
 
 ## Troubleshooting
 
-### Refine text times out (POST /refine)
+### Refine text times out
 
-- **Ollama not running:** Start Ollama (e.g. `ollama serve`) and ensure the model is pulled: `ollama pull llama3.2:3b`.
-- **First run or slow hardware:** The first request or a busy machine can take 60–90+ seconds. The Admin app uses a 120s timeout; the backend allows 90s for Ollama. If it still times out, try shorter text or a faster machine.
-- **Wrong URL:** Refine calls `http://localhost:11434` by default. If Ollama runs elsewhere, set `OLLAMA_BASE_URL` or change `OLLAMA_BASE_URL` in `services/ai_refinement.py`.
+- **Ollama not running:** Start Ollama (`ollama serve`) and ensure model is pulled: `ollama pull llama3.2:3b`
+- **OpenAI timeout:** Check internet connection and API key validity
+- **Slow first request:** Initial model load can take 30-60 seconds
+
+### Provider switch not working
+
+- Verify `.env` file is in `backend/` directory
+- Restart backend after changing `.env` (environment variables loaded at startup)
+- Check `/health/ai` to see which mode is active
 
 ### No push after approving an account (POST /send-account-approval)
 
