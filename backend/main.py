@@ -47,10 +47,29 @@ class RefineRequest(BaseModel):
 
 
 class RefineResponse(BaseModel):
-    """Original and refined text. Admin can review and edit before publishing."""
+    """
+    Response from AI refinement endpoint.
+    
+    Returns explicit success/error states.
+    On failure, refined_text is empty and error contains the reason.
+    """
 
-    original_text: str
-    refined_text: str
+    success: bool = Field(
+        ...,
+        description="True if refinement succeeded, False if it failed"
+    )
+    original_text: str = Field(
+        ...,
+        description="The original text that was sent for refinement"
+    )
+    refined_text: str = Field(
+        ...,
+        description="The refined text (empty if success is False)"
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Error message if refinement failed (null on success)"
+    )
 
 
 class RecommendAudiencesRequest(BaseModel):
@@ -88,20 +107,21 @@ def post_refine(request: RefineRequest) -> RefineResponse:
     """
     Refine announcement text using local Ollama (llama3.2:3b).
     AI only makes text formal, clear, concise. Does not add information or decide audience.
-    Returns both original and refined text for human review.
+    Returns explicit success/error state with refined text or error message.
     """
     raw = request.raw_text.strip()
     if not raw:
         raise HTTPException(status_code=400, detail="raw_text cannot be empty")
 
-    refined = refine_text(raw)
-    if refined is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Text refinement failed. Check that Ollama is running and model llama3.2:3b is available.",
-        )
-
-    return RefineResponse(original_text=raw, refined_text=refined)
+    # Call simplified refinement
+    result = refine_text(raw)
+    
+    return RefineResponse(
+        success=result["success"],
+        original_text=result["original_text"],
+        refined_text=result["refined_text"],
+        error=result["error"]
+    )
 
 
 @app.post("/recommend-audiences", response_model=RecommendAudiencesResponse)
