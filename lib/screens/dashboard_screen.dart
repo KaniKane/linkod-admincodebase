@@ -81,10 +81,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final startOfMonth = DateTime(now.year, now.month, 1);
 
     try {
+      // Use count() for accurate total users count
+      final usersCountSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .count()
+          .get();
+      totalUsers = usersCountSnapshot.count ?? 0;
+      
+      // Fetch users docs separately for monthly count
       final usersSnapshot = await FirebaseFirestore.instance
           .collection('users')
           .get();
-      totalUsers = usersSnapshot.size;
       
       // Count users added this month
       for (final doc in usersSnapshot.docs) {

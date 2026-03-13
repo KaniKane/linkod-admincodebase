@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 import '../widgets/app_sidebar.dart';
 import '../widgets/user_header.dart';
 import '../services/barangay_category_service.dart';
 import '../services/barangay_posting_service.dart';
+import '../services/barangay_branding_service.dart';
 import '../widgets/category_edit_dialog.dart';
 import '../widgets/posting_edit_dialog.dart';
 import '../utils/app_colors.dart';
@@ -35,6 +37,14 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
   // Selected category for inline postings view
   Map<String, dynamic>? _selectedCategory;
 
+  // Branding state variables
+  final ImagePicker _imagePicker = ImagePicker();
+  String? _currentLogoUrl;
+  String? _currentCoverUrl;
+  File? _pendingLogoFile;
+  File? _pendingCoverFile;
+  bool _isUploadingBranding = false;
+
   @override
   void initState() {
     super.initState();
@@ -51,6 +61,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
         _loadCurrentUserRole(),
         _loadPendingCounts(),
         _loadCategoriesOnce(),
+        _loadBranding(),
       ]);
     } catch (e) {
       _loadError = 'Failed to load: $e';
@@ -117,6 +128,231 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
     setState(() {
       _categories = categories;
     });
+  }
+
+  // Branding methods
+  Future<void> _loadBranding() async {
+    final branding = await BarangayBrandingService.getBranding();
+    if (!mounted) return;
+    setState(() {
+      _currentLogoUrl = branding?['barangayLogoUrl'] as String?;
+      _currentCoverUrl = branding?['barangayCoverImageUrl'] as String?;
+    });
+  }
+
+  Future<void> _pickLogo() async {
+    final XFile? image = await _imagePicker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      setState(() {
+        _pendingLogoFile = File(image.path);
+      });
+      await _uploadBranding(logoFile: _pendingLogoFile);
+    }
+  }
+
+  Future<void> _pickCoverImage() async {
+    final XFile? image = await _imagePicker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      setState(() {
+        _pendingCoverFile = File(image.path);
+      });
+      await _uploadBranding(coverFile: _pendingCoverFile);
+    }
+  }
+
+  Future<void> _uploadBranding({File? logoFile, File? coverFile}) async {
+    setState(() {
+      _isUploadingBranding = true;
+    });
+
+    try {
+      String? newLogoUrl;
+      String? newCoverUrl;
+
+      if (logoFile != null) {
+        // Delete old logo if exists
+        if (_currentLogoUrl != null) {
+          await BarangayBrandingService.deleteOldImage(_currentLogoUrl);
+        }
+        newLogoUrl = await BarangayBrandingService.uploadLogo(logoFile);
+      }
+
+      if (coverFile != null) {
+        // Delete old cover if exists
+        if (_currentCoverUrl != null) {
+          await BarangayBrandingService.deleteOldImage(_currentCoverUrl);
+        }
+        newCoverUrl = await BarangayBrandingService.uploadCoverImage(coverFile);
+      }
+
+      // Update Firestore with new URLs
+      await BarangayBrandingService.updateBranding(
+        logoUrl: newLogoUrl,
+        coverImageUrl: newCoverUrl,
+      );
+
+      // Update local state
+      setState(() {
+        if (newLogoUrl != null) _currentLogoUrl = newLogoUrl;
+        if (newCoverUrl != null) _currentCoverUrl = newCoverUrl;
+        _pendingLogoFile = null;
+        _pendingCoverFile = null;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: SuccessNotification(
+              message: 'Branding updated successfully',
+            ),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: ErrorNotification(
+              message: 'Failed to update branding: $e',
+            ),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isUploadingBranding = false;
+      });
+    }
+  }
+
+  Future<void> _removeLogo() async {
+    if (_currentLogoUrl == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove Logo'),
+        content: const Text(
+          'Are you sure you want to remove the barangay logo?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.deleteRed,
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await BarangayBrandingService.deleteOldImage(_currentLogoUrl);
+        await BarangayBrandingService.updateBranding(logoUrl: '');
+        setState(() {
+          _currentLogoUrl = null;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: SuccessNotification(
+                message: 'Logo removed successfully',
+              ),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: ErrorNotification(
+                message: 'Failed to remove logo: $e',
+              ),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _removeCoverImage() async {
+    if (_currentCoverUrl == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove Cover Image'),
+        content: const Text(
+          'Are you sure you want to remove the barangay cover image?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.deleteRed,
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await BarangayBrandingService.deleteOldImage(_currentCoverUrl);
+        await BarangayBrandingService.updateBranding(coverImageUrl: '');
+        setState(() {
+          _currentCoverUrl = null;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: SuccessNotification(
+                message: 'Cover image removed successfully',
+              ),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: ErrorNotification(
+                message: 'Failed to remove cover image: $e',
+              ),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    }
   }
 
   void _navigateTo(String route) {
@@ -652,7 +888,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
                             Text(
                               _selectedCategory != null
                                   ? _selectedCategory!['title'] as String? ?? 'Category'
-                                  : 'Barangay Information',
+                                  : 'Barangay Informations',
                               style: const TextStyle(
                                 fontSize: 32,
                                 fontWeight: FontWeight.bold,
@@ -699,33 +935,385 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
   }
 
   Widget _buildCategoriesView() {
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final w = constraints.maxWidth;
-          final crossAxisCount = w >= 1200
-              ? 4
-              : (w >= 900 ? 3 : 2);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        final crossAxisCount = w >= 1200
+            ? 4
+            : (w >= 900 ? 3 : 2);
 
-          return GridView.builder(
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: crossAxisCount,
-              crossAxisSpacing: 20,
-              mainAxisSpacing: 20,
-              childAspectRatio: 1.1,
+        return CustomScrollView(
+          slivers: [
+            // Branding Section
+            SliverToBoxAdapter(
+              child: _buildBrandingSection(),
             ),
-            itemCount: _categories.length + 1,
-            itemBuilder: (context, index) {
-              if (index == _categories.length) {
-                return _buildAddCategoryCard();
-              }
-              final category = _categories[index];
-              return _buildCategoryCard(category);
-            },
-          );
-        },
+            // Public Informations Label
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(32, 24, 32, 0),
+                child: Text(
+                  'Public Informations',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.darkGrey,
+                  ),
+                ),
+              ),
+            ),
+            // Categories Grid
+            SliverPadding(
+              padding: const EdgeInsets.all(32),
+              sliver: SliverGrid(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  crossAxisSpacing: 20,
+                  mainAxisSpacing: 20,
+                  childAspectRatio: 1.1,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    if (index == _categories.length) {
+                      return _buildAddCategoryCard();
+                    }
+                    final category = _categories[index];
+                    return _buildCategoryCard(category);
+                  },
+                  childCount: _categories.length + 1,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBrandingSection() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(32, 24, 32, 0),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Icon(
+                Icons.palette_outlined,
+                color: AppColors.primaryGreen,
+                size: 24,
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Barangay Branding',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.darkGrey,
+                ),
+              ),
+              const Spacer(),
+              if (_isUploadingBranding)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.primaryGreen,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Manage the logo and cover image shown on the mobile app.',
+            style: TextStyle(
+              fontSize: 14,
+              color: AppColors.mediumGrey,
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Logo Row
+          _buildLogoUploadRow(),
+          const Divider(height: 32),
+          // Cover Row
+          _buildCoverUploadRow(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLogoUploadRow() {
+    final hasLogo = _currentLogoUrl != null && _currentLogoUrl!.isNotEmpty;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Circular Logo Preview
+        _buildCircularLogoPreview(hasLogo),
+        const SizedBox(width: 20),
+        // Info and Actions
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Barangay Logo',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.darkGrey,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Used as the circular logo on the mobile app',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.mediumGrey,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Recommended: square PNG, 512×512',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.lightGrey,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Action Buttons
+              Row(
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: _isUploadingBranding ? null : _pickLogo,
+                    icon: Icon(
+                      hasLogo ? Icons.refresh : Icons.upload_outlined,
+                      size: 16,
+                    ),
+                    label: Text(hasLogo ? 'Replace Logo' : 'Upload Logo'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryGreen,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 0,
+                      textStyle: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                  if (hasLogo) ...[
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: _isUploadingBranding ? null : _removeLogo,
+                      icon: const Icon(Icons.delete_outline, size: 16),
+                      label: const Text('Remove'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.deleteRed,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        side: BorderSide(color: AppColors.deleteRed.withOpacity(0.5)),
+                        textStyle: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCircularLogoPreview(bool hasLogo) {
+    return Container(
+      width: 96,
+      height: 96,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white,
+        border: Border.all(
+          color: hasLogo ? AppColors.primaryGreen : Colors.grey.shade300,
+          width: hasLogo ? 2 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: hasLogo
+          ? Padding(
+              padding: const EdgeInsets.all(12),
+              child: Image.network(
+                _currentLogoUrl!,
+                fit: BoxFit.contain,
+                alignment: Alignment.center,
+              ),
+            )
+          : Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.account_balance,
+                    size: 36,
+                    color: AppColors.lightGrey,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'No logo',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.lightGrey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _buildCoverUploadRow() {
+    final hasCover = _currentCoverUrl != null && _currentCoverUrl!.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Title and Description
+        const Text(
+          'Cover Image',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: AppColors.darkGrey,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          'Displayed at the top of the mobile Barangay Information screen',
+          style: TextStyle(
+            fontSize: 13,
+            color: AppColors.mediumGrey,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Recommended: 1200×600 JPG or PNG',
+          style: TextStyle(
+            fontSize: 12,
+            color: AppColors.lightGrey,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Cover Preview
+        _buildCoverPreview(hasCover),
+        const SizedBox(height: 12),
+        // Action Buttons
+        Row(
+          children: [
+            ElevatedButton.icon(
+              onPressed: _isUploadingBranding ? null : _pickCoverImage,
+              icon: Icon(
+                hasCover ? Icons.refresh : Icons.upload_outlined,
+                size: 16,
+              ),
+              label: Text(hasCover ? 'Replace Cover' : 'Upload Cover'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryGreen,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                elevation: 0,
+                textStyle: const TextStyle(fontSize: 13),
+              ),
+            ),
+            if (hasCover) ...[
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: _isUploadingBranding ? null : _removeCoverImage,
+                icon: const Icon(Icons.delete_outline, size: 16),
+                label: const Text('Remove'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.deleteRed,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  side: BorderSide(color: AppColors.deleteRed.withOpacity(0.5)),
+                  textStyle: const TextStyle(fontSize: 13),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCoverPreview(bool hasCover) {
+    return Container(
+      height: 160,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppColors.inputBackground,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: hasCover ? AppColors.primaryGreen : Colors.grey.shade300,
+          width: hasCover ? 2 : 1,
+        ),
+        image: hasCover
+            ? DecorationImage(
+                image: NetworkImage(_currentCoverUrl!),
+                fit: BoxFit.cover,
+              )
+            : null,
+      ),
+      child: !hasCover
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.location_city_outlined,
+                    size: 48,
+                    color: AppColors.lightGrey,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No cover image uploaded',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.lightGrey,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : null,
     );
   }
 

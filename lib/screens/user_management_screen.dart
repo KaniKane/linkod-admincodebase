@@ -222,10 +222,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         });
       }
       // Re-applications: users who were declined and re-applied (accountStatus == 'pending')
+      // Skip users who already have an entry in awaitingApproval to avoid duplicates
+      final awaitingIds = loadedAwaiting.map((a) => a['id']).toSet();
       for (final doc in usersSnapshot.docs) {
         final data = doc.data();
         if ((data['accountStatus'] as String?)?.toLowerCase() != 'pending')
           continue;
+        // Skip if this user already has an awaitingApproval document
+        if (awaitingIds.contains(doc.id)) continue;
         final fullName = (data['fullName'] ?? '') as String;
         final phoneNumber = (data['phoneNumber'] ?? '') as String;
         final role = ((data['role'] ?? '') as String).toLowerCase();
@@ -2691,6 +2695,31 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         'lastUpdated': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
+
+      // Send account-approved push notification to the user
+      try {
+        await sendAccountApprovalPush(
+          requestId: uid,
+          userId: uid,
+          title: 'Account Approved',
+          body: 'Your re-application has been approved. You can now login.',
+        );
+      } catch (e) {
+        // Non-blocking: approval succeeded; only push failed
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: ErrorNotification(
+                message: 'Re-application approved. Push notification could not be sent: $e',
+              ),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+
       if (mounted) {
         await _loadAccounts();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -3115,7 +3144,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       // Send decline push notification to the user
       try {
         String? declinedUserId;
-        if (item != null && item['source'] == 'users') {
+        final bool isReapplication = item != null && item['source'] == 'users';
+        if (isReapplication) {
           declinedUserId = docId;
         } else {
           // For new registrations, get the uid from the users doc we just created
@@ -3132,8 +3162,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             userId: declinedUserId,
             title: 'Account Declined',
             body: reason.isNotEmpty
-                ? 'Your account request was declined. Reason: $reason'
-                : 'Your account request was declined.',
+                ? 'Your ${isReapplication ? 're-application' : 'account request'} was declined. Reason: $reason'
+                : 'Your ${isReapplication ? 're-application' : 'account request'} was declined.',
             data: {'type': 'account_declined', 'reason': reason},
           );
         }
