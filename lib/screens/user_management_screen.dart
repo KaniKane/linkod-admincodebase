@@ -96,7 +96,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     } catch (_) {}
     if (mounted) {
       setState(() {
-        _pendingApprovalsCount = pendingAnnouncements + pendingProducts + pendingTasks;
+        _pendingApprovalsCount =
+            pendingAnnouncements + pendingProducts + pendingTasks;
       });
     }
   }
@@ -256,6 +257,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         _admins = loadedAdmins;
         _awaitingApproval = loadedAwaiting;
         _inactive = loadedInactive;
+        _selectedIndices.clear();
         _isLoading = false;
       });
     } catch (e) {
@@ -374,6 +376,18 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     }).toList();
   }
 
+  List<Map<String, String>> get _filteredAwaiting {
+    if (_searchQuery.isEmpty) return _awaitingApproval;
+    return _awaitingApproval.where((u) {
+      final name = (u['name'] ?? '').toLowerCase();
+      final phone = (u['phone'] ?? '').toLowerCase();
+      final cat = (u['category'] ?? '').toLowerCase();
+      return name.contains(_searchQuery) ||
+          phone.contains(_searchQuery) ||
+          cat.contains(_searchQuery);
+    }).toList();
+  }
+
   int get _totalRecords {
     switch (_activeTabIndex) {
       case 0:
@@ -381,7 +395,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       case 1:
         return _filteredAdmins.length;
       case 2:
-        return _awaitingApproval.length;
+        return _filteredAwaiting.length;
       case 3:
         return _filteredInactive.length;
       default:
@@ -396,7 +410,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       case 1:
         return _filteredAdmins;
       case 2:
-        return _awaitingApproval;
+        return _filteredAwaiting;
       case 3:
         return _filteredInactive;
       default:
@@ -451,7 +465,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     setState(() {
       if (value == true) {
         _selectedIndices.clear();
-        for (int i = 0; i < _awaitingApproval.length; i++) {
+        for (int i = 0; i < _currentList.length; i++) {
           _selectedIndices.add(i);
         }
       } else {
@@ -467,6 +481,83 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       } else {
         _selectedIndices.remove(index);
       }
+    });
+  }
+
+  List<Map<String, String>> _selectedAwaitingItems() {
+    if (_activeTabIndex != 2 || _selectedIndices.isEmpty) return const [];
+    final list = _currentList;
+    final selected = _selectedIndices.toList()..sort();
+    return selected
+        .where((index) => index >= 0 && index < list.length)
+        .map((index) => list[index])
+        .toList();
+  }
+
+  Future<void> _approveSelectedAwaiting() async {
+    final selectedItems = _selectedAwaitingItems();
+    if (selectedItems.isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Approve selected requests'),
+        content: Text('Approve ${selectedItems.length} selected request(s)?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Approve all'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    for (final item in selectedItems) {
+      final docId = item['id'] ?? '';
+      if (docId.isEmpty) continue;
+      final isReapplication = item['source'] == 'users';
+      if (isReapplication) {
+        await _approveReapplication(docId);
+      } else {
+        await _approveAwaiting(docId, item);
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _selectedIndices.clear();
+    });
+  }
+
+  Future<void> _declineSelectedAwaiting() async {
+    final selectedItems = _selectedAwaitingItems();
+    if (selectedItems.isEmpty) return;
+
+    final result = await showDialog<DeclineReasonResult>(
+      context: context,
+      builder: (context) => DeclineReasonDialog(
+        title: 'Reason for declining selected requests',
+        submitLabel: 'Decline all',
+        showStatusDropdown: false,
+      ),
+    );
+    if (result == null) return;
+
+    for (final item in selectedItems) {
+      final docId = item['id'] ?? '';
+      if (docId.isEmpty) continue;
+      await _declineAwaiting(docId, result.reason, item, result.reapplyType);
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _selectedIndices.clear();
     });
   }
 
@@ -535,16 +626,27 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                       32,
                                       16,
                                     ),
-                                    child: const Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        'Approval Request',
-                                        style: TextStyle(
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.bold,
-                                          color: AppColors.darkGrey,
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const SizedBox(height: 16),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: CustomSearchBar(
+                                                placeholder:
+                                                    'Search awaiting request',
+                                                controller: _searchController,
+                                                onChanged: (_) => setState(() {
+                                                  _currentPage = 1;
+                                                  _selectedIndices.clear();
+                                                }),
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                      ),
+                                      ],
                                     ),
                                   )
                                 else
@@ -562,7 +664,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                                 ? 'Search admin'
                                                 : 'Search inactive',
                                             controller: _searchController,
-                                            onChanged: (_) => setState(() {}),
+                                            onChanged: (_) => setState(() {
+                                              _currentPage = 1;
+                                              _selectedIndices.clear();
+                                            }),
                                           ),
                                         ),
                                         const SizedBox(width: 16),
@@ -658,7 +763,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             _buildTab('Admins', 1),
             const SizedBox(width: 32),
           ],
-          _buildTab('Awaiting Approval', 2, badgeCount: _awaitingApproval.length),
+          _buildTab(
+            'Awaiting Approval',
+            2,
+            badgeCount: _awaitingApproval.length,
+          ),
           const SizedBox(width: 32),
           _buildTab('Inactive', 3),
         ],
@@ -702,9 +811,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               if (badgeCount > 0) ...[
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
-                    color: isActive ? AppColors.primaryGreen : AppColors.deleteRed,
+                    color: isActive
+                        ? AppColors.primaryGreen
+                        : AppColors.deleteRed,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
@@ -1894,8 +2008,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   width: 40,
                   child: Checkbox(
                     value:
-                        _selectedIndices.length == _awaitingApproval.length &&
-                        _awaitingApproval.isNotEmpty,
+                        _selectedIndices.length == _currentList.length &&
+                        _currentList.isNotEmpty,
                     onChanged: _handleSelectAll,
                   ),
                 ),
@@ -1932,7 +2046,18 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 200),
+                SizedBox(
+                  width: 200,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: _selectedIndices.isNotEmpty
+                        ? AcceptDeclineButtons(
+                            onAccept: _approveSelectedAwaiting,
+                            onDecline: _declineSelectedAwaiting,
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                ),
               ],
             ),
           ),
@@ -2074,7 +2199,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: status == 'suspended'
                         ? Colors.red.shade50
@@ -2484,7 +2612,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               child:
                   proofOfResidenceUrl != null && proofOfResidenceUrl.isNotEmpty
                   ? GestureDetector(
-                      onTap: () => openFullScreenImage(ctx, proofOfResidenceUrl!),
+                      onTap: () =>
+                          openFullScreenImage(ctx, proofOfResidenceUrl!),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: Image.network(
@@ -2500,7 +2629,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               child: const SizedBox(
                                 width: 24,
                                 height: 24,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               ),
                             );
                           },
@@ -2710,7 +2841,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: ErrorNotification(
-                message: 'Re-application approved. Push notification could not be sent: $e',
+                message:
+                    'Re-application approved. Push notification could not be sent: $e',
               ),
               backgroundColor: Colors.transparent,
               elevation: 0,
@@ -3383,67 +3515,68 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 onPressed: isSubmitting
                                     ? null
                                     : () async {
-                                      if (!formKey.currentState!.validate())
-                                        return;
-                                      if (isAdmin && selectedPosition == null) {
-                                        setState(
-                                          () => dialogError =
-                                              'Please select a position.',
-                                        );
-                                        return;
-                                      }
-                                      if (!isAdmin &&
-                                          selectedCategories.isEmpty) {
-                                        setState(
-                                          () => dialogError =
-                                              'Please select at least one category.',
-                                        );
-                                        return;
-                                      }
-                                      setState(() {
-                                        isSubmitting = true;
-                                        dialogError = null;
-                                      });
-
-                                      try {
-                                        final updates = <String, dynamic>{
-                                          'fullName': nameController.text
-                                              .trim(),
-                                          'phoneNumber': phoneController.text
-                                              .trim(),
-                                        };
-                                        if (isAdmin) {
-                                          updates['role'] =
-                                              selectedRole ?? 'admin';
-                                          updates['position'] =
-                                              selectedPosition
-                                                      ?.trim()
-                                                      .isNotEmpty ==
-                                                  true
-                                              ? selectedPosition!
-                                              : 'Admin';
-                                        } else {
-                                          updates['category'] =
-                                              selectedCategories.isEmpty
-                                              ? 'User'
-                                              : selectedCategories.join(', ');
+                                        if (!formKey.currentState!.validate())
+                                          return;
+                                        if (isAdmin &&
+                                            selectedPosition == null) {
+                                          setState(
+                                            () => dialogError =
+                                                'Please select a position.',
+                                          );
+                                          return;
                                         }
-                                        await FirebaseFirestore.instance
-                                            .collection('awaitingApproval')
-                                            .doc(docId)
-                                            .update(updates);
-                                        if (mounted) {
-                                          await _loadAccounts();
-                                          Navigator.of(context).pop();
+                                        if (!isAdmin &&
+                                            selectedCategories.isEmpty) {
+                                          setState(
+                                            () => dialogError =
+                                                'Please select at least one category.',
+                                          );
+                                          return;
                                         }
-                                      } catch (e) {
                                         setState(() {
-                                          dialogError =
-                                              'Failed to update request: $e';
-                                          isSubmitting = false;
+                                          isSubmitting = true;
+                                          dialogError = null;
                                         });
-                                      }
-                                    },
+
+                                        try {
+                                          final updates = <String, dynamic>{
+                                            'fullName': nameController.text
+                                                .trim(),
+                                            'phoneNumber': phoneController.text
+                                                .trim(),
+                                          };
+                                          if (isAdmin) {
+                                            updates['role'] =
+                                                selectedRole ?? 'admin';
+                                            updates['position'] =
+                                                selectedPosition
+                                                        ?.trim()
+                                                        .isNotEmpty ==
+                                                    true
+                                                ? selectedPosition!
+                                                : 'Admin';
+                                          } else {
+                                            updates['category'] =
+                                                selectedCategories.isEmpty
+                                                ? 'User'
+                                                : selectedCategories.join(', ');
+                                          }
+                                          await FirebaseFirestore.instance
+                                              .collection('awaitingApproval')
+                                              .doc(docId)
+                                              .update(updates);
+                                          if (mounted) {
+                                            await _loadAccounts();
+                                            Navigator.of(context).pop();
+                                          }
+                                        } catch (e) {
+                                          setState(() {
+                                            dialogError =
+                                                'Failed to update request: $e';
+                                            isSubmitting = false;
+                                          });
+                                        }
+                                      },
                                 child: isSubmitting
                                     ? const SizedBox(
                                         width: 16,

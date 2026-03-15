@@ -23,7 +23,8 @@ class BarangayInformationScreen extends StatefulWidget {
   const BarangayInformationScreen({super.key});
 
   @override
-  State<BarangayInformationScreen> createState() => _BarangayInformationScreenState();
+  State<BarangayInformationScreen> createState() =>
+      _BarangayInformationScreenState();
 }
 
 class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
@@ -33,7 +34,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
   bool _isLoading = true;
   String? _loadError;
   List<Map<String, dynamic>> _categories = const [];
-  
+
   // Selected category for inline postings view
   Map<String, dynamic>? _selectedCategory;
 
@@ -152,7 +153,9 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
   }
 
   Future<void> _pickLogo() async {
-    final XFile? image = await _imagePicker.pickImage(source: ImageSource.gallery);
+    final XFile? image = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+    );
     if (image != null) {
       setState(() {
         _pendingLogoFile = File(image.path);
@@ -162,7 +165,9 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
   }
 
   Future<void> _pickCoverImage() async {
-    final XFile? image = await _imagePicker.pickImage(source: ImageSource.gallery);
+    final XFile? image = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+    );
     if (image != null) {
       setState(() {
         _pendingCoverFile = File(image.path);
@@ -259,9 +264,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.deleteRed,
-            ),
+            style: TextButton.styleFrom(foregroundColor: AppColors.deleteRed),
             child: const Text('Remove'),
           ),
         ],
@@ -291,9 +294,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: ErrorNotification(
-                message: 'Failed to remove logo: $e',
-              ),
+              content: ErrorNotification(message: 'Failed to remove logo: $e'),
               backgroundColor: Colors.transparent,
               elevation: 0,
               behavior: SnackBarBehavior.floating,
@@ -321,9 +322,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.deleteRed,
-            ),
+            style: TextButton.styleFrom(foregroundColor: AppColors.deleteRed),
             child: const Text('Remove'),
           ),
         ],
@@ -525,17 +524,21 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
   Future<void> _editCategory(Map<String, dynamic> category) async {
     IconData? iconData;
     try {
-      final codePoint = int.tryParse(category['iconCodePoint'] as String? ?? '');
+      final codePoint = int.tryParse(
+        category['iconCodePoint'] as String? ?? '',
+      );
       if (codePoint != null) {
         var fontFamily = category['iconFontFamily'] as String?;
         // Material Symbols icons need correct font family
-        if (fontFamily == 'MaterialIcons' && 
+        if (fontFamily == 'MaterialIcons' &&
             (category['iconPackage'] as String? ?? '').isEmpty) {
           fontFamily = 'Material Symbols Outlined';
         }
         iconData = IconData(
           codePoint,
-          fontFamily: fontFamily?.isNotEmpty == true ? fontFamily : 'MaterialIcons',
+          fontFamily: fontFamily?.isNotEmpty == true
+              ? fontFamily
+              : 'MaterialIcons',
           fontPackage: category['iconPackage'] as String?,
         );
       }
@@ -608,9 +611,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.deleteRed,
-            ),
+            style: TextButton.styleFrom(foregroundColor: AppColors.deleteRed),
             child: const Text('Delete'),
           ),
         ],
@@ -662,10 +663,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
       }
       if (codePoint != null) {
         // Force MaterialIcons font family - ignore stored fontFamily for safety
-        return IconData(
-          codePoint,
-          fontFamily: 'MaterialIcons',
-        );
+        return IconData(codePoint, fontFamily: 'MaterialIcons');
       }
     } catch (e) {
       // Fall through to default
@@ -687,17 +685,18 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
 
   Future<void> _createPosting() async {
     if (_selectedCategory == null) return;
-    
+
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (context) => PostingEditDialog(
-        categoryId: _selectedCategory!['id'] as String,
-      ),
+      builder: (context) =>
+          PostingEditDialog(categoryId: _selectedCategory!['id'] as String),
     );
 
     if (result != null) {
       try {
-        List<String> imageUrls = (result['existingImageUrls'] as List<dynamic>?)?.cast<String>() ?? [];
+        List<String> imageUrls =
+            (result['existingImageUrls'] as List<dynamic>?)?.cast<String>() ??
+            [];
         String? pdfUrl = result['existingPdfUrl'] as String?;
         String? pdfName = result['pdfName'] as String?;
 
@@ -748,9 +747,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: ErrorNotification(
-                message: 'Failed to create post: $e',
-              ),
+              content: ErrorNotification(message: 'Failed to create post: $e'),
               backgroundColor: Colors.transparent,
               elevation: 0,
               behavior: SnackBarBehavior.floating,
@@ -763,7 +760,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
 
   Future<void> _editPosting(Map<String, dynamic> posting) async {
     if (_selectedCategory == null) return;
-    
+
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => PostingEditDialog(
@@ -774,7 +771,9 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
 
     if (result != null) {
       try {
-        List<String> imageUrls = (result['existingImageUrls'] as List<dynamic>?)?.cast<String>() ?? [];
+        List<String> imageUrls =
+            (result['existingImageUrls'] as List<dynamic>?)?.cast<String>() ??
+            [];
         String? pdfUrl = result['existingPdfUrl'] as String?;
         String? pdfName = result['pdfName'] as String?;
 
@@ -805,7 +804,10 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
           imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
           pdfUrl: pdfUrl,
           pdfName: pdfName,
-          removePdf: pdfUrl == null && result['existingPdfUrl'] == null && result['pdfFile'] == null,
+          removePdf:
+              pdfUrl == null &&
+              result['existingPdfUrl'] == null &&
+              result['pdfFile'] == null,
         );
 
         if (mounted) {
@@ -824,9 +826,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: ErrorNotification(
-                message: 'Failed to update post: $e',
-              ),
+              content: ErrorNotification(message: 'Failed to update post: $e'),
               backgroundColor: Colors.transparent,
               elevation: 0,
               behavior: SnackBarBehavior.floating,
@@ -842,9 +842,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Post'),
-        content: const Text(
-          'Are you sure you want to delete this post?',
-        ),
+        content: const Text('Are you sure you want to delete this post?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -852,9 +850,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.deleteRed,
-            ),
+            style: TextButton.styleFrom(foregroundColor: AppColors.deleteRed),
             child: const Text('Delete'),
           ),
         ],
@@ -880,9 +876,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: ErrorNotification(
-                message: 'Failed to delete post: $e',
-              ),
+              content: ErrorNotification(message: 'Failed to delete post: $e'),
               backgroundColor: Colors.transparent,
               elevation: 0,
               behavior: SnackBarBehavior.floating,
@@ -904,8 +898,18 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
       return 'Invalid date';
     }
     final months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
@@ -943,7 +947,8 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
                               ),
                             Text(
                               _selectedCategory != null
-                                  ? _selectedCategory!['title'] as String? ?? 'Category'
+                                  ? _selectedCategory!['title'] as String? ??
+                                        'Category'
                                   : 'Barangay Informations',
                               style: const TextStyle(
                                 fontSize: 32,
@@ -967,18 +972,18 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
                       child: _isLoading
                           ? const Center(child: CircularProgressIndicator())
                           : _loadError != null
-                              ? Center(
-                                  child: Text(
-                                    _loadError!,
-                                    style: const TextStyle(
-                                      color: AppColors.deleteRed,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                )
-                              : _selectedCategory != null
-                                  ? _buildPostingsView()
-                                  : _buildCategoriesView(),
+                          ? Center(
+                              child: Text(
+                                _loadError!,
+                                style: const TextStyle(
+                                  color: AppColors.deleteRed,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            )
+                          : _selectedCategory != null
+                          ? _buildPostingsView()
+                          : _buildCategoriesView(),
                     ),
                   ),
                 ],
@@ -994,16 +999,12 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final w = constraints.maxWidth;
-        final crossAxisCount = w >= 1200
-            ? 4
-            : (w >= 900 ? 3 : 2);
+        final crossAxisCount = w >= 1200 ? 4 : (w >= 900 ? 3 : 2);
 
         return CustomScrollView(
           slivers: [
             // Branding Section
-            SliverToBoxAdapter(
-              child: _buildBrandingSection(),
-            ),
+            SliverToBoxAdapter(child: _buildBrandingSection()),
             // Public Informations Label
             SliverToBoxAdapter(
               child: Padding(
@@ -1028,16 +1029,13 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
                   mainAxisSpacing: 20,
                   childAspectRatio: 1.1,
                 ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    if (index == _categories.length) {
-                      return _buildAddCategoryCard();
-                    }
-                    final category = _categories[index];
-                    return _buildCategoryCard(category);
-                  },
-                  childCount: _categories.length + 1,
-                ),
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  if (index == _categories.length) {
+                    return _buildAddCategoryCard();
+                  }
+                  final category = _categories[index];
+                  return _buildCategoryCard(category);
+                }, childCount: _categories.length + 1),
               ),
             ),
           ],
@@ -1096,10 +1094,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
           const SizedBox(height: 4),
           Text(
             'Manage the logo and cover image shown on the mobile app.',
-            style: TextStyle(
-              fontSize: 14,
-              color: AppColors.mediumGrey,
-            ),
+            style: TextStyle(fontSize: 14, color: AppColors.mediumGrey),
           ),
           const SizedBox(height: 20),
           // Display Name Row
@@ -1131,10 +1126,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
         const SizedBox(height: 2),
         Text(
           'Displayed in the mobile app header',
-          style: TextStyle(
-            fontSize: 13,
-            color: AppColors.mediumGrey,
-          ),
+          style: TextStyle(fontSize: 13, color: AppColors.mediumGrey),
         ),
         const SizedBox(height: 12),
         // Text Field
@@ -1199,7 +1191,10 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryGreen,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -1238,10 +1233,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
               const SizedBox(height: 2),
               Text(
                 'Used as the circular logo on the mobile app',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.mediumGrey,
-                ),
+                style: TextStyle(fontSize: 13, color: AppColors.mediumGrey),
               ),
               const SizedBox(height: 4),
               Text(
@@ -1266,7 +1258,10 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryGreen,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -1282,11 +1277,16 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
                       label: const Text('Remove'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.deleteRed,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        side: BorderSide(color: AppColors.deleteRed.withOpacity(0.5)),
+                        side: BorderSide(
+                          color: AppColors.deleteRed.withOpacity(0.5),
+                        ),
                         textStyle: const TextStyle(fontSize: 13),
                       ),
                     ),
@@ -1340,10 +1340,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
                   const SizedBox(height: 4),
                   Text(
                     'No logo',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.lightGrey,
-                    ),
+                    style: TextStyle(fontSize: 11, color: AppColors.lightGrey),
                   ),
                 ],
               ),
@@ -1369,10 +1366,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
         const SizedBox(height: 2),
         Text(
           'Displayed at the top of the mobile Barangay Information screen',
-          style: TextStyle(
-            fontSize: 13,
-            color: AppColors.mediumGrey,
-          ),
+          style: TextStyle(fontSize: 13, color: AppColors.mediumGrey),
         ),
         const SizedBox(height: 4),
         Text(
@@ -1400,7 +1394,10 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryGreen,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -1416,7 +1413,10 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
                 label: const Text('Remove'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.deleteRed,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -1462,10 +1462,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
                   const SizedBox(height: 8),
                   Text(
                     'No cover image uploaded',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.lightGrey,
-                    ),
+                    style: TextStyle(fontSize: 13, color: AppColors.lightGrey),
                   ),
                 ],
               ),
@@ -1503,7 +1500,10 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryGreen,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 12,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -1574,7 +1574,10 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primaryGreen,
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 14,
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
@@ -1615,7 +1618,8 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
   }
 
   Widget _buildPostingCard(Map<String, dynamic> posting) {
-    final imageUrls = (posting['imageUrls'] as List<dynamic>?)?.cast<String>() ?? [];
+    final imageUrls =
+        (posting['imageUrls'] as List<dynamic>?)?.cast<String>() ?? [];
     // Fallback to old single imageUrl for backward compatibility
     final singleImageUrl = posting['imageUrl'] as String?;
     if (singleImageUrl != null && imageUrls.isEmpty) {
@@ -1623,7 +1627,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
     }
     final hasImages = imageUrls.isNotEmpty;
     final hasPdf = posting['pdfUrl'] != null;
-    
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.white,
@@ -1647,7 +1651,9 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
               height: 100,
               decoration: BoxDecoration(
                 color: AppColors.inputBackground,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(16),
+                ),
               ),
               child: Center(
                 child: Icon(
@@ -1712,7 +1718,10 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
                   if (hasPdf) ...[
                     const SizedBox(height: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.deleteRed.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(6),
@@ -1782,7 +1791,10 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
             height: 140,
             color: AppColors.inputBackground,
             child: const Center(
-              child: Icon(Icons.image_not_supported, color: AppColors.lightGrey),
+              child: Icon(
+                Icons.image_not_supported,
+                color: AppColors.lightGrey,
+              ),
             ),
           ),
         ),
@@ -1815,7 +1827,10 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
                       width: 140,
                       height: 124,
                       color: Colors.grey.shade300,
-                      child: const Icon(Icons.image_not_supported, color: AppColors.lightGrey),
+                      child: const Icon(
+                        Icons.image_not_supported,
+                        color: AppColors.lightGrey,
+                      ),
                     ),
                   ),
                 ),
@@ -1851,7 +1866,9 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
               Icon(
                 icon,
                 size: 14,
-                color: isDestructive ? AppColors.deleteRed : AppColors.primaryGreen,
+                color: isDestructive
+                    ? AppColors.deleteRed
+                    : AppColors.primaryGreen,
               ),
               const SizedBox(width: 4),
               Text(
@@ -1859,7 +1876,9 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
-                  color: isDestructive ? AppColors.deleteRed : AppColors.primaryGreen,
+                  color: isDestructive
+                      ? AppColors.deleteRed
+                      : AppColors.primaryGreen,
                 ),
               ),
             ],
@@ -1893,11 +1912,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.add,
-                size: 40,
-                color: Colors.grey.shade600,
-              ),
+              Icon(Icons.add, size: 40, color: Colors.grey.shade600),
               const SizedBox(height: 12),
               Text(
                 'Create Category',
@@ -1921,10 +1936,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
       shadowColor: Colors.black.withOpacity(0.1),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: Colors.grey.withOpacity(0.15),
-          width: 1,
-        ),
+        side: BorderSide(color: Colors.grey.withOpacity(0.15), width: 1),
       ),
       color: Colors.white,
       child: GestureDetector(
@@ -1937,11 +1949,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    icon,
-                    size: 60,
-                    color: AppColors.primaryGreen,
-                  ),
+                  Icon(icon, size: 60, color: AppColors.primaryGreen),
                   const SizedBox(height: 16),
                   Text(
                     category['title'] as String? ?? 'Untitled',
@@ -1989,10 +1997,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
                       }
                     },
                     itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: Text('Edit'),
-                      ),
+                      const PopupMenuItem(value: 'edit', child: Text('Edit')),
                       const PopupMenuItem(
                         value: 'delete',
                         child: Text(

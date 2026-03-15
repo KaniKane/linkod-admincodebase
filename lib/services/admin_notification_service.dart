@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:local_notifier/local_notifier.dart';
 
@@ -8,11 +9,13 @@ import 'package:local_notifier/local_notifier.dart';
 /// Uses Firestore real-time listener to detect new documents in awaitingApproval.
 /// Only shows notifications for NEWLY ADDED documents (not existing ones on app start).
 class AdminNotificationService {
-  static final AdminNotificationService _instance = AdminNotificationService._internal();
+  static final AdminNotificationService _instance =
+      AdminNotificationService._internal();
   factory AdminNotificationService() => _instance;
   AdminNotificationService._internal();
 
   StreamSubscription<QuerySnapshot>? _subscription;
+  StreamSubscription<User?>? _authSubscription;
   bool _isInitialized = false;
 
   /// Initialize the notification service and start listening
@@ -25,7 +28,12 @@ class AdminNotificationService {
       shortcutPolicy: ShortcutPolicy.requireCreate,
     );
 
-    _startListening();
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen(
+      (user) => _handleAuthStateChanged(user),
+    );
+
+    // Handle currently signed-in user immediately.
+    await _handleAuthStateChanged(FirebaseAuth.instance.currentUser);
     _isInitialized = true;
   }
 
@@ -33,14 +41,59 @@ class AdminNotificationService {
   void dispose() {
     _subscription?.cancel();
     _subscription = null;
+    _authSubscription?.cancel();
+    _authSubscription = null;
     _isInitialized = false;
+  }
+
+  Future<void> _handleAuthStateChanged(User? user) async {
+    await _subscription?.cancel();
+    _subscription = null;
+
+    if (user == null) {
+      return;
+    }
+
+    final isSuperAdmin = await _isSuperAdmin(user.uid);
+    if (!isSuperAdmin) {
+      if (kDebugMode) {
+        debugPrint(
+          'AdminNotificationService: disabled for non-super-admin account.',
+        );
+      }
+      return;
+    }
+
+    _startListening();
+  }
+
+  Future<bool> _isSuperAdmin(String uid) async {
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+      if (!userDoc.exists) return false;
+
+      final role = (userDoc.data()?['role'] as String? ?? '').toLowerCase();
+      return role == 'super_admin';
+    } catch (_) {
+      return false;
+    }
   }
 
   void _startListening() {
     _subscription = FirebaseFirestore.instance
         .collection('awaitingApproval')
         .snapshots()
-        .listen(_handleSnapshot);
+        .listen(
+          _handleSnapshot,
+          onError: (Object error, StackTrace stackTrace) {
+            if (kDebugMode) {
+              debugPrint('AdminNotificationService listener error: $error');
+            }
+          },
+        );
   }
 
   void _handleSnapshot(QuerySnapshot snapshot) {
@@ -58,8 +111,8 @@ class AdminNotificationService {
     if (data == null) return;
 
     final fullName = data['fullName'] as String? ?? 'Someone';
-    final phoneNumber = data['phoneNumber'] as String? ?? '';
-    final isResubmission = data['reapplicationCount'] != null &&
+    final isResubmission =
+        data['reapplicationCount'] != null &&
         (data['reapplicationCount'] as int) > 0;
 
     final title = isResubmission

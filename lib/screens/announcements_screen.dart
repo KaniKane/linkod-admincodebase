@@ -104,6 +104,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     int pendingProducts = 0;
     int pendingTasks = 0;
     int pendingUsers = 0;
+    final isSuperAdmin =
+        (_currentUserRole ?? '').toLowerCase() == 'super_admin';
     try {
       final pendingAnnouncementsSnap = await FirebaseFirestore.instance
           .collection('announcements')
@@ -128,16 +130,19 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           .get();
       pendingTasks = pendingTasksSnap.count ?? 0;
     } catch (_) {}
-    try {
-      final pendingUsersSnap = await FirebaseFirestore.instance
-          .collection('awaitingApproval')
-          .count()
-          .get();
-      pendingUsers = pendingUsersSnap.count ?? 0;
-    } catch (_) {}
+    if (isSuperAdmin) {
+      try {
+        final pendingUsersSnap = await FirebaseFirestore.instance
+            .collection('awaitingApproval')
+            .count()
+            .get();
+        pendingUsers = pendingUsersSnap.count ?? 0;
+      } catch (_) {}
+    }
     if (mounted) {
       setState(() {
-        _pendingApprovalsCount = pendingAnnouncements + pendingProducts + pendingTasks;
+        _pendingApprovalsCount =
+            pendingAnnouncements + pendingProducts + pendingTasks;
         _pendingUsersCount = pendingUsers;
       });
     }
@@ -153,7 +158,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       var list = snapshot.docs.map((doc) {
         final d = doc.data();
         final imageUrlsRaw = d['imageUrls'] as List<dynamic>?;
-        final imageUrls = imageUrlsRaw?.whereType<String>().toList() ?? <String>[];
+        final imageUrls =
+            imageUrlsRaw?.whereType<String>().toList() ?? <String>[];
         return {
           'id': doc.id,
           'title': d['title'] as String? ?? '',
@@ -195,12 +201,14 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           setState(() {
             _currentUserRole = role;
           });
+          await _loadPendingCounts();
         }
       } catch (_) {
         if (mounted) {
           setState(() {
             _currentUserRole = 'admin';
           });
+          await _loadPendingCounts();
         }
       }
     }
@@ -237,8 +245,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               const DashboardScreen(),
           transitionDuration: Duration.zero,
           reverseTransitionDuration: Duration.zero,
-          transitionsBuilder:
-              (context, animation, secondaryAnimation, child) => child,
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              child,
         ),
       );
     } else if (route == '/approvals') {
@@ -249,8 +257,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               const ApprovalsScreen(),
           transitionDuration: Duration.zero,
           reverseTransitionDuration: Duration.zero,
-          transitionsBuilder:
-              (context, animation, secondaryAnimation, child) => child,
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              child,
         ),
       );
     } else if (route == '/user-management') {
@@ -261,8 +269,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               const UserManagementScreen(),
           transitionDuration: Duration.zero,
           reverseTransitionDuration: Duration.zero,
-          transitionsBuilder:
-              (context, animation, secondaryAnimation, child) => child,
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              child,
         ),
       );
     } else if (route == '/barangay-information') {
@@ -273,8 +281,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               BarangayInformationScreen(),
           transitionDuration: Duration.zero,
           reverseTransitionDuration: Duration.zero,
-          transitionsBuilder:
-              (context, animation, secondaryAnimation, child) => child,
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              child,
         ),
       );
     }
@@ -438,7 +446,10 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                     },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.red,
                         borderRadius: BorderRadius.circular(10),
@@ -486,7 +497,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             (data['audiences'] as List?)?.whereType<String>().toList() ??
             <String>[];
         final imageUrlsRaw = data['imageUrls'] as List<dynamic>?;
-        final imageUrls = imageUrlsRaw?.whereType<String>().toList() ?? <String>[];
+        final imageUrls =
+            imageUrlsRaw?.whereType<String>().toList() ?? <String>[];
         return AnnouncementDraft(
           id: doc.id,
           title: (data['title'] ?? '') as String,
@@ -755,7 +767,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                     CustomButton(
                       text: 'Post and send push',
                       isFullWidth: true,
-                      onPressed: () => Navigator.of(context).pop('post_and_push'),
+                      onPressed: () =>
+                          Navigator.of(context).pop('post_and_push'),
                     ),
                     const SizedBox(height: 12),
                     OutlineButton(
@@ -819,17 +832,21 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             .collection('announcements')
             .doc(_currentEditingAnnouncementId)
             .update({
-          'title': title,
-          'content': content,
-          'originalContent': originalContent,
-          'aiRefinedContent': refinedContent.isNotEmpty ? refinedContent : null,
-          'audiences': _selectedAudiences.toList(),
-          'imageUrls': imageUrls,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+              'title': title,
+              'content': content,
+              'originalContent': originalContent,
+              'aiRefinedContent': refinedContent.isNotEmpty
+                  ? refinedContent
+                  : null,
+              'audiences': _selectedAudiences.toList(),
+              'imageUrls': imageUrls,
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
 
         if (mounted) {
-          setState(() => _currentEditingAnnouncementId = null); // Clear editing state
+          setState(
+            () => _currentEditingAnnouncementId = null,
+          ); // Clear editing state
           _loadPublishedAnnouncements();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -843,23 +860,23 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         final announcementRef = await FirebaseFirestore.instance
             .collection('announcements')
             .add({
-          'title': title,
-          'content': content,
-          'originalContent': originalContent,
-          'aiRefinedContent': refinedContent.isNotEmpty
-              ? refinedContent
-              : null,
-          'audiences': _selectedAudiences.toList(),
-          'imageUrls': imageUrls,
-          'status': status,
-          'postedBy': postedBy,
-          if (postedByPosition != null && postedByPosition.isNotEmpty)
-            'postedByPosition': postedByPosition,
-          if (postedByUserId != null) 'postedByUserId': postedByUserId,
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-          'isActive': true,
-        });
+              'title': title,
+              'content': content,
+              'originalContent': originalContent,
+              'aiRefinedContent': refinedContent.isNotEmpty
+                  ? refinedContent
+                  : null,
+              'audiences': _selectedAudiences.toList(),
+              'imageUrls': imageUrls,
+              'status': status,
+              'postedBy': postedBy,
+              if (postedByPosition != null && postedByPosition.isNotEmpty)
+                'postedByPosition': postedByPosition,
+              if (postedByUserId != null) 'postedByUserId': postedByUserId,
+              'createdAt': FieldValue.serverTimestamp(),
+              'updatedAt': FieldValue.serverTimestamp(),
+              'isActive': true,
+            });
 
         if (!mounted) return;
 
@@ -873,7 +890,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                   .doc(postedByUserId)
                   .get();
               if (adminDoc.exists) {
-                adminName = (adminDoc.data()?['fullName'] as String?) ?? postedBy;
+                adminName =
+                    (adminDoc.data()?['fullName'] as String?) ?? postedBy;
               }
             }
             await FirebaseFirestore.instance.collection('adminActivities').add({
@@ -1472,7 +1490,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                     valueColor: AlwaysStoppedAnimation<Color>(AppColors.white),
                   ),
                 )
-              :               const Text(
+              : const Text(
                   'Suggest demographic',
                   style: TextStyle(
                     fontSize: 16,
@@ -1534,7 +1552,10 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.mediumGrey.withOpacity(0.5), width: 1),
+        border: Border.all(
+          color: AppColors.mediumGrey.withOpacity(0.5),
+          width: 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1546,16 +1567,25 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                 child: GestureDetector(
                   onTap: _pickAnnouncementImages,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.primaryGreen.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.primaryGreen.withOpacity(0.4)),
+                      border: Border.all(
+                        color: AppColors.primaryGreen.withOpacity(0.4),
+                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.add_photo_alternate_outlined, color: AppColors.primaryGreen, size: 22),
+                        Icon(
+                          Icons.add_photo_alternate_outlined,
+                          color: AppColors.primaryGreen,
+                          size: 22,
+                        ),
                         const SizedBox(width: 8),
                         const Text(
                           'Add image(s)',
@@ -1600,7 +1630,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                           width: 96,
                           height: 96,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, size: 40),
+                          errorBuilder: (_, __, ___) =>
+                              const Icon(Icons.broken_image_outlined, size: 40),
                         ),
                         onRemove: () => _removeAnnouncementImageUrl(i),
                         onTap: () => _showFullScreenImage(url),
@@ -1653,11 +1684,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             onTap: onTap,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
-              child: SizedBox(
-                width: 96,
-                height: 96,
-                child: child,
-              ),
+              child: SizedBox(width: 96, height: 96, child: child),
             ),
           ),
           Positioned(
@@ -1671,7 +1698,11 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                   color: AppColors.primaryGreen,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.close, color: AppColors.white, size: 16),
+                child: const Icon(
+                  Icons.close,
+                  color: AppColors.white,
+                  size: 16,
+                ),
               ),
             ),
           ),
@@ -1689,9 +1720,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            InteractiveViewer(
-              child: Image.network(url, fit: BoxFit.contain),
-            ),
+            InteractiveViewer(child: Image.network(url, fit: BoxFit.contain)),
             Positioned(
               top: -8,
               right: -8,
@@ -1764,13 +1793,17 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     }
 
     return MouseRegion(
-      cursor: _isPostingAnnouncement ? SystemMouseCursors.basic : SystemMouseCursors.click,
+      cursor: _isPostingAnnouncement
+          ? SystemMouseCursors.basic
+          : SystemMouseCursors.click,
       child: GestureDetector(
         onTap: _isPostingAnnouncement ? null : _handlePostAnnouncement,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           decoration: BoxDecoration(
-            color: _isPostingAnnouncement ? AppColors.mediumGrey : AppColors.primaryGreen,
+            color: _isPostingAnnouncement
+                ? AppColors.mediumGrey
+                : AppColors.primaryGreen,
             borderRadius: BorderRadius.circular(10),
           ),
           child: _isPostingAnnouncement
@@ -1925,11 +1958,11 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                           .collection('announcements')
                           .doc(updatedData['id'] as String)
                           .update({
-                        'title': updatedData['title'],
-                        'content': updatedData['content'],
-                        'imageUrls': updatedData['imageUrls'],
-                        'updatedAt': FieldValue.serverTimestamp(),
-                      });
+                            'title': updatedData['title'],
+                            'content': updatedData['content'],
+                            'imageUrls': updatedData['imageUrls'],
+                            'updatedAt': FieldValue.serverTimestamp(),
+                          });
                       _loadPublishedAnnouncements();
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -2069,7 +2102,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Delete Announcement'),
-          content: const Text('Are you sure you want to delete this announcement? This action cannot be undone.'),
+          content: const Text(
+            'Are you sure you want to delete this announcement? This action cannot be undone.',
+          ),
           actions: [
             Column(
               mainAxisSize: MainAxisSize.min,
@@ -2088,7 +2123,11 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                         if (mounted) {
                           Navigator.of(context).pop();
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: ErrorNotification(message: 'Failed to delete: $e')),
+                            SnackBar(
+                              content: ErrorNotification(
+                                message: 'Failed to delete: $e',
+                              ),
+                            ),
                           );
                           return;
                         }
@@ -2106,7 +2145,10 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                     },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.red,
                         borderRadius: BorderRadius.circular(10),
@@ -2184,8 +2226,10 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
     setState(() {
       _isEditing = true;
       _editTitleController.text = widget.announcement['title'] as String? ?? '';
-      _editContentController.text = widget.announcement['content'] as String? ?? '';
-      _editImageUrls = (widget.announcement['imageUrls'] as List?)
+      _editContentController.text =
+          widget.announcement['content'] as String? ?? '';
+      _editImageUrls =
+          (widget.announcement['imageUrls'] as List?)
               ?.whereType<String>()
               .toList() ??
           [];
@@ -2231,9 +2275,9 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
       }
     }
   }
@@ -2343,7 +2387,10 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                           ),
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFE8F5EC),
                               borderRadius: BorderRadius.circular(4),
@@ -2374,7 +2421,11 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                       value: 'edit',
                       child: Row(
                         children: [
-                          Icon(Icons.edit_outlined, size: 18, color: AppColors.darkGrey),
+                          Icon(
+                            Icons.edit_outlined,
+                            size: 18,
+                            color: AppColors.darkGrey,
+                          ),
                           SizedBox(width: 8),
                           Text('Edit'),
                         ],
@@ -2384,7 +2435,11 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                       value: 'delete',
                       child: Row(
                         children: [
-                          Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                          Icon(
+                            Icons.delete_outline,
+                            size: 18,
+                            color: Colors.red,
+                          ),
                           SizedBox(width: 8),
                           Text('Delete', style: TextStyle(color: Colors.red)),
                         ],
@@ -2425,13 +2480,14 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                   child: GestureDetector(
                     onTap: widget.onViewReaders,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: const Color(0xFFD1D5DB),
-                        ),
+                        border: Border.all(color: const Color(0xFFD1D5DB)),
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
@@ -2521,7 +2577,10 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                 style: const TextStyle(fontSize: 14, color: Color(0xFF1F2937)),
                 decoration: const InputDecoration(
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   isDense: true,
                 ),
               ),
@@ -2603,7 +2662,10 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
               child: GestureDetector(
                 onTap: _pickImages,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF3F4F6),
                     borderRadius: BorderRadius.circular(6),
@@ -2612,7 +2674,11 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.add_photo_alternate_outlined, size: 16, color: Color(0xFF6B7280)),
+                      Icon(
+                        Icons.add_photo_alternate_outlined,
+                        size: 16,
+                        color: Color(0xFF6B7280),
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         'Add Images',
@@ -2637,7 +2703,10 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                   child: GestureDetector(
                     onTap: _cancelEditing,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(6),
@@ -2661,9 +2730,14 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                   child: GestureDetector(
                     onTap: _isSaving ? null : _saveChanges,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
-                        color: _isSaving ? AppColors.mediumGrey : AppColors.primaryGreen,
+                        color: _isSaving
+                            ? AppColors.mediumGrey
+                            : AppColors.primaryGreen,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: _isSaving
@@ -2672,7 +2746,9 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                               height: 16,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
                               ),
                             )
                           : const Text(
@@ -2694,7 +2770,11 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
     );
   }
 
-  Widget _buildImageThumbnail({String? imageUrl, XFile? xFile, required VoidCallback onRemove}) {
+  Widget _buildImageThumbnail({
+    String? imageUrl,
+    XFile? xFile,
+    required VoidCallback onRemove,
+  }) {
     return Container(
       width: 80,
       height: 80,
@@ -2737,7 +2817,9 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF9CA3AF)),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFF9CA3AF),
+                              ),
                             ),
                           ),
                         ),
@@ -2765,11 +2847,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                     color: Colors.red,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(
-                    Icons.close,
-                    size: 14,
-                    color: Colors.white,
-                  ),
+                  child: const Icon(Icons.close, size: 14, color: Colors.white),
                 ),
               ),
             ),
