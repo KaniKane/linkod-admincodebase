@@ -176,8 +176,8 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
               const DashboardScreen(),
           transitionDuration: Duration.zero,
           reverseTransitionDuration: Duration.zero,
-          transitionsBuilder:
-              (context, animation, secondaryAnimation, child) => child,
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              child,
         ),
       );
     } else if (route == '/announcements') {
@@ -188,8 +188,8 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
               const AnnouncementsScreen(),
           transitionDuration: Duration.zero,
           reverseTransitionDuration: Duration.zero,
-          transitionsBuilder:
-              (context, animation, secondaryAnimation, child) => child,
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              child,
         ),
       );
     } else if (route == '/user-management') {
@@ -200,8 +200,8 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
               const UserManagementScreen(),
           transitionDuration: Duration.zero,
           reverseTransitionDuration: Duration.zero,
-          transitionsBuilder:
-              (context, animation, secondaryAnimation, child) => child,
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              child,
         ),
       );
     } else if (route == '/approvals') {
@@ -214,8 +214,8 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
               BarangayInformationScreen(),
           transitionDuration: Duration.zero,
           reverseTransitionDuration: Duration.zero,
-          transitionsBuilder:
-              (context, animation, secondaryAnimation, child) => child,
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              child,
         ),
       );
     }
@@ -317,10 +317,12 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
         .get();
     final list = snapshot.docs.map((doc) {
       final d = doc.data();
-      final imageUrls = (d['imageUrls'] as List<dynamic>?)
-          ?.map((e) => e.toString())
-          .where((s) => s.isNotEmpty)
-          .toList() ?? <String>[];
+      final imageUrls =
+          (d['imageUrls'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .where((s) => s.isNotEmpty)
+              .toList() ??
+          <String>[];
       return {
         'id': doc.id,
         'title': d['title'] as String? ?? '',
@@ -806,7 +808,11 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                           width: 160,
                           height: 160,
                           color: AppColors.inputBackground,
-                          child: const Icon(Icons.image_not_supported_outlined, color: AppColors.lightGrey, size: 40),
+                          child: const Icon(
+                            Icons.image_not_supported_outlined,
+                            color: AppColors.lightGrey,
+                            size: 40,
+                          ),
                         ),
                       ),
                     ),
@@ -899,10 +905,12 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     final description = t['description'] as String? ?? '';
     final requesterName = t['requesterName'] as String? ?? '';
     final createdAt = t['createdAt'] as DateTime?;
-    final imageUrls = (t['imageUrls'] as List<dynamic>?)
-        ?.map((e) => e.toString())
-        .where((s) => s.isNotEmpty)
-        .toList() ?? <String>[];
+    final imageUrls =
+        (t['imageUrls'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .where((s) => s.isNotEmpty)
+            .toList() ??
+        <String>[];
     final dateStr = createdAt != null
         ? createdAt.toIso8601String().substring(0, 16)
         : '—';
@@ -950,7 +958,11 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                           width: 160,
                           height: 160,
                           color: AppColors.inputBackground,
-                          child: const Icon(Icons.image_not_supported_outlined, color: AppColors.lightGrey, size: 40),
+                          child: const Icon(
+                            Icons.image_not_supported_outlined,
+                            color: AppColors.lightGrey,
+                            size: 40,
+                          ),
                         ),
                       ),
                     ),
@@ -1227,10 +1239,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
           children: [
             const Text(
               'Auto-approve',
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColors.darkGrey,
-              ),
+              style: TextStyle(fontSize: 12, color: AppColors.darkGrey),
             ),
             const SizedBox(width: 4),
             const Icon(
@@ -1253,7 +1262,10 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
           AppSidebar(
             currentRoute: '/approvals',
             currentUserRole: _currentUserRole,
-            pendingApprovalsCount: _pendingAnnouncements.length + _pendingProducts.length + _pendingTasks.length,
+            pendingApprovalsCount:
+                _pendingAnnouncements.length +
+                _pendingProducts.length +
+                _pendingTasks.length,
             pendingUsersCount: _pendingUsersCount,
             onNavigate: _navigateTo,
           ),
@@ -1269,7 +1281,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          'Approvals',
+                          'Post Approvals',
                           style: TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.bold,

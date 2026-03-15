@@ -77,7 +77,7 @@ class AppSidebar extends StatelessWidget {
                 const SizedBox(height: 8),
                 _NavItem(
                   iconPath: 'assets/img/icon/boxes.png',
-                  label: 'Approvals',
+                  label: 'Post Approvals',
                   isActive: currentRoute == '/approvals',
                   onTap: () => onNavigate('/approvals'),
                   isSmallScreen: isSmallScreen,
@@ -174,7 +174,9 @@ class _NavItemState extends State<_NavItem> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: effectiveActive ? AppColors.white : AppColors.deleteRed,
+                  color: effectiveActive
+                      ? AppColors.white
+                      : AppColors.deleteRed,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -182,7 +184,9 @@ class _NavItemState extends State<_NavItem> {
                   style: TextStyle(
                     fontSize: widget.isSmallScreen ? 10 : 12,
                     fontWeight: FontWeight.bold,
-                    color: effectiveActive ? AppColors.primaryGreen : AppColors.white,
+                    color: effectiveActive
+                        ? AppColors.primaryGreen
+                        : AppColors.white,
                   ),
                 ),
               ),
