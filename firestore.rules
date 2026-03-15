@@ -185,6 +185,17 @@ service cloud.firestore {
       allow create, update, delete: if isAdminPanelUser();
     }
 
+    // ========= barangaySettings =========
+    // Barangay branding settings (logo and cover image URLs)
+
+    match /barangaySettings/{docId} {
+      // Any signed-in user can read settings (for mobile app bulletin board)
+      allow read: if isSignedIn();
+      
+      // Only admin panel users can update branding settings
+      allow create, update, delete: if isAdminPanelUser();
+    }
+
     // ========= posts =========
     // General posts from mobile app
 
@@ -479,6 +490,27 @@ service cloud.firestore {
 
       allow create: if isSignedIn()
         && request.resource.data.userId == request.auth.uid;
+    }
+
+    // ==================== OTP & Phone Verification ====================
+
+    /// Pending OTP Records
+    /// - Only accessible via Cloud Functions (service account)
+    /// - Stores temporary OTP codes with 2-minute expiration
+    /// - Clients cannot directly read/write (security via rules)
+    match /pendingOtps/{docId} {
+      allow read, write: if false;
+      // Cloud Functions have service account access
+    }
+
+    /// Verified Phone Numbers
+    /// - Authenticated users can read (check if phone is verified)
+    /// - Only writable via Cloud Functions (after OTP verification)
+    /// - Stores phone number verification records
+    match /verifiedPhones/{phoneNumber} {
+      allow read: if isSignedIn();
+      allow write: if false;
+      // Only writable via Cloud Functions
     }
   }
 }

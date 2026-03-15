@@ -321,6 +321,30 @@ exports.onProductMessageCreated = functions.firestore
     });
   });
 
+exports.onProductReplyCreated = functions.firestore
+  .document('products/{productId}/messages/{messageId}')
+  .onCreate(async (snap, context) => {
+    const { productId, messageId } = context.params;
+    const msgData = snap.data() || {};
+    const senderId = msgData.senderId;
+    const parentId = msgData.parentId;
+    // Only process replies (messages with parentId)
+    if (!parentId) return;
+    // Fetch parent message to get its sender
+    const parentSnap = await db.collection('products').doc(productId).collection('messages').doc(parentId).get();
+    if (!parentSnap.exists) return;
+    const parentSenderId = (parentSnap.data() || {}).senderId;
+    // Don't notify if parent sender is the same as reply sender
+    if (!parentSenderId || parentSenderId === senderId) return;
+    const senderName = msgData.senderName || 'Someone';
+    await sendPushToUser(parentSenderId, 'Reply', `${senderName} replied to your message`, {
+      type: 'reply',
+      productId,
+      parentMessageId: parentId,
+      messageId,
+    });
+  });
+
 // --- Firestore triggers: task volunteer and volunteer acceptance (Phase 1 fix) ---
 
 exports.onTaskVolunteerCreated = functions.firestore

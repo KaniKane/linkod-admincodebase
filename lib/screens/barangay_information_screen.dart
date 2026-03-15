@@ -39,11 +39,20 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
 
   // Branding state variables
   final ImagePicker _imagePicker = ImagePicker();
+  final TextEditingController _displayNameController = TextEditingController();
   String? _currentLogoUrl;
   String? _currentCoverUrl;
+  String? _currentDisplayName;
   File? _pendingLogoFile;
   File? _pendingCoverFile;
   bool _isUploadingBranding = false;
+  bool _isSavingDisplayName = false;
+
+  @override
+  void dispose() {
+    _displayNameController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -137,6 +146,8 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
     setState(() {
       _currentLogoUrl = branding?['barangayLogoUrl'] as String?;
       _currentCoverUrl = branding?['barangayCoverImageUrl'] as String?;
+      _currentDisplayName = branding?['barangayDisplayName'] as String?;
+      _displayNameController.text = _currentDisplayName ?? '';
     });
   }
 
@@ -352,6 +363,51 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
           );
         }
       }
+    }
+  }
+
+  Future<void> _saveDisplayName() async {
+    final displayName = _displayNameController.text.trim();
+    if (displayName.isEmpty) return;
+
+    setState(() {
+      _isSavingDisplayName = true;
+    });
+
+    try {
+      await BarangayBrandingService.updateBarangayDisplayName(displayName);
+      setState(() {
+        _currentDisplayName = displayName;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: SuccessNotification(
+              message: 'Display name updated successfully',
+            ),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: ErrorNotification(
+              message: 'Failed to update display name: $e',
+            ),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isSavingDisplayName = false;
+      });
     }
   }
 
@@ -1046,6 +1102,9 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
             ),
           ),
           const SizedBox(height: 20),
+          // Display Name Row
+          _buildDisplayNameRow(),
+          const Divider(height: 32),
           // Logo Row
           _buildLogoUploadRow(),
           const Divider(height: 32),
@@ -1053,6 +1112,104 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
           _buildCoverUploadRow(),
         ],
       ),
+    );
+  }
+
+  Widget _buildDisplayNameRow() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Title and Description
+        const Text(
+          'Barangay Display Name',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: AppColors.darkGrey,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          'Displayed in the mobile app header',
+          style: TextStyle(
+            fontSize: 13,
+            color: AppColors.mediumGrey,
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Text Field
+        TextField(
+          controller: _displayNameController,
+          minLines: 1,
+          maxLines: 3,
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.newline,
+          decoration: InputDecoration(
+            hintText: 'Barangay Cagbaoto\nBayabas, Surigao del Sur',
+            hintStyle: TextStyle(
+              fontSize: 14,
+              color: AppColors.lightGrey,
+              height: 1.4,
+            ),
+            filled: true,
+            fillColor: AppColors.inputBackground,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(
+                color: AppColors.primaryGreen,
+                width: 1.5,
+              ),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
+          ),
+          style: const TextStyle(
+            fontSize: 14,
+            color: AppColors.darkGrey,
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Save Button
+        Row(
+          children: [
+            ElevatedButton.icon(
+              onPressed: _isSavingDisplayName ? null : _saveDisplayName,
+              icon: _isSavingDisplayName
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.save_outlined, size: 16),
+              label: const Text('Save Display Name'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryGreen,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                elevation: 0,
+                textStyle: const TextStyle(fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 

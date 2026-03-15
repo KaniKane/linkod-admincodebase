@@ -56,6 +56,7 @@ class BarangayBrandingService {
   static Future<void> updateBranding({
     String? logoUrl,
     String? coverImageUrl,
+    String? displayName,
   }) async {
     final updateData = <String, dynamic>{
       'updatedAt': FieldValue.serverTimestamp(),
@@ -67,9 +68,29 @@ class BarangayBrandingService {
     if (coverImageUrl != null) {
       updateData['barangayCoverImageUrl'] = coverImageUrl;
     }
+    if (displayName != null) {
+      updateData['barangayDisplayName'] = displayName;
+    }
 
     await _firestore.collection(_collection).doc(_documentId).set(
       updateData,
+      SetOptions(merge: true),
+    );
+  }
+
+  /// Get the barangay display name
+  static Future<String?> getBarangayDisplayName() async {
+    final branding = await getBranding();
+    return branding?['barangayDisplayName'] as String?;
+  }
+
+  /// Update only the barangay display name
+  static Future<void> updateBarangayDisplayName(String displayName) async {
+    await _firestore.collection(_collection).doc(_documentId).set(
+      {
+        'barangayDisplayName': displayName,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
       SetOptions(merge: true),
     );
   }
