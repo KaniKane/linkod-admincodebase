@@ -1309,9 +1309,9 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                                 Expanded(
                                   child: CustomTabs(
                                     tabs: const [
-                                      'Post Approvals',
-                                      'Marketplace Approvals',
-                                      'Errand Approvals',
+                                      'Announcement Request Post',
+                                      'Marketplace Listing',
+                                      'Job/Errand Posting',
                                     ],
                                     activeIndex: _activeTabIndex,
                                     onTabChanged: (i) =>
@@ -1634,7 +1634,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       return const Padding(
         padding: EdgeInsets.only(top: 24),
         child: Text(
-          'No pending errands.',
+          'No pending job/errand post.',
           style: TextStyle(color: AppColors.mediumGrey),
         ),
       );
