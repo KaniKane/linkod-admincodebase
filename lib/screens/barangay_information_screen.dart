@@ -1494,7 +1494,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
               ElevatedButton.icon(
                 onPressed: _createPosting,
                 icon: const Icon(Icons.add, size: 18),
-                label: const Text('New Post'),
+                label: const Text('Add Item'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryGreen,
                   foregroundColor: Colors.white,
@@ -1589,15 +1589,15 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
 
                 return LayoutBuilder(
                   builder: (context, constraints) {
-                    final crossAxisCount = constraints.maxWidth >= 1200
+                    final crossAxisCount = constraints.maxWidth >= 1000
                         ? 3
                         : (constraints.maxWidth >= 800 ? 2 : 1);
                     return GridView.builder(
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: crossAxisCount,
-                        crossAxisSpacing: 20,
-                        mainAxisSpacing: 20,
-                        childAspectRatio: 0.85,
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 16,
+                        childAspectRatio: 1.02,
                       ),
                       itemCount: postings.length,
                       itemBuilder: (context, index) {
@@ -1641,26 +1641,6 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Image section
-          if (hasImages)
-            _buildMultiImageSection(imageUrls)
-          else
-            Container(
-              height: 100,
-              decoration: BoxDecoration(
-                color: AppColors.inputBackground,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(16),
-                ),
-              ),
-              child: Center(
-                child: Icon(
-                  Icons.article_outlined,
-                  size: 40,
-                  color: AppColors.lightGrey,
-                ),
-              ),
-            ),
           // Content
           Expanded(
             child: Padding(
@@ -1700,17 +1680,34 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
                   ),
                   const SizedBox(height: 10),
                   // Description preview
-                  Expanded(
-                    child: Text(
-                      posting['description'] as String? ?? '',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: const Color(0xFF6B7280),
-                        height: 1.4,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                  Text(
+                    posting['description'] as String? ?? '',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: const Color(0xFF6B7280),
+                      height: 1.4,
                     ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: hasImages
+                        ? _buildMultiImageSection(imageUrls)
+                        : Container(
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: AppColors.inputBackground,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Center(
+                              child: Icon(
+                                Icons.article_outlined,
+                                size: 40,
+                                color: AppColors.lightGrey,
+                              ),
+                            ),
+                          ),
                   ),
                   // PDF indicator
                   if (hasPdf) ...[
@@ -1777,16 +1774,17 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
 
   Widget _buildMultiImageSection(List<String> imageUrls) {
     if (imageUrls.length == 1) {
-      // Single image - full width
+      // Single image - fill available card media space
       return ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.circular(12),
         child: Image.network(
           imageUrls[0],
-          height: 140,
           width: double.infinity,
+          height: double.infinity,
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) => Container(
-            height: 140,
+            width: double.infinity,
+            height: double.infinity,
             color: AppColors.inputBackground,
             child: const Center(
               child: Icon(
@@ -1798,40 +1796,43 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
         ),
       );
     } else {
-      // Multiple images - horizontal scroll
+      // Multiple images - horizontal scroll using the full available media area
       return Container(
-        height: 140,
+        width: double.infinity,
         decoration: BoxDecoration(
           color: AppColors.inputBackground,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: imageUrls.length,
-            padding: const EdgeInsets.all(8),
-            itemBuilder: (context, index) {
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    imageUrls[index],
-                    width: 140,
-                    height: 124,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      width: 140,
-                      height: 124,
-                      color: Colors.grey.shade300,
-                      child: const Icon(
-                        Icons.image_not_supported,
-                        color: AppColors.lightGrey,
+          borderRadius: BorderRadius.circular(12),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final imageWidth = constraints.maxWidth * 0.9;
+              return ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.all(8),
+                itemCount: imageUrls.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.network(
+                      imageUrls[index],
+                      width: imageWidth,
+                      height: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: imageWidth,
+                        height: double.infinity,
+                        color: Colors.grey.shade300,
+                        child: const Icon(
+                          Icons.image_not_supported,
+                          color: AppColors.lightGrey,
+                        ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                },
               );
             },
           ),

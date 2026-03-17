@@ -54,13 +54,17 @@ class _PostingEditDialogState extends State<PostingEditDialog> {
     final imageUrls = widget.initialPosting?['imageUrls'] as List<dynamic>?;
     if (imageUrls != null) {
       for (final url in imageUrls) {
-        _imageItems.add(_ImageItem(url: url as String, id: 'url_${_imageItems.length}'));
+        _imageItems.add(
+          _ImageItem(url: url as String, id: 'url_${_imageItems.length}'),
+        );
       }
     }
     // Fallback to old single imageUrl for backward compatibility
     final singleImageUrl = widget.initialPosting?['imageUrl'] as String?;
     if (singleImageUrl != null && _imageItems.isEmpty) {
-      _imageItems.add(_ImageItem(url: singleImageUrl, id: 'url_${_imageItems.length}'));
+      _imageItems.add(
+        _ImageItem(url: singleImageUrl, id: 'url_${_imageItems.length}'),
+      );
     }
     _existingPdfUrl = widget.initialPosting?['pdfUrl'] as String?;
     _existingPdfName = widget.initialPosting?['pdfName'] as String?;
@@ -78,10 +82,12 @@ class _PostingEditDialogState extends State<PostingEditDialog> {
     if (images.isNotEmpty) {
       setState(() {
         for (final image in images) {
-          _imageItems.add(_ImageItem(
-            file: File(image.path),
-            id: 'file_${_imageItems.length}_${DateTime.now().millisecondsSinceEpoch}',
-          ));
+          _imageItems.add(
+            _ImageItem(
+              file: File(image.path),
+              id: 'file_${_imageItems.length}_${DateTime.now().millisecondsSinceEpoch}',
+            ),
+          );
         }
       });
     }
@@ -127,7 +133,7 @@ class _PostingEditDialogState extends State<PostingEditDialog> {
 
   Widget _buildImagesSection() {
     final totalImages = _imageItems.length;
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -183,14 +189,8 @@ class _PostingEditDialogState extends State<PostingEditDialog> {
             height: 100,
             color: AppColors.inputBackground,
             child: item.isFile
-                ? Image.file(
-                    item.file!,
-                    fit: BoxFit.cover,
-                  )
-                : Image.network(
-                    item.url!,
-                    fit: BoxFit.cover,
-                  ),
+                ? Image.file(item.file!, fit: BoxFit.cover)
+                : Image.network(item.url!, fit: BoxFit.cover),
           ),
         ),
       ),
@@ -228,16 +228,12 @@ class _PostingEditDialogState extends State<PostingEditDialog> {
               height: 100,
               color: AppColors.inputBackground,
               child: item.isFile
-                  ? Image.file(
-                      item.file!,
-                      fit: BoxFit.cover,
-                    )
+                  ? Image.file(item.file!, fit: BoxFit.cover)
                   : Image.network(
                       item.url!,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Center(
-                        child: Icon(Icons.image_not_supported),
-                      ),
+                      errorBuilder: (_, __, ___) =>
+                          const Center(child: Icon(Icons.image_not_supported)),
                     ),
             ),
           ),
@@ -252,11 +248,7 @@ class _PostingEditDialogState extends State<PostingEditDialog> {
               color: Colors.black.withOpacity(0.5),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(
-              Icons.drag_handle,
-              size: 12,
-              color: Colors.white,
-            ),
+            child: const Icon(Icons.drag_handle, size: 12, color: Colors.white),
           ),
         ),
         Positioned(
@@ -271,11 +263,7 @@ class _PostingEditDialogState extends State<PostingEditDialog> {
                 color: Colors.black.withOpacity(0.6),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(
-                Icons.close,
-                size: 14,
-                color: Colors.white,
-              ),
+              child: const Icon(Icons.close, size: 14, color: Colors.white),
             ),
           ),
         ),
@@ -310,10 +298,7 @@ class _PostingEditDialogState extends State<PostingEditDialog> {
             const SizedBox(height: 6),
             Text(
               'Add',
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColors.mediumGrey,
-              ),
+              style: TextStyle(fontSize: 12, color: AppColors.mediumGrey),
             ),
           ],
         ),
@@ -321,11 +306,15 @@ class _PostingEditDialogState extends State<PostingEditDialog> {
     );
   }
 
-  void _showFullScreenImage({_ImageItem? item, String? imageUrl, File? imageFile}) {
+  void _showFullScreenImage({
+    _ImageItem? item,
+    String? imageUrl,
+    File? imageFile,
+  }) {
     // Support both old and new calling patterns
     final File? file = item?.file ?? imageFile;
     final String? url = item?.url ?? imageUrl;
-    
+
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -339,10 +328,7 @@ class _PostingEditDialogState extends State<PostingEditDialog> {
               maxScale: 4.0,
               child: Center(
                 child: file != null
-                    ? Image.file(
-                        file,
-                        fit: BoxFit.contain,
-                      )
+                    ? Image.file(file, fit: BoxFit.contain)
                     : Image.network(
                         url!,
                         fit: BoxFit.contain,
@@ -352,7 +338,7 @@ class _PostingEditDialogState extends State<PostingEditDialog> {
                             child: CircularProgressIndicator(
                               value: progress.expectedTotalBytes != null
                                   ? progress.cumulativeBytesLoaded /
-                                      progress.expectedTotalBytes!
+                                        progress.expectedTotalBytes!
                                   : null,
                               color: Colors.white,
                             ),
@@ -373,11 +359,7 @@ class _PostingEditDialogState extends State<PostingEditDialog> {
                     color: Colors.black.withOpacity(0.5),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: const Icon(
-                    Icons.close,
-                    color: Colors.white,
-                    size: 24,
-                  ),
+                  child: const Icon(Icons.close, color: Colors.white, size: 24),
                 ),
               ),
             ),
@@ -419,7 +401,9 @@ class _PostingEditDialogState extends State<PostingEditDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          widget.initialPosting == null ? 'Create New Post' : 'Edit Post',
+                          widget.initialPosting == null
+                              ? 'Create New Item'
+                              : 'Edit Item',
                           style: const TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
@@ -438,8 +422,14 @@ class _PostingEditDialogState extends State<PostingEditDialog> {
                     ),
                   ),
                   IconButton(
-                    onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close, size: 22, color: Color(0xFF6B7280)),
+                    onPressed: _isLoading
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    icon: const Icon(
+                      Icons.close,
+                      size: 22,
+                      color: Color(0xFF6B7280),
+                    ),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),
@@ -497,18 +487,21 @@ class _PostingEditDialogState extends State<PostingEditDialog> {
             Container(
               padding: const EdgeInsets.fromLTRB(28, 16, 28, 24),
               decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: Colors.grey.shade200),
-                ),
+                border: Border(top: BorderSide(color: Colors.grey.shade200)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+                    onPressed: _isLoading
+                        ? null
+                        : () => Navigator.of(context).pop(),
                     style: TextButton.styleFrom(
                       foregroundColor: const Color(0xFF6B7280),
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -532,13 +525,18 @@ class _PostingEditDialogState extends State<PostingEditDialog> {
                           )
                         : const Icon(Icons.check, size: 18),
                     label: Text(
-                      widget.initialPosting == null ? 'Publish Post' : 'Update Post',
+                      widget.initialPosting == null
+                          ? 'Publish Post'
+                          : 'Update Post',
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryGreen,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -568,10 +566,7 @@ class _PostingEditDialogState extends State<PostingEditDialog> {
   InputDecoration _buildInputDecoration({required String hintText}) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle: TextStyle(
-        fontSize: 14,
-        color: AppColors.lightGrey,
-      ),
+      hintStyle: TextStyle(fontSize: 14, color: AppColors.lightGrey),
       filled: true,
       fillColor: const Color(0xFFF9FAFB),
       border: OutlineInputBorder(
@@ -599,18 +594,11 @@ class _PostingEditDialogState extends State<PostingEditDialog> {
         decoration: BoxDecoration(
           color: const Color(0xFFF9FAFB),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: Colors.grey.shade200,
-            width: 1,
-          ),
+          border: Border.all(color: Colors.grey.shade200, width: 1),
         ),
         child: Row(
           children: [
-            Icon(
-              Icons.attach_file,
-              size: 20,
-              color: AppColors.mediumGrey,
-            ),
+            Icon(Icons.attach_file, size: 20, color: AppColors.mediumGrey),
             const SizedBox(width: 12),
             Text(
               'Choose File',
@@ -661,10 +649,7 @@ class _PostingEditDialogState extends State<PostingEditDialog> {
                 const SizedBox(height: 2),
                 Text(
                   'PDF Attached',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.deleteRed,
-                  ),
+                  style: TextStyle(fontSize: 12, color: AppColors.deleteRed),
                 ),
               ],
             ),
@@ -731,8 +716,14 @@ class _PostingEditDialogState extends State<PostingEditDialog> {
     Navigator.of(context).pop({
       'title': _titleController.text.trim(),
       'description': _descriptionController.text.trim(),
-      'imageFiles': _imageItems.where((item) => item.isFile).map((item) => item.file).toList(),
-      'existingImageUrls': _imageItems.where((item) => item.isUrl).map((item) => item.url).toList(),
+      'imageFiles': _imageItems
+          .where((item) => item.isFile)
+          .map((item) => item.file)
+          .toList(),
+      'existingImageUrls': _imageItems
+          .where((item) => item.isUrl)
+          .map((item) => item.url)
+          .toList(),
       'pdfFile': _selectedPdf,
       'pdfName': _existingPdfName,
       'existingPdfUrl': _existingPdfUrl,

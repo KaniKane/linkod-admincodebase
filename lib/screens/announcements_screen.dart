@@ -201,18 +201,24 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         final imageUrlsRaw = d['imageUrls'] as List<dynamic>?;
         final imageUrls =
             imageUrlsRaw?.whereType<String>().toList() ?? <String>[];
+        final postedByUserId =
+            (d['postedByUserId'] ??
+                    d['createdByUserId'] ??
+                    d['authorUserId'] ??
+                    d['userId'])
+                as String?;
         return {
           'id': doc.id,
           'title': d['title'] as String? ?? '',
           'content': d['content'] as String? ?? '',
           'postedBy': d['postedBy'] as String? ?? '',
-          'postedByUserId': d['postedByUserId'] as String?,
+          'postedByUserId': postedByUserId,
           'createdAt': _parseTimestamp(d['createdAt']),
           'imageUrls': imageUrls,
         };
       }).toList();
       String role = (_currentUserRole ?? 'admin').toLowerCase();
-      if (role == 'admin' && currentUser != null) {
+      if (role != 'super_admin' && currentUser != null) {
         list = list
             .where((a) => a['postedByUserId'] == currentUser.uid)
             .toList();
@@ -243,6 +249,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             _currentUserRole = role;
           });
           await _loadPendingCounts();
+          await _loadPublishedAnnouncements();
         }
       } catch (_) {
         if (mounted) {
@@ -250,6 +257,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             _currentUserRole = 'admin';
           });
           await _loadPendingCounts();
+          await _loadPublishedAnnouncements();
         }
       }
     }
