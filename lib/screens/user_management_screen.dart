@@ -24,7 +24,14 @@ import 'login_screen.dart';
 import 'barangay_information_screen.dart';
 
 class UserManagementScreen extends StatefulWidget {
-  const UserManagementScreen({super.key});
+  const UserManagementScreen({
+    super.key,
+    this.initialTabIndex = 0,
+    this.showAcceptedUsersOnly = false,
+  });
+
+  final int initialTabIndex;
+  final bool showAcceptedUsersOnly;
 
   @override
   State<UserManagementScreen> createState() => _UserManagementScreenState();
@@ -61,6 +68,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   @override
   void initState() {
     super.initState();
+    _activeTabIndex = widget.initialTabIndex.clamp(0, 3);
     _loadAccounts();
     _loadCurrentUserRole();
     _loadPendingApprovalsCount();
@@ -157,6 +165,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       for (final doc in usersSnapshot.docs) {
         final data = doc.data();
         final accountStatus = (data['accountStatus'] as String?)?.toLowerCase();
+        final status = (data['status'] as String?)?.toLowerCase();
         final fullName = (data['fullName'] ?? '') as String;
         final phoneNumber = (data['phoneNumber'] ?? '') as String;
         final role = ((data['role'] ?? '') as String).toLowerCase();
@@ -188,6 +197,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             'position': position.isNotEmpty ? position : 'Admin',
           });
         } else {
+          if (widget.showAcceptedUsersOnly) {
+            final isAccepted =
+                accountStatus == 'active' ||
+                accountStatus == 'accepted' ||
+                status == 'accepted';
+            if (!isAccepted) continue;
+          }
           loadedUsers.add({
             'id': doc.id,
             'name': fullName.isNotEmpty ? fullName : 'Unnamed user',

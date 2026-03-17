@@ -10,23 +10,26 @@ class BarangayPostingService {
   static const String _collection = 'barangayPostings';
 
   /// Get all postings for a category stream
-  static Stream<List<Map<String, dynamic>>> getPostingsStream(String categoryId) {
+  static Stream<List<Map<String, dynamic>>> getPostingsStream(
+    String categoryId,
+  ) {
     return _firestore
         .collection(_collection)
         .where('categoryId', isEqualTo: categoryId)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) {
-              final data = doc.data();
-              return {
-                'id': doc.id,
-                ...data,
-              };
-            }).toList());
+        .map(
+          (snapshot) => snapshot.docs.map((doc) {
+            final data = doc.data();
+            return {'id': doc.id, ...data};
+          }).toList(),
+        );
   }
 
   /// Get all postings for a category (one-time)
-  static Future<List<Map<String, dynamic>>> getPostings(String categoryId) async {
+  static Future<List<Map<String, dynamic>>> getPostings(
+    String categoryId,
+  ) async {
     final snapshot = await _firestore
         .collection(_collection)
         .where('categoryId', isEqualTo: categoryId)
@@ -34,17 +37,21 @@ class BarangayPostingService {
         .get();
     return snapshot.docs.map((doc) {
       final data = doc.data();
-      return {
-        'id': doc.id,
-        ...data,
-      };
+      return {'id': doc.id, ...data};
     }).toList();
   }
 
   /// Upload image file to Firebase Storage
-  static Future<String> uploadImage(File imageFile, String categoryId, String postingId) async {
-    final fileName = '${DateTime.now().millisecondsSinceEpoch}_${path.basename(imageFile.path)}';
-    final ref = _storage.ref().child('barangay_postings/$categoryId/$postingId/$fileName');
+  static Future<String> uploadImage(
+    File imageFile,
+    String categoryId,
+    String postingId,
+  ) async {
+    final fileName =
+        '${DateTime.now().millisecondsSinceEpoch}_${path.basename(imageFile.path)}';
+    final ref = _storage.ref().child(
+      'barangay_postings/$categoryId/$postingId/$fileName',
+    );
     final metadata = SettableMetadata(
       contentType: 'image/jpeg',
       customMetadata: {'uploadedBy': 'admin'},
@@ -54,9 +61,16 @@ class BarangayPostingService {
   }
 
   /// Upload PDF file to Firebase Storage
-  static Future<String> uploadPdf(File pdfFile, String categoryId, String postingId) async {
-    final fileName = '${DateTime.now().millisecondsSinceEpoch}_${path.basename(pdfFile.path)}';
-    final ref = _storage.ref().child('barangay_postings/$categoryId/$postingId/$fileName');
+  static Future<String> uploadPdf(
+    File pdfFile,
+    String categoryId,
+    String postingId,
+  ) async {
+    final fileName =
+        '${DateTime.now().millisecondsSinceEpoch}_${path.basename(pdfFile.path)}';
+    final ref = _storage.ref().child(
+      'barangay_postings/$categoryId/$postingId/$fileName',
+    );
     final metadata = SettableMetadata(
       contentType: 'application/pdf',
       customMetadata: {'uploadedBy': 'admin'},
@@ -87,6 +101,7 @@ class BarangayPostingService {
     List<String>? imageUrls,
     String? pdfUrl,
     String? pdfName,
+    String? imageUrl,
   }) async {
     final docRef = await _firestore.collection(_collection).add({
       'categoryId': categoryId,
@@ -111,13 +126,14 @@ class BarangayPostingService {
     String? pdfUrl,
     String? pdfName,
     bool removePdf = false,
+    String? imageUrl,
   }) async {
     final updateData = <String, dynamic>{
       'title': title,
       'description': description,
       'updatedAt': FieldValue.serverTimestamp(),
     };
-    
+
     if (imageUrls != null) {
       updateData['imageUrls'] = imageUrls;
     }
@@ -130,7 +146,7 @@ class BarangayPostingService {
     if (pdfName != null && !removePdf) {
       updateData['pdfName'] = pdfName;
     }
-    
+
     await _firestore.collection(_collection).doc(postingId).update(updateData);
   }
 

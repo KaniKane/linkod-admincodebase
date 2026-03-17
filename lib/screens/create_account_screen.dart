@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -64,7 +64,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
           .createUserWithEmailAndPassword(email: email, password: password);
       final uid = userCredential.user?.uid;
       if (uid == null) {
-        setState(() => _errorMessage = 'Failed to create account. Please try again.');
+        setState(
+          () => _errorMessage = 'Failed to create account. Please try again.',
+        );
         return;
       }
 
@@ -85,7 +87,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const DraftSavedNotification(
-              message: 'Account request submitted for approval. You can log in with your phone and password; access will be granted after approval.'),
+            message:
+                'Account request submitted for approval. You can log in with your phone and password; access will be granted after approval.',
+          ),
           backgroundColor: Colors.transparent,
           elevation: 0,
           behavior: SnackBarBehavior.floating,
@@ -96,10 +100,13 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     } on FirebaseAuthException catch (e) {
       if (e.code == 'email-already-in-use') {
         setState(() {
-          _errorMessage = 'An account with this phone number already exists. Try logging in or wait for approval.';
+          _errorMessage =
+              'An account with this phone number already exists. Try logging in or wait for approval.';
         });
       } else {
-        setState(() => _errorMessage = e.message ?? 'Sign up failed: ${e.code}');
+        setState(
+          () => _errorMessage = e.message ?? 'Sign up failed: ${e.code}',
+        );
       }
     } catch (e) {
       setState(() {
@@ -138,17 +145,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         child: Row(
           children: [
             // Left branding section
-            Expanded(
-              flex: 2,
-              child: _buildBrandingSection(),
-            ),
+            Expanded(flex: 2, child: _buildBrandingSection()),
             // Right sign up card section
             Expanded(
               flex: 1,
               child: Center(
-                child: SingleChildScrollView(
-                  child: _buildSignUpCard(),
-                ),
+                child: SingleChildScrollView(child: _buildSignUpCard()),
               ),
             ),
           ],
@@ -222,7 +224,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
             children: [
               // Title
               const Text(
-                'Request Sign in',
+                'Request Admin Sign Up',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w600,
@@ -230,7 +232,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 ),
               ),
               const SizedBox(height: 40),
-              
+
               // Name Field
               const Text(
                 'Name',
@@ -274,7 +276,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              
+
               // Phone Number Field
               const Text(
                 'Phone Number',
@@ -318,7 +320,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              
+
               // Password Field
               const Text(
                 'Password',
@@ -364,7 +366,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                     ),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _passwordObscure ? Icons.visibility_off : Icons.visibility,
+                        _passwordObscure
+                            ? Icons.visibility_off
+                            : Icons.visibility,
                         color: AppColors.darkGrey,
                         size: 22,
                       ),
@@ -375,7 +379,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              
+
               // Barangay Position Dropdown
               const Text(
                 'Barangay Position',
@@ -436,7 +440,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 ),
               ),
               const SizedBox(height: 30),
-              
+
               if (_errorMessage != null) ...[
                 ErrorNotification(message: _errorMessage!),
                 const SizedBox(height: 12),
@@ -444,11 +448,11 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
               // Create Admin Button
               _SignUpButton(
-                text: 'Create Admin Account',
+                text: 'Request Sign Up',
                 onPressed: _isLoading ? null : _handleSignUp,
               ),
               const SizedBox(height: 15),
-              
+
               // Log in link
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -461,10 +465,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                       color: AppColors.darkGreyAlt,
                     ),
                   ),
-                  CustomLink(
-                    text: 'Log in',
-                    onTap: _navigateToLogin,
-                  ),
+                  CustomLink(text: 'Log in', onTap: _navigateToLogin),
                 ],
               ),
             ],
@@ -479,10 +480,7 @@ class _SignUpButton extends StatefulWidget {
   final String text;
   final VoidCallback? onPressed;
 
-  const _SignUpButton({
-    required this.text,
-    this.onPressed,
-  });
+  const _SignUpButton({required this.text, this.onPressed});
 
   @override
   State<_SignUpButton> createState() => _SignUpButtonState();

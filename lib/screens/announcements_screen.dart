@@ -24,7 +24,9 @@ import 'user_management_screen.dart';
 import 'barangay_information_screen.dart';
 
 class AnnouncementsScreen extends StatefulWidget {
-  const AnnouncementsScreen({super.key});
+  const AnnouncementsScreen({super.key, this.initialTabIndex = 0});
+
+  final int initialTabIndex;
 
   @override
   State<AnnouncementsScreen> createState() => _AnnouncementsScreenState();
@@ -86,6 +88,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   @override
   void initState() {
     super.initState();
+    _activeTabIndex = widget.initialTabIndex.clamp(0, 2);
     _loadDrafts();
     _loadCurrentUserRole();
     _loadPublishedAnnouncements();

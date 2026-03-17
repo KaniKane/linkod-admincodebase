@@ -21,7 +21,9 @@ import 'barangay_information_screen.dart';
 /// Approvals screen: Post Approvals, Marketplace Approvals, Errand Approvals.
 /// Human-in-the-loop: Admin is the final decision maker (Facebook-style review).
 class ApprovalsScreen extends StatefulWidget {
-  const ApprovalsScreen({super.key});
+  const ApprovalsScreen({super.key, this.initialTabIndex = 0});
+
+  final int initialTabIndex;
 
   @override
   State<ApprovalsScreen> createState() => _ApprovalsScreenState();
@@ -48,6 +50,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
   @override
   void initState() {
     super.initState();
+    _activeTabIndex = widget.initialTabIndex.clamp(0, 2);
     _init();
   }
 

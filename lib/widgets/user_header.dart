@@ -92,11 +92,7 @@ class _UserHeaderState extends State<UserHeader> {
           value: 'profile',
           child: Row(
             children: [
-              Icon(
-                Icons.account_circle,
-                color: AppColors.darkGrey,
-                size: 20,
-              ),
+              Icon(Icons.account_circle, color: AppColors.darkGrey, size: 20),
               const SizedBox(width: 12),
               const Text('Change Profile Picture'),
             ],
@@ -106,11 +102,7 @@ class _UserHeaderState extends State<UserHeader> {
           value: 'password',
           child: Row(
             children: [
-              Icon(
-                Icons.lock,
-                color: AppColors.darkGrey,
-                size: 20,
-              ),
+              Icon(Icons.lock, color: AppColors.darkGrey, size: 20),
               const SizedBox(width: 12),
               const Text('Change Password'),
             ],
@@ -121,16 +113,9 @@ class _UserHeaderState extends State<UserHeader> {
           value: 'logout',
           child: Row(
             children: [
-              Icon(
-                Icons.logout,
-                color: AppColors.deleteRed,
-                size: 20,
-              ),
+              Icon(Icons.logout, color: AppColors.deleteRed, size: 20),
               const SizedBox(width: 12),
-              Text(
-                'Logout',
-                style: TextStyle(color: AppColors.deleteRed),
-              ),
+              Text('Logout', style: TextStyle(color: AppColors.deleteRed)),
             ],
           ),
         ),
@@ -262,9 +247,7 @@ class _UserHeaderState extends State<UserHeader> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const Center(
-          child: CircularProgressIndicator(),
-        ),
+        builder: (context) => const Center(child: CircularProgressIndicator()),
       );
 
       // Upload to Firebase Storage
@@ -321,9 +304,7 @@ class _UserHeaderState extends State<UserHeader> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const Center(
-          child: CircularProgressIndicator(),
-        ),
+        builder: (context) => const Center(child: CircularProgressIndicator()),
       );
 
       // Delete from Firebase Storage
@@ -398,10 +379,12 @@ class _UserHeaderState extends State<UserHeader> {
                 shape: BoxShape.circle,
                 color: AppColors.inputBackground,
                 border: Border.all(
-                  color: _profileImageUrl != null && _profileImageUrl!.isNotEmpty
+                  color:
+                      _profileImageUrl != null && _profileImageUrl!.isNotEmpty
                       ? AppColors.primaryGreen
                       : AppColors.lightGrey,
-                  width: _profileImageUrl != null && _profileImageUrl!.isNotEmpty
+                  width:
+                      _profileImageUrl != null && _profileImageUrl!.isNotEmpty
                       ? 2
                       : 1,
                 ),
@@ -420,7 +403,7 @@ class _UserHeaderState extends State<UserHeader> {
                               strokeWidth: 2,
                               value: loadingProgress.expectedTotalBytes != null
                                   ? loadingProgress.cumulativeBytesLoaded /
-                                      loadingProgress.expectedTotalBytes!
+                                        loadingProgress.expectedTotalBytes!
                                   : null,
                             ),
                           );
@@ -433,11 +416,7 @@ class _UserHeaderState extends State<UserHeader> {
                           );
                         },
                       )
-                    : Icon(
-                        Icons.person,
-                        color: AppColors.darkGrey,
-                        size: 36,
-                      ),
+                    : Icon(Icons.person, color: AppColors.darkGrey, size: 36),
               ),
             ),
             const SizedBox(width: 12),
@@ -451,16 +430,15 @@ class _UserHeaderState extends State<UserHeader> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: _isHovered ? AppColors.primaryGreen : AppColors.darkGrey,
+                    color: _isHovered
+                        ? AppColors.primaryGreen
+                        : AppColors.darkGrey,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   _userPosition ?? 'Administrator',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.lightGrey,
-                  ),
+                  style: TextStyle(fontSize: 12, color: AppColors.lightGrey),
                 ),
               ],
             ),
@@ -506,7 +484,9 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
     final newPassword = _newPasswordController.text.trim();
     final confirmPassword = _confirmPasswordController.text.trim();
 
-    if (currentPassword.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty) {
+    if (currentPassword.isEmpty ||
+        newPassword.isEmpty ||
+        confirmPassword.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please fill in all fields'),
@@ -562,27 +542,24 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
       }
 
       debugPrint('Verifying current password with fresh sign-in...');
-      
+
       // Verify current password by signing in (creates a fresh authenticated session)
       final userCredential = await FirebaseAuth.instance
-          .signInWithEmailAndPassword(
-            email: email,
-            password: currentPassword,
-          )
+          .signInWithEmailAndPassword(email: email, password: currentPassword)
           .timeout(const Duration(seconds: 15));
-      
+
       final freshUser = userCredential.user;
       if (freshUser == null) {
         throw Exception('Sign-in succeeded but no user returned');
       }
-      
+
       debugPrint('Sign-in successful, updating password...');
 
       // Update password with the fresh session
       await freshUser
           .updatePassword(newPassword)
           .timeout(const Duration(seconds: 15));
-      
+
       debugPrint('Password updated successfully');
 
       if (mounted) {
@@ -595,7 +572,9 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
         // Then show message after navigation
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Password changed! Please log in with your new password.'),
+            content: Text(
+              'Password changed! Please log in with your new password.',
+            ),
             duration: Duration(seconds: 3),
           ),
         );
@@ -660,9 +639,7 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         width: 400,
         padding: const EdgeInsets.all(24),
@@ -703,7 +680,9 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
                 ),
                 suffixIcon: IconButton(
                   icon: Icon(
-                    _obscureCurrentPassword ? Icons.visibility : Icons.visibility_off,
+                    _obscureCurrentPassword
+                        ? Icons.visibility
+                        : Icons.visibility_off,
                     color: AppColors.lightGrey,
                   ),
                   onPressed: () {
@@ -730,7 +709,9 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
                 ),
                 suffixIcon: IconButton(
                   icon: Icon(
-                    _obscureNewPassword ? Icons.visibility : Icons.visibility_off,
+                    _obscureNewPassword
+                        ? Icons.visibility
+                        : Icons.visibility_off,
                     color: AppColors.lightGrey,
                   ),
                   onPressed: () {
@@ -757,7 +738,9 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
                 ),
                 suffixIcon: IconButton(
                   icon: Icon(
-                    _obscureConfirmPassword ? Icons.visibility : Icons.visibility_off,
+                    _obscureConfirmPassword
+                        ? Icons.visibility
+                        : Icons.visibility_off,
                     color: AppColors.lightGrey,
                   ),
                   onPressed: () {

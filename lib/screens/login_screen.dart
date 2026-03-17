@@ -134,9 +134,7 @@ class _LoginScreenState extends State<LoginScreen> {
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (context) => const DashboardScreen(),
-          ),
+          MaterialPageRoute(builder: (context) => const DashboardScreen()),
         );
       });
     } catch (e) {
@@ -176,17 +174,12 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Row(
           children: [
             // Left branding section
-            Expanded(
-              flex: 2,
-              child: _buildBrandingSection(),
-            ),
+            Expanded(flex: 2, child: _buildBrandingSection()),
             // Right login card section
             Expanded(
               flex: 1,
               child: Center(
-                child: SingleChildScrollView(
-                  child: _buildLoginCard(),
-                ),
+                child: SingleChildScrollView(child: _buildLoginCard()),
               ),
             ),
           ],
@@ -269,7 +262,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 50),
-              
+
               // Phone Number Field
               const Text(
                 'Phone Number',
@@ -313,7 +306,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 25),
-              
+
               // Password Field
               const Text(
                 'Password (min 6 characters)',
@@ -359,7 +352,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _passwordObscure ? Icons.visibility_off : Icons.visibility,
+                        _passwordObscure
+                            ? Icons.visibility_off
+                            : Icons.visibility,
                         color: AppColors.darkGrey,
                         size: 22,
                       ),
@@ -375,7 +370,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ErrorNotification(message: _errorMessage!),
                 const SizedBox(height: 16),
               ],
-              
+
               // Login Button
               _LoginButton(
                 text: 'Login',
@@ -383,7 +378,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 onPressed: _isLoading ? null : _handleLogin,
               ),
               const SizedBox(height: 30),
-              
+
               // Sign up link
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -396,10 +391,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       color: AppColors.darkGreyAlt,
                     ),
                   ),
-                  CustomLink(
-                    text: 'Sign up',
-                    onTap: _navigateToCreateAccount,
-                  ),
+                  CustomLink(text: 'Sign up', onTap: _navigateToCreateAccount),
                 ],
               ),
             ],
@@ -450,8 +442,8 @@ class _LoginButtonState extends State<_LoginButton> {
             color: widget.isLoading
                 ? AppColors.loginGreen.withOpacity(0.7)
                 : (_isHovered
-                    ? AppColors.gradientBottomLeft
-                    : AppColors.loginGreen),
+                      ? AppColors.gradientBottomLeft
+                      : AppColors.loginGreen),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Center(
@@ -461,7 +453,9 @@ class _LoginButtonState extends State<_LoginButton> {
                     height: 22,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.white),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.white,
+                      ),
                     ),
                   )
                 : Text(
