@@ -52,7 +52,7 @@ class AppSidebar extends StatelessWidget {
             child: Column(
               children: [
                 _NavItem(
-                  iconPath: 'assets/img/icon/boxes.png',
+                  icon: Icons.dashboard_outlined,
                   label: 'Dashboard',
                   isActive: currentRoute == '/dashboard',
                   onTap: () => onNavigate('/dashboard'),
@@ -60,7 +60,7 @@ class AppSidebar extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 _NavItem(
-                  iconPath: 'assets/img/icon/sound_mute.png',
+                  icon: Icons.campaign_outlined,
                   label: 'Announcements',
                   isActive: currentRoute == '/announcements',
                   onTap: () => onNavigate('/announcements'),
@@ -68,7 +68,7 @@ class AppSidebar extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 _NavItem(
-                  iconPath: 'assets/img/icon/boxes.png',
+                  icon: Icons.location_city_outlined,
                   label: 'Barangay Information',
                   isActive: currentRoute == '/barangay-information',
                   onTap: () => onNavigate('/barangay-information'),
@@ -76,7 +76,7 @@ class AppSidebar extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 _NavItem(
-                  iconPath: 'assets/img/icon/boxes.png',
+                  icon: Icons.fact_check_outlined,
                   label: 'Post Approvals',
                   isActive: currentRoute == '/approvals',
                   onTap: () => onNavigate('/approvals'),
@@ -86,7 +86,7 @@ class AppSidebar extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 _NavItem(
-                  iconPath: 'assets/img/icon/user-profile-group.png',
+                  icon: Icons.manage_accounts_outlined,
                   label: 'User Management',
                   isActive: currentRoute == '/user-management',
                   onTap: () => onNavigate('/user-management'),
@@ -104,7 +104,7 @@ class AppSidebar extends StatelessWidget {
 }
 
 class _NavItem extends StatefulWidget {
-  final String iconPath;
+  final IconData icon;
   final String label;
   final bool isActive;
   final VoidCallback onTap;
@@ -113,7 +113,7 @@ class _NavItem extends StatefulWidget {
   final int badgeCount;
 
   const _NavItem({
-    required this.iconPath,
+    required this.icon,
     required this.label,
     required this.isActive,
     required this.onTap,
@@ -151,12 +151,7 @@ class _NavItemState extends State<_NavItem> {
         ),
         child: Row(
           children: [
-            Image.asset(
-              widget.iconPath,
-              width: 24,
-              height: 24,
-              color: iconColor,
-            ),
+            Icon(widget.icon, size: 24, color: iconColor),
             const SizedBox(width: 12),
             Flexible(
               child: Text(
