@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/app_sidebar.dart';
 import '../widgets/custom_tabs.dart';
 import '../widgets/search_bar.dart';
@@ -37,6 +38,8 @@ class UserManagementScreen extends StatefulWidget {
 }
 
 class _UserManagementScreenState extends State<UserManagementScreen> {
+  static const String _lastTabPrefsKey = 'user_management_last_tab';
+
   int _activeTabIndex = 0;
   final _searchController = TextEditingController();
   int _currentPage = 1;
@@ -68,9 +71,39 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   void initState() {
     super.initState();
     _activeTabIndex = widget.initialTabIndex.clamp(0, 3);
+    _restoreLastTabIndex();
     _loadAccounts();
     _loadCurrentUserRole();
     _loadPendingApprovalsCount();
+  }
+
+  Future<void> _restoreLastTabIndex() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedIndex = prefs.getInt(_lastTabPrefsKey);
+    if (savedIndex == null || !mounted) return;
+    final normalized = savedIndex.clamp(0, 3);
+    if (normalized == _activeTabIndex) return;
+    setState(() {
+      _activeTabIndex = normalized;
+      _currentPage = 1;
+      _selectedIndices.clear();
+    });
+  }
+
+  Future<void> _persistActiveTabIndex() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_lastTabPrefsKey, _activeTabIndex.clamp(0, 3));
+  }
+
+  void _setActiveTab(int index) {
+    final nextIndex = index.clamp(0, 3);
+    if (nextIndex == _activeTabIndex) return;
+    setState(() {
+      _activeTabIndex = nextIndex;
+      _currentPage = 1;
+      _selectedIndices.clear();
+    });
+    _persistActiveTabIndex();
   }
 
   Future<void> _loadPendingApprovalsCount() async {
@@ -630,7 +663,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               children: [
                                 // Action bar (search + add button)
                                 if (_activeTabIndex ==
-                                    2) // Awaiting Approval tab
+                                    1) // Awaiting Approval tab
                                   Padding(
                                     padding: const EdgeInsets.fromLTRB(
                                       32,
@@ -793,13 +826,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _activeTabIndex = index;
-            _currentPage = 1;
-            _selectedIndices.clear();
-          });
-        },
+        onTap: () => _setActiveTab(index),
         child: Container(
           padding: const EdgeInsets.only(bottom: 16, top: 16),
           decoration: BoxDecoration(
@@ -3128,6 +3155,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     try {
       final adminUid = FirebaseAuth.instance.currentUser?.uid;
       String fullName = 'Applicant';
+      String? declinedUserId;
 
       if (item != null && item['source'] == 'users') {
         // Re-application: user already has Auth and users doc; just set status to declined
@@ -3139,6 +3167,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           'updatedAt': FieldValue.serverTimestamp(),
         });
         fullName = item['name'] ?? fullName;
+        declinedUserId = docId;
       } else {
         // New registration: if mobile sent uid (Auth already created), just create users doc; else create Auth + users
         final doc = await FirebaseFirestore.instance
@@ -3152,22 +3181,26 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         }
         final data = doc.data() ?? {};
         fullName = (data['fullName'] as String? ?? 'Applicant').toString();
-        final phone = (data['phoneNumber'] as String?)?.toString().trim() ?? '';
+        final phone =
+            ((data['phoneNumber'] ??
+                        data['phone'] ??
+                        data['contactNumber'] ??
+                        data['mobileNumber'])
+                    as String?)
+                ?.toString()
+                .trim() ??
+            '';
+        final requestEmail =
+            (data['email'] as String?)?.toString().trim() ?? '';
         final existingUid = data['uid'] as String?;
         final category =
             (data['category'] ?? data['demographicCategory'] ?? '') as String;
         final role = ((data['role'] ?? 'user') as String).toLowerCase();
 
-        if (phone.isEmpty) {
-          if (mounted)
-            setState(
-              () => _errorMessage =
-                  'Phone number required to decline with governance.',
-            );
-          return;
-        }
-
-        final email = '$phone@linkod.com';
+        // Prefer request email when present; otherwise derive one from phone.
+        final email = requestEmail.isNotEmpty
+            ? requestEmail
+            : (phone.isNotEmpty ? '$phone@linkod.com' : '');
         final now = FieldValue.serverTimestamp();
         // Official account roles: super_admin and admin only (stored as-is)
         final firestoreRole = (role == 'super_admin' || role == 'admin')
@@ -3177,6 +3210,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         if (existingUid != null && existingUid.toString().trim().isNotEmpty) {
           // Mobile created Auth at registration — just create users doc with declined
           final uid = existingUid.toString().trim();
+          declinedUserId = uid;
           await FirebaseFirestore.instance.collection('users').doc(uid).set({
             'userId': uid,
             'fullName': fullName,
@@ -3198,6 +3232,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         } else {
           // Legacy: no uid — create Auth + users doc
           final password = data['password'] as String?;
+          if (email.isEmpty) {
+            if (mounted) {
+              setState(
+                () => _errorMessage =
+                    'Missing uid/email in request; cannot decline safely.',
+              );
+            }
+            return;
+          }
           if (password == null || password.isEmpty || password.length < 6) {
             if (mounted)
               setState(
@@ -3242,6 +3285,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             return;
           }
           final uid = newUser.uid;
+          declinedUserId = uid;
           await FirebaseFirestore.instance.collection('users').doc(uid).set({
             'userId': uid,
             'fullName': fullName,
@@ -3288,20 +3332,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
       // Send decline push notification to the user
       try {
-        String? declinedUserId;
         final bool isReapplication = item != null && item['source'] == 'users';
-        if (isReapplication) {
-          declinedUserId = docId;
-        } else {
-          // For new registrations, get the uid from the users doc we just created
-          final doc = await FirebaseFirestore.instance
-              .collection('awaitingApproval')
-              .doc(docId)
-              .get();
-          if (doc.exists) {
-            declinedUserId = doc.data()?['uid'] as String?;
-          }
-        }
         if (declinedUserId != null && declinedUserId.isNotEmpty) {
           await sendUserPush(
             userId: declinedUserId,

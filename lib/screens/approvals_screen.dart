@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/full_screen_image_viewer.dart';
 import '../utils/app_colors.dart';
 import '../widgets/app_sidebar.dart';
@@ -29,6 +30,8 @@ class ApprovalsScreen extends StatefulWidget {
 }
 
 class _ApprovalsScreenState extends State<ApprovalsScreen> {
+  static const String _lastTabPrefsKey = 'approvals_last_tab';
+
   int _activeTabIndex = 0;
   bool _isLoading = false;
   String? _errorMessage;
@@ -50,7 +53,37 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
   void initState() {
     super.initState();
     _activeTabIndex = widget.initialTabIndex.clamp(0, 2);
+    if (widget.initialTabIndex == 0) {
+      _restoreLastTabIndex();
+    } else {
+      _persistActiveTabIndex();
+    }
     _init();
+  }
+
+  Future<void> _restoreLastTabIndex() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedIndex = prefs.getInt(_lastTabPrefsKey);
+    if (savedIndex == null || !mounted) return;
+    final normalized = savedIndex.clamp(0, 2);
+    if (normalized == _activeTabIndex) return;
+    setState(() {
+      _activeTabIndex = normalized;
+    });
+  }
+
+  Future<void> _persistActiveTabIndex() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_lastTabPrefsKey, _activeTabIndex.clamp(0, 2));
+  }
+
+  void _setActiveTab(int index) {
+    final nextIndex = index.clamp(0, 2);
+    if (nextIndex == _activeTabIndex) return;
+    setState(() {
+      _activeTabIndex = nextIndex;
+    });
+    _persistActiveTabIndex();
   }
 
   Future<void> _init() async {
@@ -1313,8 +1346,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                                       'Job/Errand Posting',
                                     ],
                                     activeIndex: _activeTabIndex,
-                                    onTabChanged: (i) =>
-                                        setState(() => _activeTabIndex = i),
+                                    onTabChanged: _setActiveTab,
                                   ),
                                 ),
                                 if (_currentUserRole == 'super_admin')

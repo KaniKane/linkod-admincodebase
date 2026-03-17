@@ -186,14 +186,6 @@ class _AppSidebarState extends State<AppSidebar> {
                           ),
                           const SizedBox(height: 8),
                           _NavItem(
-                            icon: Icons.campaign_outlined,
-                            label: 'Announcements',
-                            isActive: widget.currentRoute == '/announcements',
-                            onTap: () => widget.onNavigate('/announcements'),
-                            isSmallScreen: isSmallScreen,
-                          ),
-                          const SizedBox(height: 8),
-                          _NavItem(
                             icon: Icons.location_city_outlined,
                             label: 'Barangay Information',
                             isActive:
@@ -202,6 +194,15 @@ class _AppSidebarState extends State<AppSidebar> {
                                 widget.onNavigate('/barangay-information'),
                             isSmallScreen: isSmallScreen,
                           ),
+                          const SizedBox(height: 8),
+                          _NavItem(
+                            icon: Icons.campaign_outlined,
+                            label: 'Announcements',
+                            isActive: widget.currentRoute == '/announcements',
+                            onTap: () => widget.onNavigate('/announcements'),
+                            isSmallScreen: isSmallScreen,
+                          ),
+
                           const SizedBox(height: 8),
                           _NavItem(
                             icon: Icons.fact_check_outlined,

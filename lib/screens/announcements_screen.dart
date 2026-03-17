@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../api/announcement_backend_api.dart';
 import '../widgets/app_sidebar.dart';
 import '../widgets/audience_tag.dart';
@@ -32,6 +33,8 @@ class AnnouncementsScreen extends StatefulWidget {
 }
 
 class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
+  static const String _lastTabPrefsKey = 'announcements_last_tab';
+
   int _activeTabIndex = 0;
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
@@ -88,10 +91,46 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   void initState() {
     super.initState();
     _activeTabIndex = widget.initialTabIndex.clamp(0, 2);
+    if (widget.initialTabIndex == 0) {
+      _restoreLastTabIndex();
+    } else {
+      _persistActiveTabIndex();
+    }
     _loadDrafts();
     _loadCurrentUserRole();
     _loadPublishedAnnouncements();
     _loadPendingCounts();
+  }
+
+  Future<void> _restoreLastTabIndex() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedIndex = prefs.getInt(_lastTabPrefsKey);
+    if (savedIndex == null || !mounted) return;
+    final normalized = savedIndex.clamp(0, 2);
+    if (normalized == _activeTabIndex) return;
+    setState(() {
+      _activeTabIndex = normalized;
+    });
+    if (normalized == 2) {
+      _loadPublishedAnnouncements();
+    }
+  }
+
+  Future<void> _persistActiveTabIndex() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_lastTabPrefsKey, _activeTabIndex.clamp(0, 2));
+  }
+
+  void _setActiveTab(int index) {
+    final nextIndex = index.clamp(0, 2);
+    if (nextIndex == _activeTabIndex) return;
+    setState(() {
+      _activeTabIndex = nextIndex;
+    });
+    _persistActiveTabIndex();
+    if (nextIndex == 2) {
+      _loadPublishedAnnouncements();
+    }
   }
 
   static DateTime? _parseTimestamp(dynamic t) {
@@ -407,9 +446,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       _currentDraftId = draft.id;
       _announcementImageUrls = List.from(draft.imageUrls);
       _pickedImages = [];
-      _activeTabIndex = 0; // Switch to Compose tab
       _hasTriggeredAudienceSuggestion = true;
     });
+    _setActiveTab(0); // Switch to Compose tab
   }
 
   void _handleDeleteDraft(String draftId) {
@@ -1083,7 +1122,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           const SizedBox(width: 32),
           _buildTab('Draft', 1),
           const SizedBox(width: 32),
-          _buildTab('Posts', 2),
+          _buildTab('Posted', 2),
         ],
       ),
     );
@@ -1094,12 +1133,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _activeTabIndex = index;
-          });
-          if (index == 2) _loadPublishedAnnouncements();
-        },
+        onTap: () => _setActiveTab(index),
         child: Container(
           padding: const EdgeInsets.only(bottom: 16, top: 16),
           decoration: BoxDecoration(
