@@ -100,6 +100,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     int pendingAnnouncementsGrowth = 0;
 
     final dateWindow = _buildDateWindow();
+    final rangeStart = Timestamp.fromDate(dateWindow.start);
+    final rangeEnd = Timestamp.fromDate(dateWindow.end);
     final canReadAwaitingApproval =
         (_currentUserRole ?? '').toLowerCase() == 'super_admin';
 
@@ -184,6 +186,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       final announcementsSnapshot = await FirebaseFirestore.instance
           .collection('announcements')
+          .where('createdAt', isGreaterThanOrEqualTo: rangeStart)
+          .where('createdAt', isLessThanOrEqualTo: rangeEnd)
           .orderBy('createdAt', descending: true)
           .limit(10)
           .get();
@@ -255,6 +259,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       final adminActivitiesSnapshot = await FirebaseFirestore.instance
           .collection('adminActivities')
+          .where('createdAt', isGreaterThanOrEqualTo: rangeStart)
+          .where('createdAt', isLessThanOrEqualTo: rangeEnd)
           .orderBy('createdAt', descending: true)
           .limit(10)
           .get();
