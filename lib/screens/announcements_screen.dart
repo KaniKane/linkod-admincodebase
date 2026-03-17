@@ -24,9 +24,14 @@ import 'user_management_screen.dart';
 import 'barangay_information_screen.dart';
 
 class AnnouncementsScreen extends StatefulWidget {
-  const AnnouncementsScreen({super.key, this.initialTabIndex = 0});
+  const AnnouncementsScreen({
+    super.key,
+    this.initialTabIndex = 0,
+    this.rememberLastTab = true,
+  });
 
   final int initialTabIndex;
+  final bool rememberLastTab;
 
   @override
   State<AnnouncementsScreen> createState() => _AnnouncementsScreenState();
@@ -91,7 +96,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   void initState() {
     super.initState();
     _activeTabIndex = widget.initialTabIndex.clamp(0, 2);
-    if (widget.initialTabIndex == 0) {
+    if (widget.rememberLastTab) {
       _restoreLastTabIndex();
     } else {
       _persistActiveTabIndex();

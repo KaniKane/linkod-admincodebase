@@ -26,10 +26,12 @@ class UserManagementScreen extends StatefulWidget {
     super.key,
     this.initialTabIndex = 0,
     this.showAcceptedUsersOnly = false,
+    this.rememberLastTab = true,
   });
 
   final int initialTabIndex;
   final bool showAcceptedUsersOnly;
+  final bool rememberLastTab;
 
   @override
   State<UserManagementScreen> createState() => _UserManagementScreenState();
@@ -69,7 +71,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   void initState() {
     super.initState();
     _activeTabIndex = widget.initialTabIndex.clamp(0, 3);
-    _restoreLastTabIndex();
+    if (widget.rememberLastTab) {
+      _restoreLastTabIndex();
+    } else {
+      _persistActiveTabIndex();
+    }
     _loadAccounts();
     _loadCurrentUserRole();
     _loadPendingApprovalsCount();

@@ -480,13 +480,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     Widget page;
     if (route == '/announcements') {
-      page = AnnouncementsScreen(initialTabIndex: initialTabIndex ?? 0);
+      page = AnnouncementsScreen(
+        initialTabIndex: initialTabIndex ?? 0,
+        rememberLastTab: false,
+      );
     } else if (route == '/approvals') {
-      page = ApprovalsScreen(initialTabIndex: initialTabIndex ?? 0);
+      page = ApprovalsScreen(
+        initialTabIndex: initialTabIndex ?? 0,
+        rememberLastTab: false,
+      );
     } else if (route == '/user-management') {
       page = UserManagementScreen(
         initialTabIndex: initialTabIndex ?? 2,
         showAcceptedUsersOnly: showAcceptedUsersOnly,
+        rememberLastTab: false,
       );
     } else {
       return;
