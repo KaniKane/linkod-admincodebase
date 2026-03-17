@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:linkod_admin/screens/dashboard_screen.dart';
 
 import 'firebase_options.dart';
 import 'services/fcm_token_service.dart';

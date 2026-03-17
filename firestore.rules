@@ -107,7 +107,11 @@ service cloud.firestore {
       // Delete: Super Admin (approve/decline flow) or applicant (original email-style mapping)
       allow delete: if isSuperAdmin()
         || (isSignedIn()
-          && request.auth.token.email == (resource.data.phoneNumber + '@linkod.com'));
+          && (
+            request.auth.uid == resource.data.uid
+            || request.auth.token.email == resource.data.email
+            || request.auth.token.email == (resource.data.phoneNumber + '@linkod.com')
+          ));
     }
 
     // ========= announcements =========

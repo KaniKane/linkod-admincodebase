@@ -2,6 +2,8 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const express = require('express');
 const bodyParser = require('body-parser');
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -10,6 +12,288 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 const messaging = admin.messaging();
 const MAX_TOKENS_PER_BATCH = 500;
+const OTP_TTL_MINUTES = 5;
+
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+function validateEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function generateOtpCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function hashOtp(email, otp) {
+  return crypto.createHash('sha256').update(`${normalizeEmail(email)}:${otp}`).digest('hex');
+}
+
+function getMailTransport() {
+  const host = process.env.SMTP_HOST || functions.config()?.smtp?.host;
+  const portRaw = process.env.SMTP_PORT || functions.config()?.smtp?.port || '587';
+  const secureRaw = process.env.SMTP_SECURE || functions.config()?.smtp?.secure || 'false';
+  const user = process.env.SMTP_USER || functions.config()?.smtp?.user;
+  const pass = process.env.SMTP_PASS || functions.config()?.smtp?.pass;
+
+  if (!host || !user || !pass) {
+    throw new Error('SMTP is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS.');
+  }
+
+  return nodemailer.createTransport({
+    host,
+    port: Number(portRaw),
+    secure: String(secureRaw).toLowerCase() === 'true',
+    auth: { user, pass },
+  });
+}
+
+async function sendOtpEmail(email, otp) {
+  const fromAddress =
+    process.env.SMTP_FROM ||
+    functions.config()?.smtp?.from ||
+    'Linkod Admin <no-reply@linkod.local>';
+  const transport = getMailTransport();
+  await transport.sendMail({
+    from: fromAddress,
+    to: email,
+    subject: 'Your Linkod verification code',
+    text: `Your OTP is ${otp}. It expires in ${OTP_TTL_MINUTES} minutes.`,
+    html: `<p>Your OTP is <b>${otp}</b>.</p><p>This code expires in ${OTP_TTL_MINUTES} minutes.</p>`,
+  });
+}
+
+function inferUserTypeByRole(role) {
+  const normalizedRole = String(role || '').toLowerCase();
+  if (normalizedRole === 'admin' || normalizedRole === 'super_admin') {
+    return 'admin';
+  }
+  return 'resident';
+}
+
+function normalizeUserType(value, roleHint) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'admin' || normalized === 'resident') {
+    return normalized;
+  }
+  return inferUserTypeByRole(roleHint);
+}
+
+function mapHttpsErrorToStatus(code) {
+  switch (String(code || '')) {
+    case 'invalid-argument':
+      return 400;
+    case 'unauthenticated':
+      return 401;
+    case 'permission-denied':
+      return 403;
+    case 'not-found':
+      return 404;
+    case 'already-exists':
+      return 409;
+    case 'failed-precondition':
+      return 412;
+    case 'deadline-exceeded':
+      return 408;
+    default:
+      return 500;
+  }
+}
+
+async function performSendEmailOtp(payload) {
+  const email = normalizeEmail(payload?.email);
+  if (!validateEmail(email)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Valid email is required.');
+  }
+
+  try {
+    const existing = await admin.auth().getUserByEmail(email);
+    if (existing) {
+      throw new functions.https.HttpsError('already-exists', 'Email is already registered.');
+    }
+  } catch (e) {
+    if (e.code !== 'auth/user-not-found') {
+      throw e;
+    }
+  }
+
+  const pendingExisting = await db
+    .collection('awaitingApproval')
+    .where('email', '==', email)
+    .where('status', '==', 'pending')
+    .limit(1)
+    .get();
+  if (!pendingExisting.empty) {
+    throw new functions.https.HttpsError(
+      'already-exists',
+      'A pending request already exists for this email.',
+    );
+  }
+
+  const otp = generateOtpCode();
+  const nowMs = Date.now();
+  const expiresAtMs = nowMs + OTP_TTL_MINUTES * 60 * 1000;
+
+  await db.collection('emailOtpRequests').doc(email).set({
+    email,
+    otpHash: hashOtp(email, otp),
+    createdAtMs: nowMs,
+    expiresAtMs,
+    verified: false,
+    consumed: false,
+    attempts: 0,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  await sendOtpEmail(email, otp);
+
+  return {
+    ok: true,
+    expiresInSeconds: OTP_TTL_MINUTES * 60,
+  };
+}
+
+async function performVerifyEmailOtp(payload) {
+  const email = normalizeEmail(payload?.email);
+  const otp = String(payload?.otp || '').trim();
+  if (!validateEmail(email) || otp.length != 6) {
+    throw new functions.https.HttpsError('invalid-argument', 'Email and 6-digit OTP are required.');
+  }
+
+  const ref = db.collection('emailOtpRequests').doc(email);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    throw new functions.https.HttpsError('not-found', 'OTP request not found.');
+  }
+
+  const dataDoc = snap.data() || {};
+  const expiresAtMs = Number(dataDoc.expiresAtMs || 0);
+  const expectedHash = String(dataDoc.otpHash || '');
+  const consumed = dataDoc.consumed === true;
+  const nowMs = Date.now();
+
+  if (consumed) {
+    throw new functions.https.HttpsError('failed-precondition', 'OTP is already used.');
+  }
+  if (expiresAtMs <= nowMs) {
+    throw new functions.https.HttpsError('deadline-exceeded', 'OTP has expired.');
+  }
+
+  const providedHash = hashOtp(email, otp);
+  const attempts = Number(dataDoc.attempts || 0) + 1;
+  if (providedHash !== expectedHash) {
+    await ref.update({ attempts, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    throw new functions.https.HttpsError('permission-denied', 'Invalid OTP code.');
+  }
+
+  await ref.update({
+    verified: true,
+    verifiedAtMs: nowMs,
+    attempts,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  return { ok: true };
+}
+
+async function performCreatePendingSignup(payload) {
+  const email = normalizeEmail(payload?.email);
+  const password = String(payload?.password || '');
+  const firstName = String(payload?.firstName || '').trim();
+  const middleName = String(payload?.middleName || '').trim();
+  const lastName = String(payload?.lastName || '').trim();
+  const position = String(payload?.position || '').trim();
+  const requestedRole = String(payload?.requestedRole || 'admin').toLowerCase();
+  const userType = normalizeUserType(payload?.userType, requestedRole);
+
+  if (!validateEmail(email)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Valid email is required.');
+  }
+  if (password.length < 6) {
+    throw new functions.https.HttpsError('invalid-argument', 'Password must be at least 6 characters.');
+  }
+  if (!firstName || !lastName) {
+    throw new functions.https.HttpsError('invalid-argument', 'First name and last name are required.');
+  }
+
+  const otpRef = db.collection('emailOtpRequests').doc(email);
+  const otpSnap = await otpRef.get();
+  if (!otpSnap.exists) {
+    throw new functions.https.HttpsError('failed-precondition', 'Email must be verified first.');
+  }
+  const otpData = otpSnap.data() || {};
+  const verified = otpData.verified === true;
+  const consumed = otpData.consumed === true;
+  const verifiedAtMs = Number(otpData.verifiedAtMs || 0);
+  const nowMs = Date.now();
+  if (!verified || consumed || nowMs - verifiedAtMs > 15 * 60 * 1000) {
+    throw new functions.https.HttpsError('failed-precondition', 'Email verification is missing or expired.');
+  }
+
+  try {
+    const existing = await admin.auth().getUserByEmail(email);
+    if (existing) {
+      throw new functions.https.HttpsError('already-exists', 'Email is already registered.');
+    }
+  } catch (e) {
+    if (e.code !== 'auth/user-not-found') {
+      throw e;
+    }
+  }
+
+  const pendingExisting = await db
+    .collection('awaitingApproval')
+    .where('email', '==', email)
+    .where('status', '==', 'pending')
+    .limit(1)
+    .get();
+  if (!pendingExisting.empty) {
+    throw new functions.https.HttpsError(
+      'already-exists',
+      'A pending request already exists for this email.',
+    );
+  }
+
+  const userRecord = await admin.auth().createUser({
+    email,
+    password,
+    displayName: [firstName, middleName, lastName].filter(Boolean).join(' '),
+    emailVerified: false,
+  });
+
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const fullName = [firstName, middleName, lastName].filter(Boolean).join(' ');
+  await db.collection('awaitingApproval').doc(userRecord.uid).set({
+    uid: userRecord.uid,
+    userType,
+    firstName,
+    middleName,
+    lastName,
+    fullName,
+    email,
+    requestedRole: userType === 'admin' ? (requestedRole === 'super_admin' ? 'super_admin' : 'admin') : 'resident',
+    role: userType === 'resident' ? 'resident' : 'admin',
+    position: userType === 'admin' ? (position || 'Admin') : '',
+    status: 'pending',
+    accountStatus: 'pending',
+    isApproved: false,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  await otpRef.update({
+    consumed: true,
+    consumedAtMs: nowMs,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  return {
+    ok: true,
+    uid: userRecord.uid,
+    message: 'Waiting for admin approval.',
+  };
+}
 
 // --- FCM helpers (match backend logic) ---
 
@@ -170,6 +454,103 @@ app.post('/send-user-push', async (req, res) => {
   }
 });
 
+app.post('/seed-default-super-admin', async (req, res) => {
+  try {
+    const providedSeedKey = req.headers['x-seed-key'] || req.body?.seedKey;
+    const configuredSeedKey = process.env.SEED_KEY || functions.config()?.app?.seed_key;
+    if (!configuredSeedKey || providedSeedKey !== configuredSeedKey) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const email = normalizeEmail(req.body?.email || process.env.DEFAULT_SUPER_ADMIN_EMAIL || 'dev@system.com');
+    const password = String(req.body?.password || process.env.DEFAULT_SUPER_ADMIN_PASSWORD || '').trim();
+    const fullName = String(req.body?.fullName || 'System Developer').trim();
+
+    if (!validateEmail(email)) {
+      return res.status(400).json({ error: 'Valid email is required.' });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    }
+
+    let userRecord;
+    try {
+      userRecord = await admin.auth().getUserByEmail(email);
+    } catch (e) {
+      if (e.code === 'auth/user-not-found') {
+        userRecord = await admin.auth().createUser({
+          email,
+          password,
+          displayName: fullName,
+          emailVerified: true,
+        });
+      } else {
+        throw e;
+      }
+    }
+
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    await db.collection('users').doc(userRecord.uid).set(
+      {
+        userId: userRecord.uid,
+        fullName,
+        email,
+        role: 'super_admin',
+        userType: 'admin',
+        status: 'approved',
+        accountStatus: 'active',
+        isApproved: true,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+      { merge: true },
+    );
+
+    return res.status(200).json({ ok: true, uid: userRecord.uid, email });
+  } catch (e) {
+    console.error('seed-default-super-admin error:', e);
+    return res.status(503).json({ error: String(e.message || e) });
+  }
+});
+
+app.post('/promote-user-super-admin', async (req, res) => {
+  try {
+    const providedSeedKey = req.headers['x-seed-key'] || req.body?.seedKey;
+    const configuredSeedKey = process.env.SEED_KEY || functions.config()?.app?.seed_key;
+    if (!configuredSeedKey || providedSeedKey !== configuredSeedKey) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const email = normalizeEmail(req.body?.email);
+    if (!validateEmail(email)) {
+      return res.status(400).json({ error: 'Valid email is required.' });
+    }
+
+    const userRecord = await admin.auth().getUserByEmail(email);
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    await db.collection('users').doc(userRecord.uid).set(
+      {
+        userId: userRecord.uid,
+        email,
+        role: 'super_admin',
+        userType: 'admin',
+        status: 'approved',
+        accountStatus: 'active',
+        isApproved: true,
+        isActive: true,
+        updatedAt: now,
+      },
+      { merge: true },
+    );
+
+    return res.status(200).json({ ok: true, uid: userRecord.uid, email });
+  } catch (e) {
+    console.error('promote-user-super-admin error:', e);
+    return res.status(503).json({ error: String(e.message || e) });
+  }
+});
+
 app.post('/send-account-approval', async (req, res) => {
   try {
     const { request_id: requestId, user_id: userId, title, body } = req.body || {};
@@ -234,11 +615,65 @@ app.post('/send-announcement-push', async (req, res) => {
   }
 });
 
+app.post('/auth/send-email-otp', async (req, res) => {
+  try {
+    const result = await performSendEmailOtp(req.body || {});
+    return res.status(200).json(result);
+  } catch (e) {
+    if (e instanceof functions.https.HttpsError) {
+      return res.status(mapHttpsErrorToStatus(e.code)).json({
+        error: e.message,
+        code: e.code,
+      });
+    }
+    console.error('auth/send-email-otp error:', e);
+    return res.status(500).json({ error: String(e.message || e) });
+  }
+});
+
+app.post('/auth/verify-email-otp', async (req, res) => {
+  try {
+    const result = await performVerifyEmailOtp(req.body || {});
+    return res.status(200).json(result);
+  } catch (e) {
+    if (e instanceof functions.https.HttpsError) {
+      return res.status(mapHttpsErrorToStatus(e.code)).json({
+        error: e.message,
+        code: e.code,
+      });
+    }
+    console.error('auth/verify-email-otp error:', e);
+    return res.status(500).json({ error: String(e.message || e) });
+  }
+});
+
+app.post('/auth/create-pending-signup', async (req, res) => {
+  try {
+    const result = await performCreatePendingSignup(req.body || {});
+    return res.status(200).json(result);
+  } catch (e) {
+    if (e instanceof functions.https.HttpsError) {
+      return res.status(mapHttpsErrorToStatus(e.code)).json({
+        error: e.message,
+        code: e.code,
+      });
+    }
+    console.error('auth/create-pending-signup error:', e);
+    return res.status(500).json({ error: String(e.message || e) });
+  }
+});
+
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', service: 'linkod-admin-api' });
 });
 
 exports.api = functions.https.onRequest(app);
+
+exports.sendEmailOtp = functions.https.onCall(async (data) => performSendEmailOtp(data));
+
+exports.verifyEmailOtp = functions.https.onCall(async (data) => performVerifyEmailOtp(data));
+
+exports.createPendingSignup = functions.https.onCall(async (payload) => performCreatePendingSignup(payload));
 
 // --- Firestore triggers: send push on like, comment, task chat, product message (red indicators stay in app) ---
 

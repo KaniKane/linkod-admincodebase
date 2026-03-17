@@ -4,7 +4,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/app_sidebar.dart';
-import '../widgets/custom_tabs.dart';
 import '../widgets/search_bar.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/outline_button.dart';
@@ -20,7 +19,6 @@ import '../utils/app_colors.dart';
 import 'dashboard_screen.dart';
 import 'announcements_screen.dart';
 import 'approvals_screen.dart';
-import 'login_screen.dart';
 import 'barangay_information_screen.dart';
 
 class UserManagementScreen extends StatefulWidget {
@@ -104,6 +102,24 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       _selectedIndices.clear();
     });
     _persistActiveTabIndex();
+  }
+
+  String _stripLinkodEmailSuffix(String value) {
+    final trimmed = value.trim();
+    const suffix = '@linkod.com';
+    if (trimmed.toLowerCase().endsWith(suffix)) {
+      return trimmed.substring(0, trimmed.length - suffix.length);
+    }
+    return trimmed;
+  }
+
+  String _residentDisplayContact({
+    required String phone,
+    required String email,
+  }) {
+    final phoneValue = phone.trim();
+    if (phoneValue.isNotEmpty) return phoneValue;
+    return _stripLinkodEmailSuffix(email);
   }
 
   Future<void> _loadPendingApprovalsCount() async {
@@ -199,7 +215,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         final accountStatus = (data['accountStatus'] as String?)?.toLowerCase();
         final status = (data['status'] as String?)?.toLowerCase();
         final fullName = (data['fullName'] ?? '') as String;
+        final email = (data['email'] ?? '') as String;
         final phoneNumber = (data['phoneNumber'] ?? '') as String;
+        final contact = email.isNotEmpty ? email : phoneNumber;
+        final residentContact = _residentDisplayContact(
+          phone: phoneNumber,
+          email: email,
+        );
         final role = ((data['role'] ?? '') as String).toLowerCase();
         final position = (data['position'] ?? '') as String;
         final demographicCategory =
@@ -209,7 +231,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           loadedInactive.add({
             'id': doc.id,
             'name': fullName.isNotEmpty ? fullName : 'Unnamed',
-            'phone': phoneNumber,
+            'phone': contact,
             'category': role == 'super_admin' || role == 'admin'
                 ? (position.isNotEmpty ? position : 'Admin')
                 : (demographicCategory.isNotEmpty
@@ -225,7 +247,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           loadedAdmins.add({
             'id': doc.id,
             'name': fullName.isNotEmpty ? fullName : 'Unnamed admin',
-            'phone': phoneNumber,
+            'phone': contact,
             'position': position.isNotEmpty ? position : 'Admin',
           });
         } else {
@@ -239,7 +261,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           loadedUsers.add({
             'id': doc.id,
             'name': fullName.isNotEmpty ? fullName : 'Unnamed user',
-            'phone': phoneNumber,
+            'phone': residentContact,
             'category': demographicCategory.isNotEmpty
                 ? demographicCategory
                 : (role.isNotEmpty ? role : 'User'),
@@ -251,7 +273,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         final data = doc.data();
         final fullName = (data['fullName'] ?? '') as String;
         final phoneNumber = (data['phoneNumber'] ?? '') as String;
+        final email = (data['email'] ?? '') as String;
         final role = ((data['role'] ?? '') as String).toLowerCase();
+        final userType = ((data['userType'] ?? '') as String).toLowerCase();
+        final inferredUserType = userType.isNotEmpty
+            ? userType
+            : ((role == 'admin' || role == 'super_admin')
+                  ? 'admin'
+                  : 'resident');
+        final awaitingContact = inferredUserType == 'admin'
+            ? (phoneNumber.isNotEmpty ? phoneNumber : email)
+            : _residentDisplayContact(phone: phoneNumber, email: email);
         final position = (data['position'] ?? '') as String;
         final category =
             (data['category'] ?? data['demographicCategory'] ?? '') as String;
@@ -259,13 +291,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         loadedAwaiting.add({
           'id': doc.id,
           'name': fullName.isNotEmpty ? fullName : 'Unnamed user',
-          'phone': phoneNumber,
+          'phone': awaitingContact,
+          'email': email,
           'category': category.isNotEmpty
               ? category
               : (role == 'admin'
                     ? (position.isNotEmpty ? position : 'Admin')
                     : (role.isNotEmpty ? role : 'User')),
           'role': role,
+          'userType': inferredUserType,
           'position': position,
           'source': 'awaitingApproval',
         });
@@ -281,18 +315,30 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         if (awaitingIds.contains(doc.id)) continue;
         final fullName = (data['fullName'] ?? '') as String;
         final phoneNumber = (data['phoneNumber'] ?? '') as String;
+        final email = (data['email'] ?? '') as String;
         final role = ((data['role'] ?? '') as String).toLowerCase();
+        final userType = ((data['userType'] ?? '') as String).toLowerCase();
+        final inferredUserType = userType.isNotEmpty
+            ? userType
+            : ((role == 'admin' || role == 'super_admin')
+                  ? 'admin'
+                  : 'resident');
+        final awaitingContact = inferredUserType == 'admin'
+            ? (phoneNumber.isNotEmpty ? phoneNumber : email)
+            : _residentDisplayContact(phone: phoneNumber, email: email);
         final position = (data['position'] ?? '') as String;
         final category =
             (data['category'] ?? data['demographicCategory'] ?? '') as String;
         loadedAwaiting.add({
           'id': doc.id,
           'name': fullName.isNotEmpty ? fullName : 'Unnamed user',
-          'phone': phoneNumber,
+          'phone': awaitingContact,
+          'email': email,
           'category': category.isNotEmpty
               ? category
               : (role.isNotEmpty ? role : 'User'),
           'role': role,
+          'userType': inferredUserType,
           'position': position,
           'source': 'users',
           'reapplication': 'true',
@@ -542,6 +588,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         .toList();
   }
 
+  bool _isValidEmail(String value) {
+    return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value.trim());
+  }
+
   Future<void> _approveSelectedAwaiting() async {
     final selectedItems = _selectedAwaitingItems();
     if (selectedItems.isEmpty) return;
@@ -573,7 +623,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       if (isReapplication) {
         await _approveReapplication(docId);
       } else {
-        await _approveAwaiting(docId, item);
+        String? approvedRole;
+        final userType = (item['userType'] ?? '').toLowerCase();
+        if (userType == 'admin') {
+          final selectedRole = await _showAdminRolePicker();
+          if (selectedRole == null) {
+            continue;
+          }
+          approvedRole = selectedRole;
+        }
+        await _approveAwaiting(docId, item, approvedRole: approvedRole);
       }
     }
 
@@ -908,7 +967,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   Future<void> _showAddAccountDialog({required bool isAdmin}) async {
     final nameController = TextEditingController();
-    final phoneController = TextEditingController();
+    final emailController = TextEditingController();
     final passwordController = TextEditingController();
     final roleController = TextEditingController(
       text: isAdmin ? 'admin' : 'user',
@@ -970,12 +1029,18 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ),
                         const SizedBox(height: 16),
                         _buildDialogTextField(
-                          label: 'Phone Number',
-                          controller: phoneController,
-                          validator: (value) =>
-                              value == null || value.trim().isEmpty
-                              ? 'Phone number is required'
-                              : null,
+                          label: 'Email',
+                          controller: emailController,
+                          validator: (value) {
+                            final email = value?.trim() ?? '';
+                            if (email.isEmpty) {
+                              return 'Email is required';
+                            }
+                            if (!_isValidEmail(email)) {
+                              return 'Enter a valid email address';
+                            }
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 16),
                         _buildDialogPasswordField(
@@ -1077,14 +1142,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
                                       try {
                                         final name = nameController.text.trim();
-                                        final phone = phoneController.text
-                                            .trim();
+                                        final email = emailController.text
+                                            .trim()
+                                            .toLowerCase();
                                         final password =
                                             passwordController.text;
-                                        if (phone.isEmpty) {
+                                        if (!_isValidEmail(email)) {
                                           setState(() {
                                             dialogError =
-                                                'Phone number is required';
+                                                'Valid email is required';
                                             isSubmitting = false;
                                           });
                                           return;
@@ -1101,7 +1167,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
                                         final now =
                                             FieldValue.serverTimestamp();
-                                        final email = '$phone@linkod.com';
                                         final firestoreRole = isAdmin
                                             ? 'admin'
                                             : 'resident';
@@ -1156,9 +1221,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                         final data = <String, dynamic>{
                                           'userId': uid,
                                           'fullName': name,
-                                          'phoneNumber': phone,
+                                          'phoneNumber': '',
                                           'email': email,
                                           'role': firestoreRole,
+                                          'userType': isAdmin
+                                              ? 'admin'
+                                              : 'resident',
                                           'createdAt': now,
                                           'updatedAt': now,
                                           'isActive': true,
@@ -1238,11 +1306,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                         switch (e.code) {
                                           case 'email-already-in-use':
                                             msg =
-                                                'An account already exists for this phone number. Please use a different phone or reset the password.';
+                                                'An account already exists for this email. Please use a different email or reset the password.';
                                             break;
                                           case 'invalid-email':
                                             msg =
-                                                'The generated email for this phone number is invalid. Please check the phone format.';
+                                                'The provided email is invalid.';
                                             break;
                                           case 'operation-not-allowed':
                                             msg =
@@ -1298,7 +1366,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   Future<void> _showCreateOfficialAccountDialog() async {
     final nameController = TextEditingController();
-    final phoneController = TextEditingController();
+    final emailController = TextEditingController();
     final passwordController = TextEditingController();
     String? selectedRole = 'admin'; // SUPER ADMIN and ADMIN only
     String? selectedPosition;
@@ -1356,12 +1424,18 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ),
                         const SizedBox(height: 16),
                         _buildDialogTextField(
-                          label: 'Phone Number',
-                          controller: phoneController,
-                          validator: (value) =>
-                              value == null || value.trim().isEmpty
-                              ? 'Phone number is required'
-                              : null,
+                          label: 'Email',
+                          controller: emailController,
+                          validator: (value) {
+                            final email = value?.trim() ?? '';
+                            if (email.isEmpty) {
+                              return 'Email is required';
+                            }
+                            if (!_isValidEmail(email)) {
+                              return 'Enter a valid email address';
+                            }
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 16),
                         _buildDialogPasswordField(
@@ -1485,14 +1559,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
                                       try {
                                         final name = nameController.text.trim();
-                                        final phone = phoneController.text
-                                            .trim();
+                                        final email = emailController.text
+                                            .trim()
+                                            .toLowerCase();
                                         final password =
                                             passwordController.text;
-                                        if (phone.isEmpty) {
+                                        if (!_isValidEmail(email)) {
                                           setState(() {
                                             dialogError =
-                                                'Phone number is required';
+                                                'Valid email is required';
                                             isSubmitting = false;
                                           });
                                           return;
@@ -1509,7 +1584,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
                                         final now =
                                             FieldValue.serverTimestamp();
-                                        final email = '$phone@linkod.com';
                                         final role = selectedRole ?? 'admin';
 
                                         // Create Firebase Auth user using secondary app
@@ -1562,9 +1636,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                         final data = <String, dynamic>{
                                           'userId': uid,
                                           'fullName': name,
-                                          'phoneNumber': phone,
+                                          'phoneNumber': '',
                                           'email': email,
                                           'role': role,
+                                          'userType': 'admin',
                                           'position':
                                               selectedPosition ?? 'Admin',
                                           'createdAt': now,
@@ -1635,11 +1710,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                         switch (e.code) {
                                           case 'email-already-in-use':
                                             msg =
-                                                'An account already exists for this phone number. Please use a different phone or reset the password.';
+                                                'An account already exists for this email. Please use a different email or reset the password.';
                                             break;
                                           case 'invalid-email':
                                             msg =
-                                                'The generated email for this phone number is invalid. Please check the phone format.';
+                                                'The provided email is invalid.';
                                             break;
                                           case 'operation-not-allowed':
                                             msg =
@@ -1922,7 +1997,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 Expanded(
                   flex: 2,
                   child: Text(
-                    canViewFullData ? 'Phone number' : 'Status',
+                    canViewFullData ? 'Phone Number' : 'Status',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -1990,7 +2065,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 Expanded(
                   flex: 2,
                   child: Text(
-                    'Phone number',
+                    'Email',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -2067,7 +2142,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 const Expanded(
                   flex: 2,
                   child: Text(
-                    'Phone number',
+                    'Email / Phone',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -2148,7 +2223,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 Expanded(
                   flex: 2,
                   child: Text(
-                    'Phone number',
+                    'Email / Phone',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -2343,7 +2418,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   Widget _buildUserRow(Map<String, String> user, bool isLast) {
-    // OFFICIAL role: hide phone number, hide edit/delete buttons
+    // OFFICIAL role: hide contact field and edit/delete buttons
     final canViewFullData = _currentUserRole == 'super_admin';
     final canEditDelete = _currentUserRole == 'super_admin';
 
@@ -2546,6 +2621,29 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     ),
                   ),
                 ],
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: (user['userType'] == 'admin')
+                        ? Colors.blue.withOpacity(0.14)
+                        : Colors.orange.withOpacity(0.16),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    user['userType'] == 'admin' ? 'Admin Account' : 'Resident',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: (user['userType'] == 'admin')
+                          ? Colors.blue.shade700
+                          : Colors.orange.shade700,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -2599,7 +2697,19 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     if (!doc.exists || !mounted) return;
     final data = doc.data() ?? {};
     final fullName = (data['fullName'] ?? user['name'] ?? '') as String;
+    final email = (data['email'] ?? user['email'] ?? '') as String;
     final phone = (data['phoneNumber'] ?? user['phone'] ?? '') as String;
+    final userTypeRaw = ((data['userType'] ?? user['userType'] ?? '') as String)
+        .toLowerCase();
+    final userType = userTypeRaw.isNotEmpty
+        ? userTypeRaw
+        : ((((data['role'] ?? user['role'] ?? '') as String).toLowerCase() ==
+                      'admin' ||
+                  ((data['role'] ?? user['role'] ?? '') as String)
+                          .toLowerCase() ==
+                      'super_admin')
+              ? 'admin'
+              : 'resident');
     final category =
         (data['category'] ??
                 data['demographicCategory'] ??
@@ -2633,7 +2743,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ),
               ),
             _detailRow('Full Name', fullName),
+            _detailRow('Email', email),
             _detailRow('Phone Number', phone),
+            _detailRow(
+              'Account Type',
+              userType == 'admin' ? 'Admin Account' : 'Resident',
+            ),
             _detailRow(
               'Demography',
               category.isNotEmpty
@@ -2761,6 +2876,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     String docId,
     Map<String, String> user,
   ) async {
+    String? approvedRole;
+    final userType = (user['userType'] ?? '').toLowerCase();
+    if (userType == 'admin') {
+      final selectedRole = await _showAdminRolePicker();
+      if (selectedRole == null) return;
+      approvedRole = selectedRole;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -2805,8 +2928,61 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       ),
     );
     if (confirmed == true && mounted) {
-      await _approveAwaiting(docId, user);
+      await _approveAwaiting(docId, user, approvedRole: approvedRole);
     }
+  }
+
+  Future<String?> _showAdminRolePicker() {
+    String selected = 'admin';
+    return showDialog<String>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Assign role for admin account'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RadioListTile<String>(
+                    value: 'admin',
+                    groupValue: selected,
+                    title: const Text('Admin'),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setDialogState(() {
+                        selected = value;
+                      });
+                    },
+                  ),
+                  RadioListTile<String>(
+                    value: 'super_admin',
+                    groupValue: selected,
+                    title: const Text('Super Admin'),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setDialogState(() {
+                        selected = value;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, selected),
+                  child: const Text('Continue'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _confirmThenApproveReapplication(String uid) async {
@@ -2906,7 +3082,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     }
   }
 
-  Future<void> _approveAwaiting(String docId, Map<String, String> user) async {
+  Future<void> _approveAwaiting(
+    String docId,
+    Map<String, String> user, {
+    String? approvedRole,
+  }) async {
     if (docId.isEmpty) return;
     try {
       final doc = await FirebaseFirestore.instance
@@ -2919,10 +3099,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       final phone = (data['phoneNumber'] ?? user['phone'] ?? '')
           .toString()
           .trim();
+      final requestedEmail = (data['email'] ?? user['email'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
       final password = (data['password'] ?? '') as String?;
       final existingUid = data['uid'] as String?;
       final role = ((data['role'] ?? user['role'] ?? 'user') as String)
           .toLowerCase();
+      final requestUserType =
+          ((data['userType'] ?? user['userType'] ?? '') as String)
+              .toLowerCase();
+      final userType = requestUserType.isNotEmpty
+          ? requestUserType
+          : ((role == 'admin' || role == 'super_admin') ? 'admin' : 'resident');
       final position = (data['position'] ?? user['position'] ?? '') as String;
       final category =
           (data['category'] ??
@@ -2932,16 +3122,19 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               as String;
       final proofOfResidenceUrl = data['proofOfResidenceUrl'] as String?;
 
-      if (phone.isEmpty) {
+      if (phone.isEmpty && requestedEmail.isEmpty) {
         if (mounted)
           setState(
-            () => _errorMessage = 'Phone number is required to approve.',
+            () =>
+                _errorMessage = 'Email or phone number is required to approve.',
           );
         return;
       }
 
       final adminUid = FirebaseAuth.instance.currentUser?.uid;
-      final email = '$phone@linkod.com';
+      final email = requestedEmail.isNotEmpty
+          ? requestedEmail
+          : '$phone@linkod.com';
       final now = FieldValue.serverTimestamp();
       String uid;
       FirebaseAuth? authHelperUsed;
@@ -3014,9 +3207,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         uid = newUser.uid;
       }
 
-      // Official account roles: super_admin and admin only (stored as-is)
-      final firestoreRole = (role == 'super_admin' || role == 'admin')
-          ? role
+      // Official account roles: super_admin and admin only for admin userType.
+      final normalizedApprovedRole = (approvedRole ?? '').toLowerCase();
+      final firestoreRole = userType == 'admin'
+          ? ((normalizedApprovedRole == 'super_admin' ||
+                    normalizedApprovedRole == 'admin')
+                ? normalizedApprovedRole
+                : 'admin')
           : 'resident';
       final categoriesList = (category)
           .split(',')
@@ -3030,6 +3227,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         'fullName': fullName,
         'phoneNumber': phone,
         'email': email,
+        'userType': userType,
         'role': firestoreRole,
         'createdAt': now,
         'updatedAt': now,
@@ -3445,11 +3643,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ),
                         const SizedBox(height: 16),
                         _buildDialogTextField(
-                          label: 'Phone Number',
+                          label: 'Email / Phone',
                           controller: phoneController,
                           validator: (value) =>
                               value == null || value.trim().isEmpty
-                              ? 'Phone number is required'
+                              ? 'Email or phone is required'
                               : null,
                         ),
                         const SizedBox(height: 16),
@@ -3731,11 +3929,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ),
                         const SizedBox(height: 16),
                         _buildDialogTextField(
-                          label: 'Phone Number',
+                          label: 'Email / Phone',
                           controller: phoneController,
                           validator: (value) =>
                               value == null || value.trim().isEmpty
-                              ? 'Phone number is required'
+                              ? 'Email or phone is required'
                               : null,
                         ),
                         const SizedBox(height: 16),
@@ -3967,11 +4165,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ),
                         const SizedBox(height: 16),
                         _buildDialogTextField(
-                          label: 'Phone Number',
+                          label: 'Email / Phone',
                           controller: phoneController,
                           validator: (value) =>
                               value == null || value.trim().isEmpty
-                              ? 'Phone number is required'
+                              ? 'Email or phone is required'
                               : null,
                         ),
                         const SizedBox(height: 16),

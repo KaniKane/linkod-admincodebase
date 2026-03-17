@@ -1,12 +1,15 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+﻿import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
+import '../services/email_auth_service.dart';
 import '../utils/app_colors.dart';
 import '../widgets/custom_link.dart';
 import '../widgets/draft_saved_notification.dart';
 import '../widgets/error_notification.dart';
+import '../widgets/outline_button.dart';
 import 'login_screen.dart';
+
+enum _SignUpStep { email, otp, profile }
 
 class CreateAccountScreen extends StatefulWidget {
   const CreateAccountScreen({super.key});
@@ -16,11 +19,17 @@ class CreateAccountScreen extends StatefulWidget {
 }
 
 class _CreateAccountScreenState extends State<CreateAccountScreen> {
-  final _nameController = TextEditingController();
-  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _otpController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _middleNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  _SignUpStep _step = _SignUpStep.email;
   String? _selectedPosition;
+  String _selectedUserType = 'admin';
+  bool _emailVerified = false;
 
   bool _isLoading = false;
   String? _errorMessage;
@@ -38,14 +47,28 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _phoneController.dispose();
+    _emailController.dispose();
+    _otpController.dispose();
+    _firstNameController.dispose();
+    _middleNameController.dispose();
+    _lastNameController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleSignUp() async {
-    if (!_formKey.currentState!.validate()) return;
+  bool _isValidEmail(String value) {
+    final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+    return emailRegex.hasMatch(value.trim());
+  }
+
+  Future<void> _sendOtp() async {
+    final email = _emailController.text.trim();
+    if (!_isValidEmail(email)) {
+      setState(() {
+        _errorMessage = 'Please enter a valid email address.';
+      });
+      return;
+    }
 
     setState(() {
       _isLoading = true;
@@ -53,42 +76,117 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     });
 
     try {
-      final name = _nameController.text.trim();
-      final phone = _phoneController.text.trim();
-      final password = _passwordController.text;
-      final position = _selectedPosition ?? '';
-      final email = '$phone@linkod.com';
-
-      // Create Firebase Auth user so they can log in with same credentials (before or after approval)
-      final userCredential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(email: email, password: password);
-      final uid = userCredential.user?.uid;
-      if (uid == null) {
-        setState(
-          () => _errorMessage = 'Failed to create account. Please try again.',
-        );
-        return;
-      }
-
-      // Store request in awaitingApproval for admin review (no password; Auth already created)
-      await FirebaseFirestore.instance.collection('awaitingApproval').add({
-        'uid': uid,
-        'fullName': name,
-        'phoneNumber': phone,
-        'role': 'admin',
-        'position': position,
-        'createdAt': FieldValue.serverTimestamp(),
-        'status': 'pending',
+      await EmailAuthService.sendOtp(email: email);
+      if (!mounted) return;
+      setState(() {
+        _step = _SignUpStep.otp;
       });
 
-      await FirebaseAuth.instance.signOut();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const DraftSavedNotification(
+            message: 'OTP sent. Please check your email.',
+          ),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } on FirebaseFunctionsException catch (e) {
+      setState(() {
+        _errorMessage = e.message ?? 'Failed to send OTP.';
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Failed to send OTP: $e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _verifyOtp() async {
+    final otp = _otpController.text.trim();
+    if (otp.length != 6) {
+      setState(() {
+        _errorMessage = 'Please enter the 6-digit OTP.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await EmailAuthService.verifyOtp(
+        email: _emailController.text.trim(),
+        otp: otp,
+      );
+      if (!mounted) return;
+      setState(() {
+        _emailVerified = true;
+        _step = _SignUpStep.profile;
+      });
+    } on FirebaseFunctionsException catch (e) {
+      setState(() {
+        _errorMessage = e.message ?? 'Invalid OTP.';
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Failed to verify OTP: $e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleSignUp() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (!_emailVerified) {
+      setState(() {
+        _errorMessage = 'Please verify your email first.';
+      });
+      return;
+    }
+    if (_selectedUserType == 'admin' && _selectedPosition == null) {
+      setState(() {
+        _errorMessage = 'Please select a barangay position.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await EmailAuthService.createPendingSignup(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        firstName: _firstNameController.text.trim(),
+        middleName: _middleNameController.text.trim(),
+        lastName: _lastNameController.text.trim(),
+        userType: _selectedUserType,
+        requestedRole: _selectedUserType == 'admin' ? 'admin' : 'resident',
+        position: _selectedUserType == 'admin' ? (_selectedPosition ?? '') : '',
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const DraftSavedNotification(
-            message:
-                'Account request submitted for approval. You can log in with your phone and password; access will be granted after approval.',
+            message: 'Request submitted. Waiting for admin approval.',
           ),
           backgroundColor: Colors.transparent,
           elevation: 0,
@@ -97,17 +195,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       );
 
       _navigateToLogin();
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'email-already-in-use') {
-        setState(() {
-          _errorMessage =
-              'An account with this phone number already exists. Try logging in or wait for approval.';
-        });
-      } else {
-        setState(
-          () => _errorMessage = e.message ?? 'Sign up failed: ${e.code}',
-        );
-      }
+    } on FirebaseFunctionsException catch (e) {
+      setState(() {
+        _errorMessage = e.message ?? 'Sign up failed.';
+      });
     } catch (e) {
       setState(() {
         _errorMessage = 'Unexpected error: $e';
@@ -119,6 +210,433 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         });
       }
     }
+  }
+
+  Widget _buildStepIndicator() {
+    final labels = ['Email', 'OTP', 'Profile'];
+    final index = _step.index;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(labels.length, (i) {
+        final isActive = i == index;
+        final isDone = i < index;
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: isDone || isActive
+                ? AppColors.loginGreen.withOpacity(0.15)
+                : AppColors.inputBg,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Text(
+            labels[i],
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isDone || isActive
+                  ? AppColors.loginGreen
+                  : AppColors.mediumGrey,
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _buildEmailStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Email Address',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.normal,
+            color: AppColors.darkGrey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 50,
+          decoration: BoxDecoration(
+            color: AppColors.inputBg,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: TextFormField(
+            controller: _emailController,
+            validator: (value) {
+              if (_step != _SignUpStep.email) return null;
+              if (value == null || !_isValidEmail(value)) {
+                return 'Valid email is required';
+              }
+              return null;
+            },
+            style: const TextStyle(fontSize: 16, color: AppColors.darkGrey),
+            decoration: const InputDecoration(
+              hintText: 'name@example.com',
+              hintStyle: TextStyle(fontSize: 16, color: AppColors.lightGrey),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 15,
+                vertical: 15,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        _SignUpButton(
+          text: _isLoading ? 'Sending OTP...' : 'Send OTP',
+          onPressed: _isLoading ? null : _sendOtp,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOtpStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Enter the OTP sent to ${_emailController.text.trim()}',
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.normal,
+            color: AppColors.mediumGrey,
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'OTP Code',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.normal,
+            color: AppColors.darkGrey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 50,
+          decoration: BoxDecoration(
+            color: AppColors.inputBg,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: TextFormField(
+            controller: _otpController,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            style: const TextStyle(fontSize: 16, color: AppColors.darkGrey),
+            decoration: const InputDecoration(
+              hintText: '123456',
+              counterText: '',
+              hintStyle: TextStyle(fontSize: 16, color: AppColors.lightGrey),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 15,
+                vertical: 15,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(
+              child: OutlineButton(
+                text: 'Back',
+                onPressed: _isLoading
+                    ? null
+                    : () => setState(() => _step = _SignUpStep.email),
+                isFullWidth: true,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _SignUpButton(
+                text: _isLoading ? 'Verifying...' : 'Verify OTP',
+                onPressed: _isLoading ? null : _verifyOtp,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProfileStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'First Name',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.normal,
+            color: AppColors.darkGrey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 50,
+          decoration: BoxDecoration(
+            color: AppColors.inputBg,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: TextFormField(
+            controller: _firstNameController,
+            validator: (value) {
+              if (_step != _SignUpStep.profile) return null;
+              if (value == null || value.trim().isEmpty) {
+                return 'First name is required';
+              }
+              return null;
+            },
+            style: const TextStyle(fontSize: 16, color: AppColors.darkGrey),
+            decoration: const InputDecoration(
+              hintText: 'Juan',
+              hintStyle: TextStyle(fontSize: 16, color: AppColors.lightGrey),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 15,
+                vertical: 15,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Middle Name',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.normal,
+            color: AppColors.darkGrey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 50,
+          decoration: BoxDecoration(
+            color: AppColors.inputBg,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: TextFormField(
+            controller: _middleNameController,
+            style: const TextStyle(fontSize: 16, color: AppColors.darkGrey),
+            decoration: const InputDecoration(
+              hintText: 'Santos (optional)',
+              hintStyle: TextStyle(fontSize: 16, color: AppColors.lightGrey),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 15,
+                vertical: 15,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Last Name',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.normal,
+            color: AppColors.darkGrey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 50,
+          decoration: BoxDecoration(
+            color: AppColors.inputBg,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: TextFormField(
+            controller: _lastNameController,
+            validator: (value) {
+              if (_step != _SignUpStep.profile) return null;
+              if (value == null || value.trim().isEmpty) {
+                return 'Last name is required';
+              }
+              return null;
+            },
+            style: const TextStyle(fontSize: 16, color: AppColors.darkGrey),
+            decoration: const InputDecoration(
+              hintText: 'Dela Cruz',
+              hintStyle: TextStyle(fontSize: 16, color: AppColors.lightGrey),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 15,
+                vertical: 15,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Password',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.normal,
+            color: AppColors.darkGrey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 50,
+          decoration: BoxDecoration(
+            color: AppColors.inputBg,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: TextFormField(
+            controller: _passwordController,
+            obscureText: _passwordObscure,
+            validator: (value) {
+              if (_step != _SignUpStep.profile) return null;
+              if (value == null || value.isEmpty) {
+                return 'Password is required';
+              }
+              if (value.length < 6) {
+                return 'Password must be at least 6 characters';
+              }
+              return null;
+            },
+            style: const TextStyle(fontSize: 16, color: AppColors.darkGrey),
+            decoration: InputDecoration(
+              hintText: '********',
+              hintStyle: const TextStyle(
+                fontSize: 16,
+                color: AppColors.lightGrey,
+              ),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 15,
+                vertical: 15,
+              ),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _passwordObscure ? Icons.visibility_off : Icons.visibility,
+                  color: AppColors.darkGrey,
+                  size: 22,
+                ),
+                onPressed: () =>
+                    setState(() => _passwordObscure = !_passwordObscure),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Account Type',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.normal,
+            color: AppColors.darkGrey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 50,
+          decoration: BoxDecoration(
+            color: AppColors.inputBg,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 15),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedUserType,
+              isExpanded: true,
+              items: const [
+                DropdownMenuItem(value: 'admin', child: Text('Admin Account')),
+                DropdownMenuItem(
+                  value: 'resident',
+                  child: Text('Resident Account'),
+                ),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() {
+                  _selectedUserType = value;
+                  if (value != 'admin') {
+                    _selectedPosition = null;
+                  }
+                });
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (_selectedUserType == 'admin') ...[
+          const Text(
+            'Barangay Position',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.normal,
+              color: AppColors.darkGrey,
+            ),
+          ),
+          const SizedBox(height: 8),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: Container(
+              height: 50,
+              decoration: BoxDecoration(
+                color: AppColors.inputBg,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 15),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButtonFormField<String>(
+                  value: _selectedPosition,
+                  isExpanded: true,
+                  icon: const Icon(
+                    Icons.keyboard_arrow_down,
+                    color: AppColors.lightGrey,
+                  ),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: AppColors.darkGrey,
+                  ),
+                  hint: const Text(
+                    'Select position',
+                    style: TextStyle(fontSize: 16, color: AppColors.lightGrey),
+                  ),
+                  items: _barangayPositions
+                      .map(
+                        (item) => DropdownMenuItem<String>(
+                          value: item,
+                          child: Text(item),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) =>
+                      setState(() => _selectedPosition = value),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+        Row(
+          children: [
+            Expanded(
+              child: OutlineButton(
+                text: 'Back',
+                onPressed: _isLoading
+                    ? null
+                    : () => setState(() => _step = _SignUpStep.otp),
+                isFullWidth: true,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _SignUpButton(
+                text: _isLoading ? 'Submitting...' : 'Request Sign Up',
+                onPressed: _isLoading ? null : _handleSignUp,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 
   void _navigateToLogin() {
@@ -224,233 +742,26 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
             children: [
               // Title
               const Text(
-                'Request Admin Sign Up',
+                'Request Sign Up',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w600,
                   color: AppColors.loginGreen,
                 ),
               ),
+              const SizedBox(height: 12),
+              _buildStepIndicator(),
               const SizedBox(height: 40),
 
-              // Name Field
-              const Text(
-                'Name',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.normal,
-                  color: AppColors.darkGrey,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                height: 50,
-                decoration: BoxDecoration(
-                  color: AppColors.inputBg,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: TextFormField(
-                  controller: _nameController,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Name is required';
-                    }
-                    return null;
-                  },
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: AppColors.darkGrey,
-                  ),
-                  decoration: const InputDecoration(
-                    hintText: 'Juan Dela Cruz',
-                    hintStyle: TextStyle(
-                      fontSize: 16,
-                      color: AppColors.lightGrey,
-                    ),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 15,
-                      vertical: 15,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Phone Number Field
-              const Text(
-                'Phone Number',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.normal,
-                  color: AppColors.darkGrey,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                height: 50,
-                decoration: BoxDecoration(
-                  color: AppColors.inputBg,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: TextFormField(
-                  controller: _phoneController,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Phone number is required';
-                    }
-                    return null;
-                  },
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: AppColors.darkGrey,
-                  ),
-                  decoration: const InputDecoration(
-                    hintText: '09856231879',
-                    hintStyle: TextStyle(
-                      fontSize: 16,
-                      color: AppColors.lightGrey,
-                    ),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 15,
-                      vertical: 15,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Password Field
-              const Text(
-                'Password',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.normal,
-                  color: AppColors.darkGrey,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                height: 50,
-                decoration: BoxDecoration(
-                  color: AppColors.inputBg,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: TextFormField(
-                  controller: _passwordController,
-                  obscureText: _passwordObscure,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Password is required';
-                    }
-                    if (value.length < 6) {
-                      return 'Password must be at least 6 characters';
-                    }
-                    return null;
-                  },
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: AppColors.darkGrey,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: '********',
-                    hintStyle: const TextStyle(
-                      fontSize: 16,
-                      color: AppColors.lightGrey,
-                    ),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 15,
-                      vertical: 15,
-                    ),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _passwordObscure
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                        color: AppColors.darkGrey,
-                        size: 22,
-                      ),
-                      onPressed: () =>
-                          setState(() => _passwordObscure = !_passwordObscure),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Barangay Position Dropdown
-              const Text(
-                'Barangay Position',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.normal,
-                  color: AppColors.darkGrey,
-                ),
-              ),
-              const SizedBox(height: 8),
-              MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: Container(
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: AppColors.inputBg,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 15),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButtonFormField<String>(
-                      value: _selectedPosition,
-                      isExpanded: true,
-                      icon: const Icon(
-                        Icons.keyboard_arrow_down,
-                        color: AppColors.lightGrey,
-                      ),
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: AppColors.darkGrey,
-                      ),
-                      hint: const Text(
-                        'Select position',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: AppColors.lightGrey,
-                        ),
-                      ),
-                      items: _barangayPositions.map((String item) {
-                        return DropdownMenuItem<String>(
-                          value: item,
-                          child: Text(item),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedPosition = value;
-                        });
-                      },
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please select a position';
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 30),
+              if (_step == _SignUpStep.email) _buildEmailStep(),
+              if (_step == _SignUpStep.otp) _buildOtpStep(),
+              if (_step == _SignUpStep.profile) _buildProfileStep(),
 
               if (_errorMessage != null) ...[
+                const SizedBox(height: 12),
                 ErrorNotification(message: _errorMessage!),
                 const SizedBox(height: 12),
               ],
-
-              // Create Admin Button
-              _SignUpButton(
-                text: 'Request Sign Up',
-                onPressed: _isLoading ? null : _handleSignUp,
-              ),
               const SizedBox(height: 15),
 
               // Log in link

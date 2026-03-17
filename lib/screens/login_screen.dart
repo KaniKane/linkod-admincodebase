@@ -17,7 +17,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
@@ -28,27 +28,27 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSavedPhoneNumber();
+    _loadSavedEmail();
   }
 
-  Future<void> _loadSavedPhoneNumber() async {
+  Future<void> _loadSavedEmail() async {
     final prefs = await SharedPreferences.getInstance();
-    final savedPhone = prefs.getString('last_phone_number');
-    if (savedPhone != null && savedPhone.isNotEmpty) {
+    final savedEmail = prefs.getString('last_login_email');
+    if (savedEmail != null && savedEmail.isNotEmpty) {
       setState(() {
-        _phoneController.text = savedPhone;
+        _emailController.text = savedEmail;
       });
     }
   }
 
-  Future<void> _savePhoneNumber(String phone) async {
+  Future<void> _saveEmail(String email) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('last_phone_number', phone);
+    await prefs.setString('last_login_email', email);
   }
 
   @override
   void dispose() {
-    _phoneController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -62,15 +62,11 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final phone = _phoneController.text.trim();
+      final email = _emailController.text.trim().toLowerCase();
       final password = _passwordController.text;
 
-      // Save phone number for next login (but not password)
-      await _savePhoneNumber(phone);
-
-      // Map phone number to an email-style identifier for Firebase Auth,
-      // e.g. "+1234567890" -> "+1234567890@linkod.com"
-      final email = '$phone@linkod.com';
+      // Save email for next login (but not password)
+      await _saveEmail(email);
 
       // Sign in with Firebase Authentication
       final userCredential = await FirebaseAuth.instance
@@ -95,7 +91,7 @@ class _LoginScreenState extends State<LoginScreen> {
         // Check if they signed up but are still pending approval
         final pendingQuery = await FirebaseFirestore.instance
             .collection('awaitingApproval')
-            .where('uid', isEqualTo: user.uid)
+            .where('email', isEqualTo: email)
             .limit(1)
             .get();
         if (pendingQuery.docs.isNotEmpty) {
@@ -114,6 +110,15 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       final data = userDoc.data() ?? {};
+      final accountStatus = (data['accountStatus'] as String? ?? '')
+          .toLowerCase();
+      if (accountStatus == 'pending') {
+        setState(() {
+          _errorMessage = 'Waiting for admin approval.';
+        });
+        await FirebaseAuth.instance.signOut();
+        return;
+      }
       final role = (data['role'] as String? ?? '').toLowerCase();
 
       // Only Super Admin and Admin can access this panel. Positions (e.g. official, staff) are labels only.
@@ -263,9 +268,9 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 50),
 
-              // Phone Number Field
+              // Email Field
               const Text(
-                'Phone Number',
+                'Email',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.normal,
@@ -280,10 +285,17 @@ class _LoginScreenState extends State<LoginScreen> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: TextFormField(
-                  controller: _phoneController,
+                  controller: _emailController,
                   validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Phone number is required';
+                    final email = value?.trim() ?? '';
+                    if (email.isEmpty) {
+                      return 'Email is required';
+                    }
+                    final isValid = RegExp(
+                      r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
+                    ).hasMatch(email);
+                    if (!isValid) {
+                      return 'Enter a valid email address';
                     }
                     return null;
                   },
@@ -292,7 +304,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: AppColors.darkGrey,
                   ),
                   decoration: const InputDecoration(
-                    hintText: '09856231879',
+                    hintText: 'name@example.com',
                     hintStyle: TextStyle(
                       fontSize: 16,
                       color: AppColors.lightGrey,
