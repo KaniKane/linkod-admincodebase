@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../api/announcement_backend_api.dart';
 import '../widgets/app_sidebar.dart';
-import '../widgets/user_header.dart';
 import '../widgets/audience_tag.dart';
 import '../widgets/draft_item.dart';
 import '../widgets/success_notification.dart';
@@ -269,7 +268,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         context,
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) =>
-              const UserManagementScreen(),
+              const UserManagementScreen(initialTabIndex: 2),
           transitionDuration: Duration.zero,
           reverseTransitionDuration: Duration.zero,
           transitionsBuilder: (context, animation, secondaryAnimation, child) =>
@@ -1018,23 +1017,20 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               color: AppColors.white,
               child: Column(
                 children: [
-                  // Top header with user profile
+                  // Top header
                   Container(
                     color: AppColors.white,
                     padding: const EdgeInsets.all(24),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Announcements',
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.darkGrey,
-                          ),
+                    child: const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Announcements',
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.darkGrey,
                         ),
-                        const UserHeader(),
-                      ],
+                      ),
                     ),
                   ),
                   // Content area with inner background panel

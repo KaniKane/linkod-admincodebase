@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import '../widgets/app_sidebar.dart';
-import '../widgets/user_header.dart';
 import '../widgets/custom_tabs.dart';
 import '../widgets/search_bar.dart';
 import '../widgets/custom_button.dart';
@@ -597,23 +596,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               color: AppColors.white,
               child: Column(
                 children: [
-                  // Top header with user profile
+                  // Top header
                   Container(
                     color: AppColors.white,
                     padding: const EdgeInsets.all(24),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'User Management',
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.darkGrey,
-                          ),
+                    child: const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'User Management',
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.darkGrey,
                         ),
-                        const UserHeader(),
-                      ],
+                      ),
                     ),
                   ),
                   // Content area with inner background panel
@@ -782,7 +778,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           _buildTab(
             'Awaiting Approval',
             2,
-            badgeCount: _awaitingApproval.length,
+            // Only show badge if not currently viewing this tab
+            badgeCount: _activeTabIndex == 2 ? 0 : _awaitingApproval.length,
           ),
           const SizedBox(width: 32),
           _buildTab('Inactive', 3),

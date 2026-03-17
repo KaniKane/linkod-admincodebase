@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import '../widgets/app_sidebar.dart';
-import '../widgets/user_header.dart';
 import '../services/barangay_category_service.dart';
 import '../services/barangay_posting_service.dart';
 import '../services/barangay_branding_service.dart';
@@ -466,7 +465,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
         context,
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) =>
-              const UserManagementScreen(),
+              const UserManagementScreen(initialTabIndex: 2),
           transitionDuration: Duration.zero,
           reverseTransitionDuration: Duration.zero,
           transitionsBuilder: (context, animation, secondaryAnimation, child) =>
@@ -958,7 +957,6 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
                             ),
                           ],
                         ),
-                        const UserHeader(),
                       ],
                     ),
                   ),

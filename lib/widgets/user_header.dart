@@ -10,7 +10,9 @@ import '../screens/login_screen.dart';
 import '../widgets/full_screen_image_viewer.dart';
 
 class UserHeader extends StatefulWidget {
-  const UserHeader({super.key});
+  const UserHeader({super.key, this.compact = false});
+
+  final bool compact;
 
   @override
   State<UserHeader> createState() => _UserHeaderState();
@@ -362,6 +364,12 @@ class _UserHeaderState extends State<UserHeader> {
 
   @override
   Widget build(BuildContext context) {
+    final compact = widget.compact;
+    final avatarSize = compact ? 44.0 : 60.0;
+    final iconSize = compact ? 22.0 : 36.0;
+    final nameSize = compact ? 13.0 : 14.0;
+    final positionSize = compact ? 11.0 : 12.0;
+
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
@@ -369,12 +377,12 @@ class _UserHeaderState extends State<UserHeader> {
       child: GestureDetector(
         onTap: _showProfileMenu,
         child: Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: compact ? MainAxisSize.max : MainAxisSize.min,
           children: [
             // Profile Avatar
             Container(
-              width: 60,
-              height: 60,
+              width: avatarSize,
+              height: avatarSize,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: AppColors.inputBackground,
@@ -393,8 +401,8 @@ class _UserHeaderState extends State<UserHeader> {
                 child: _profileImageUrl != null && _profileImageUrl!.isNotEmpty
                     ? Image.network(
                         _profileImageUrl!,
-                        width: 60,
-                        height: 60,
+                        width: avatarSize,
+                        height: avatarSize,
                         fit: BoxFit.cover,
                         loadingBuilder: (context, child, loadingProgress) {
                           if (loadingProgress == null) return child;
@@ -412,37 +420,50 @@ class _UserHeaderState extends State<UserHeader> {
                           return Icon(
                             Icons.person,
                             color: AppColors.darkGrey,
-                            size: 36,
+                            size: iconSize,
                           );
                         },
                       )
-                    : Icon(Icons.person, color: AppColors.darkGrey, size: 36),
+                    : Icon(
+                        Icons.person,
+                        color: AppColors.darkGrey,
+                        size: iconSize,
+                      ),
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: compact ? 10 : 12),
             // User Info Column
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  _fullName ?? 'Admin',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: _isHovered
-                        ? AppColors.primaryGreen
-                        : AppColors.darkGrey,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _fullName ?? 'Admin',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: nameSize,
+                      fontWeight: FontWeight.w600,
+                      color: _isHovered
+                          ? AppColors.primaryGreen
+                          : AppColors.darkGrey,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _userPosition ?? 'Administrator',
-                  style: TextStyle(fontSize: 12, color: AppColors.lightGrey),
-                ),
-              ],
+                  const SizedBox(height: 2),
+                  Text(
+                    _userPosition ?? 'Administrator',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: positionSize,
+                      color: AppColors.lightGrey,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: compact ? 4 : 8),
             Icon(
               Icons.arrow_drop_down,
               size: 20,

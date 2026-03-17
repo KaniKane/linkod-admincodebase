@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import '../widgets/full_screen_image_viewer.dart';
 import '../utils/app_colors.dart';
 import '../widgets/app_sidebar.dart';
-import '../widgets/user_header.dart';
 import '../widgets/custom_tabs.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/outline_button.dart';
@@ -200,7 +199,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
         context,
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) =>
-              const UserManagementScreen(),
+              const UserManagementScreen(initialTabIndex: 2),
           transitionDuration: Duration.zero,
           reverseTransitionDuration: Duration.zero,
           transitionsBuilder: (context, animation, secondaryAnimation, child) =>
@@ -1280,19 +1279,16 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                   Container(
                     color: AppColors.white,
                     padding: const EdgeInsets.all(24),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Post Approvals',
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.darkGrey,
-                          ),
+                    child: const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Post Approvals',
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.darkGrey,
                         ),
-                        const UserHeader(),
-                      ],
+                      ),
                     ),
                   ),
                   Expanded(
