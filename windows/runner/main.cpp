@@ -32,6 +32,18 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   }
   window.SetQuitOnClose(true);
 
+    // Keep the title bar, disable resizing, and start maximized.
+  HWND hwnd = window.GetHandle();
+  LONG_PTR style = GetWindowLongPtr(hwnd, GWL_STYLE);
+  style &= ~WS_THICKFRAME;
+  style &= ~WS_MAXIMIZEBOX;
+  SetWindowLongPtr(hwnd, GWL_STYLE, style);
+
+    SetWindowPos(
+      hwnd, nullptr, 0, 0, 0, 0,
+      SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+    ShowWindow(hwnd, SW_MAXIMIZE);
+
   ::MSG msg;
   while (::GetMessage(&msg, nullptr, 0, 0)) {
     ::TranslateMessage(&msg);
