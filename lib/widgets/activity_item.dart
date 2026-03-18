@@ -25,9 +25,7 @@ class ActivityItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: _buildDescription(),
-          ),
+          Expanded(child: _buildDescription()),
           const SizedBox(width: 16),
           Text(
             timestamp,
@@ -43,61 +41,76 @@ class ActivityItem extends StatelessWidget {
   }
 
   Widget _buildDescription() {
-    // Extract name (first 1-2 words before action verb)
-    final parts = description.split(' ');
-    String name = '';
-    String rest = description;
-    
-    if (parts.length >= 2) {
-      // Common action verbs
-      final actionVerbs = ['approved', 'posted', 'decline', 'declined', 'edited', 'submitted'];
-      int nameEndIndex = 1;
-      
-      for (int i = 1; i < parts.length && i <= 2; i++) {
-        if (actionVerbs.contains(parts[i].toLowerCase())) {
-          nameEndIndex = i;
-          break;
-        }
+    final text = description.trim();
+
+    // Fallback: bold full actor name up to the action verb.
+    final parts = text.split(RegExp(r'\s+'));
+    final actionVerbs = {
+      'approved',
+      'posted',
+      'decline',
+      'declined',
+      'edited',
+      'submitted',
+      'created',
+      'updated',
+      'deleted',
+      'rejected',
+      'suspended',
+      'accepted',
+      'archived',
+    };
+
+    int actionIndex = -1;
+    for (int i = 0; i < parts.length; i++) {
+      if (actionVerbs.contains(parts[i].toLowerCase())) {
+        actionIndex = i;
+        break;
       }
-      
-      name = parts.sublist(0, nameEndIndex).join(' ');
-      rest = parts.sublist(nameEndIndex).join(' ');
-    } else if (parts.isNotEmpty) {
-      name = parts[0];
+    }
+
+    final String name;
+    final String rest;
+    if (parts.isEmpty) {
+      name = '';
+      rest = '';
+    } else if (actionIndex > 0) {
+      name = parts.sublist(0, actionIndex).join(' ');
+      rest = parts.sublist(actionIndex).join(' ');
+    } else {
+      name = parts.first;
       rest = parts.length > 1 ? parts.sublist(1).join(' ') : '';
     }
 
-    // Handle bold text if specified (for announcement titles)
-    if (boldText != null && description.contains(boldText!)) {
-      final nameIndex = description.indexOf(name);
-      final boldIndex = description.indexOf(boldText!);
-      final beforeBold = description.substring(nameIndex + name.length, boldIndex);
-      final afterBold = description.substring(boldIndex + boldText!.length);
-      
-      return RichText(
-        text: TextSpan(
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.normal,
-            color: AppColors.darkGrey,
+    final trailingText = rest.isNotEmpty ? ' $rest' : '';
+    final children = <TextSpan>[
+      TextSpan(
+        text: name,
+        style: const TextStyle(fontWeight: FontWeight.bold),
+      ),
+    ];
+
+    final token = boldText?.trim() ?? '';
+    if (token.isNotEmpty) {
+      final tokenIndex = trailingText.indexOf(token);
+      if (tokenIndex >= 0) {
+        final beforeToken = trailingText.substring(0, tokenIndex);
+        final afterToken = trailingText.substring(tokenIndex + token.length);
+        children.add(TextSpan(text: beforeToken));
+        children.add(
+          TextSpan(
+            text: token,
+            style: const TextStyle(fontWeight: FontWeight.bold),
           ),
-          children: [
-            TextSpan(
-              text: name,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            TextSpan(text: beforeBold),
-            TextSpan(
-              text: boldText,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            TextSpan(text: afterBold),
-          ],
-        ),
-      );
+        );
+        children.add(TextSpan(text: afterToken));
+      } else {
+        children.add(TextSpan(text: trailingText));
+      }
+    } else {
+      children.add(TextSpan(text: trailingText));
     }
 
-    // Default: bold name, normal rest
     return RichText(
       text: TextSpan(
         style: const TextStyle(
@@ -105,13 +118,7 @@ class ActivityItem extends StatelessWidget {
           fontWeight: FontWeight.normal,
           color: AppColors.darkGrey,
         ),
-        children: [
-          TextSpan(
-            text: name,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-          TextSpan(text: ' $rest'),
-        ],
+        children: children,
       ),
     );
   }

@@ -2159,7 +2159,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 const Expanded(
                   flex: 3,
                   child: Text(
-                    'Demographic category',
+                    'Position / Demographic category',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -3228,7 +3228,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           .toList();
 
       // 3) As admin (primary Auth unchanged): create/update users/{uid}
-      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+      // Also copy FCM tokens from awaitingApproval to users doc to ensure push notification can find them
+      final fcmTokens =
+          (data['fcmTokens'] as List<dynamic>?)
+              ?.whereType<String>()
+              .map((t) => (t as String).trim())
+              .where((t) => t.isNotEmpty)
+              .toList() ??
+          <String>[];
+
+      final userDocData = <String, dynamic>{
         'userId': uid,
         'fullName': fullName,
         'phoneNumber': phone,
@@ -3243,6 +3252,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         'accountStatus': 'active',
         if (proofOfResidenceUrl != null && proofOfResidenceUrl.isNotEmpty)
           'proofOfResidenceUrl': proofOfResidenceUrl,
+        if (fcmTokens.isNotEmpty) 'fcmTokens': fcmTokens,
         if (firestoreRole == 'admin')
           'position': position.isNotEmpty ? position : 'Admin',
         if (firestoreRole == 'resident') ...{
@@ -3251,9 +3261,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           // Add `categories` (array) so we can query audience targeting efficiently.
           'categories': categoriesList,
         },
-      }, SetOptions(merge: true));
+      };
 
-      // 4) Send account-approved push (human-in-the-loop; backend fetches fcmTokens from awaitingApproval)
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .set(userDocData, SetOptions(merge: true));
+
+      // 4) Send account-approved push (human-in-the-loop; backend fetches fcmTokens from awaitingApproval or users doc)
       try {
         await sendAccountApprovalPush(
           requestId: docId,

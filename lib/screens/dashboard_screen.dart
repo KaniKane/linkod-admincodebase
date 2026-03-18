@@ -323,10 +323,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   bool _isAcceptedUser(Map<String, dynamic> userData) {
-    final status =
-        (userData['status'] as String? ?? userData['accountStatus'] as String?)
-            ?.toLowerCase() ??
-        '';
+    final role = (userData['role'] as String? ?? '').toLowerCase();
+    if (role == 'super_admin' || role == 'admin') {
+      return false;
+    }
+
+    final accountStatus =
+        (userData['accountStatus'] as String?)?.toLowerCase().trim() ?? '';
+    final status = (userData['status'] as String?)?.toLowerCase().trim() ?? '';
+
+    // Pending users can still carry stale status values; prefer accountStatus.
+    if (accountStatus == 'pending' || status == 'pending') {
+      return false;
+    }
+
+    if (accountStatus.isNotEmpty) {
+      return accountStatus == 'accepted' || accountStatus == 'active';
+    }
+
     return status == 'accepted' || status == 'active';
   }
 

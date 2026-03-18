@@ -18,19 +18,18 @@ const String kAnnouncementBackendBaseUrl = 'http://localhost:8000';
 /// Use your deployed Cloud Function URL, e.g. https://us-central1-linkod-db.cloudfunctions.net/api
 /// (Replace region if your functions are in another region; see Firebase Console > Functions.)
 /// If null or empty, push requests use [kAnnouncementBackendBaseUrl] (requires local backend on port 8000).
-const String? kPushApiBaseUrl = 'https://us-central1-linkod-db.cloudfunctions.net/api';
+// TODO: Verify Cloud Function is deployed and accessible before enabling this
+const String? kPushApiBaseUrl =
+    null; // Temporarily use local backend at http://localhost:8000
 
 String get _pushBaseUrl =>
     (kPushApiBaseUrl != null && kPushApiBaseUrl!.trim().isNotEmpty)
-        ? kPushApiBaseUrl!.trim()
-        : kAnnouncementBackendBaseUrl;
+    ? kPushApiBaseUrl!.trim()
+    : kAnnouncementBackendBaseUrl;
 
 /// Result of POST /refine: original and refined text.
 class RefineResponse {
-  const RefineResponse({
-    required this.originalText,
-    required this.refinedText,
-  });
+  const RefineResponse({required this.originalText, required this.refinedText});
 
   factory RefineResponse.fromJson(Map<String, dynamic> json) {
     return RefineResponse(
@@ -52,11 +51,13 @@ class RecommendAudiencesResponse {
   });
 
   factory RecommendAudiencesResponse.fromJson(Map<String, dynamic> json) {
-    final audiences = (json['audiences'] as List<dynamic>?)
+    final audiences =
+        (json['audiences'] as List<dynamic>?)
             ?.map((e) => e as String)
             .toList() ??
         [];
-    final matchedRules = (json['matched_rules'] as List<dynamic>?)
+    final matchedRules =
+        (json['matched_rules'] as List<dynamic>?)
             ?.map((e) => _MatchedRule.fromJson(e as Map<String, dynamic>))
             .toList() ??
         [];
@@ -77,11 +78,15 @@ class _MatchedRule {
 
   factory _MatchedRule.fromJson(Map<String, dynamic> json) {
     final keywords =
-        (json['keywords'] as List<dynamic>?)?.map((e) => e as String).toList() ??
-            [];
+        (json['keywords'] as List<dynamic>?)
+            ?.map((e) => e as String)
+            .toList() ??
+        [];
     final audiences =
-        (json['audiences'] as List<dynamic>?)?.map((e) => e as String).toList() ??
-            [];
+        (json['audiences'] as List<dynamic>?)
+            ?.map((e) => e as String)
+            .toList() ??
+        [];
     return _MatchedRule(keywords: keywords, audiences: audiences);
   }
 
@@ -97,7 +102,8 @@ class AnnouncementBackendException implements Exception {
   final int? statusCode;
 
   @override
-  String toString() => 'AnnouncementBackendException: $message (status: $statusCode)';
+  String toString() =>
+      'AnnouncementBackendException: $message (status: $statusCode)';
 }
 
 /// Result of POST /send-announcement-push: counts for evaluation/UX feedback.
@@ -116,7 +122,8 @@ class SendAnnouncementPushResponse {
       tokenCount: json['token_count'] as int? ?? 0,
       successCount: json['success_count'] as int? ?? 0,
       failureCount: json['failure_count'] as int? ?? 0,
-      errorCounts: (json['error_counts'] as Map<String, dynamic>?)?.map(
+      errorCounts:
+          (json['error_counts'] as Map<String, dynamic>?)?.map(
             (k, v) => MapEntry(k, (v as num?)?.toInt() ?? 0),
           ) ??
           const {},
@@ -144,7 +151,8 @@ class SendAccountApprovalResponse {
       tokenCount: json['token_count'] as int? ?? 0,
       successCount: json['success_count'] as int? ?? 0,
       failureCount: json['failure_count'] as int? ?? 0,
-      errorCounts: (json['error_counts'] as Map<String, dynamic>?)?.map(
+      errorCounts:
+          (json['error_counts'] as Map<String, dynamic>?)?.map(
             (k, v) => MapEntry(k, (v as num?)?.toInt() ?? 0),
           ) ??
           const {},
@@ -171,7 +179,8 @@ class SendUserPushResponse {
       tokenCount: json['token_count'] as int? ?? 0,
       successCount: json['success_count'] as int? ?? 0,
       failureCount: json['failure_count'] as int? ?? 0,
-      errorCounts: (json['error_counts'] as Map<String, dynamic>?)?.map(
+      errorCounts:
+          (json['error_counts'] as Map<String, dynamic>?)?.map(
             (k, v) => MapEntry(k, (v as num?)?.toInt() ?? 0),
           ) ??
           const {},
@@ -209,14 +218,18 @@ Future<SendAccountApprovalResponse> sendAccountApprovalPush({
   if (response.statusCode != 200) {
     final body = response.body;
     throw AnnouncementBackendException(
-      body.isNotEmpty ? body : 'Send account approval push failed (${response.statusCode})',
+      body.isNotEmpty
+          ? body
+          : 'Send account approval push failed (${response.statusCode})',
       response.statusCode,
     );
   }
 
   final json = jsonDecode(response.body) as Map<String, dynamic>?;
   if (json == null) {
-    throw AnnouncementBackendException('Empty response from send-account-approval');
+    throw AnnouncementBackendException(
+      'Empty response from send-account-approval',
+    );
   }
   return SendAccountApprovalResponse.fromJson(json);
 }
@@ -300,14 +313,18 @@ Future<RecommendAudiencesResponse> recommendAudiences(String text) async {
   if (response.statusCode != 200) {
     final body = response.body;
     throw AnnouncementBackendException(
-      body.isNotEmpty ? body : 'Recommend audiences failed (${response.statusCode})',
+      body.isNotEmpty
+          ? body
+          : 'Recommend audiences failed (${response.statusCode})',
       response.statusCode,
     );
   }
 
   final json = jsonDecode(response.body) as Map<String, dynamic>?;
   if (json == null) {
-    throw AnnouncementBackendException('Empty response from recommend-audiences');
+    throw AnnouncementBackendException(
+      'Empty response from recommend-audiences',
+    );
   }
   return RecommendAudiencesResponse.fromJson(json);
 }
@@ -351,7 +368,9 @@ Future<SendAnnouncementPushResponse> sendAnnouncementPush({
 
   final json = jsonDecode(response.body) as Map<String, dynamic>?;
   if (json == null) {
-    throw AnnouncementBackendException('Empty response from send-announcement-push');
+    throw AnnouncementBackendException(
+      'Empty response from send-announcement-push',
+    );
   }
   return SendAnnouncementPushResponse.fromJson(json);
 }
