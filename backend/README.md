@@ -1,35 +1,158 @@
 # LINKod Admin Backend (FastAPI)
 
-Local REST API for the LINKod Admin system: **AI-based text refinement**, **rule-based audience recommendation**, and **admin-triggered push notifications (FCM)**.
+Local REST API for the LINKod Admin system with **AI text refinement** via LLM Gateway (hosted LLM with local fallback), **rule-based audience recommendation**, and **admin-triggered push notifications (FCM)**.
 
-## Architecture
+## Quick Start
 
-- **AI logic** (Ollama, llama3.2:3b): isolated in `services/ai_refinement.py`. Only refines text; does not add information or decide audience.
-- **Rule-based logic**: isolated in `services/audience_rules.py`. Keyword rules loaded from `config/audience_rules.json`; no AI.
-- **Human-in-the-loop**: Endpoints return data only. The Flutter admin app shows refined text and suggested audiences; the admin reviews and edits before publishing. No auto-publish.
-
-## Requirements
-
-- Python 3.9+
-- [Ollama](https://ollama.ai) installed and running locally
-- Model pulled: `ollama pull llama3.2:3b` (suitable for ~8 GB RAM)
-
-## Install
+### 1. Install Dependencies
 
 ```bash
 cd backend
 pip install -r requirements.txt
 ```
 
-## Run
+### 2. Configure Environment
+
+Copy the example and fill in your values:
 
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 8000
+cp env_example.txt .env
 ```
 
-Or: `python main.py`
+**For hosted mode (recommended for production):**
+```env
+AI_PROVIDER_MODE=auto
+LLM_BASE_URL=https://api.groq.com/openai/v1
+LLM_API_KEY=your_groq_api_key_here
+LLM_MODEL_PRIMARY=llama-3.1-8b-instant
+LLM_MODEL_FALLBACK=llama-3.3-70b-versatile
+```
 
-## Endpoints
+**For local-only mode (no internet required):**
+```env
+AI_PROVIDER_MODE=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2:3b
+```
+
+### 3. Run the Server
+
+```bash
+python main.py
+```
+
+Or with auto-reload for development:
+```bash
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Server starts on `http://localhost:8000`
+
+Test it's running:
+```powershell
+Invoke-RestMethod -Uri http://localhost:8000/health -Method GET
+```
+
+## Provider Modes
+
+Set `AI_PROVIDER_MODE` in your `.env`:
+
+| Mode | Behavior | Use When |
+|------|----------|----------|
+| `auto` | Try hosted primary → hosted fallback → local Ollama | Default, production |
+| `hosted` | Hosted only (no Ollama fallback) | Fast responses, no local GPU |
+| `ollama` | Local Ollama only | No internet, testing, privacy |
+
+## Switching to Local (Ollama) Fallback
+
+If Groq API fails or you want to run completely offline:
+
+### 1. Install Ollama
+
+```powershell
+winget install Ollama.Ollama
+```
+
+Or download from [ollama.ai](https://ollama.ai)
+
+### 2. Pull the Model
+
+```bash
+ollama pull llama3.2:3b
+```
+
+### 3. Switch Mode
+
+Edit `.env`:
+```env
+AI_PROVIDER_MODE=ollama
+```
+
+Or for automatic fallback (keeps trying hosted first):
+```env
+AI_PROVIDER_MODE=auto
+```
+
+### 4. Restart Backend
+
+```bash
+# Stop current server (Ctrl+C), then:
+python main.py
+```
+
+### Verify Ollama is Working
+
+```bash
+# Check Ollama is running
+ollama list
+
+# Test model directly
+ollama run llama3.2:3b "test"
+```
+
+## Fallback Chain (Auto Mode)
+
+```
+User Request
+    ↓
+Groq Primary (llama-3.1-8b-instant)
+    ↓ (fails after timeout or error)
+Groq Fallback (llama-3.3-70b-versatile)
+    ↓ (fails)
+Local Ollama (llama3.2:3b)
+    ↓ (fails)
+Return error to Flutter app
+```
+
+## Architecture
+
+```
+services/ai_refinement.py (API layer)
+    ↓
+llm/gateway.py (orchestrator - picks provider)
+    ↓
+├─ llm/client.py (hosted: Groq/OpenAI)
+└─ llm/fallback.py (local: Ollama)
+```
+
+**New modular structure:**
+- `llm/prompt_builder.py` - Prompt templates with anti-hallucination rules
+- `llm/validators.py` - Output validation (signature preservation, fact checking)
+- `config/ai_settings.py` - Environment configuration
+
+## Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `AI_PROVIDER_MODE` | No | `auto` | `auto`, `hosted`, or `ollama` |
+| `LLM_BASE_URL` | For hosted | - | API endpoint (Groq: `https://api.groq.com/openai/v1`) |
+| `LLM_API_KEY` | For hosted | - | Your Groq/OpenAI API key |
+| `LLM_MODEL_PRIMARY` | For hosted | - | Primary model (e.g., `llama-3.1-8b-instant`) |
+| `LLM_MODEL_FALLBACK` | No | - | Fallback model (e.g., `llama-3.3-70b-versatile`) |
+| `AI_TIMEOUT_SECONDS` | No | `60` | Request timeout |
+| `OLLAMA_BASE_URL` | No | `http://localhost:11434` | Ollama endpoint |
+| `OLLAMA_MODEL` | No | `llama3.2:3b` | Local model name |
+| `GOOGLE_APPLICATION_CREDENTIALS` | For push | - | Firebase service account JSON path |
 
 ### POST /refine
 
@@ -115,6 +238,48 @@ So: **announcement is posted** (Firestore write) is separate from **push sent** 
 
 ## Troubleshooting
 
+### Port 8000 in use
+```powershell
+Get-Process python | Stop-Process -Force
+```
+
+### Groq API errors (400/401/429)
+- Check `LLM_API_KEY` is valid and not expired
+- Verify model names are current (models get deprecated)
+- Check `LLM_BASE_URL` ends with `/v1`
+- 429 = rate limit; wait a moment and retry
+
+### Model deprecated error
+Groq deprecates models periodically. Update `.env`:
+```env
+LLM_MODEL_PRIMARY=llama-3.1-8b-instant
+LLM_MODEL_FALLBACK=llama-3.3-70b-versatile
+```
+
+### Ollama not responding
+```powershell
+# Check if Ollama is running
+ollama list
+
+# If empty, start Ollama
+ollama serve
+
+# Pull model if missing
+ollama pull llama3.2:3b
+```
+
+### Timeout errors
+Increase timeout in `.env`:
+```env
+AI_TIMEOUT_SECONDS=120
+```
+
+### AI refinement returns 503
+This means all providers failed:
+1. Check Groq API key is valid
+2. Check Ollama is running (if using `auto` or `ollama` mode)
+3. Check model is pulled: `ollama list`
+
 ### Refine text times out (POST /refine)
 
 - **Ollama not running:** Start Ollama (e.g. `ollama serve`) and ensure the model is pulled: `ollama pull llama3.2:3b`.
@@ -144,7 +309,30 @@ Example:
 
 No AI is used for audience recommendation; logic is transparent and explainable via `matched_rules` in the response.
 
-## Flutter integration
+## Security Notes
+
+- **Never commit `.env`** with real API keys
+- The repo has `.gitignore` configured to exclude `.env`
+- Store production keys in environment variables, not files
+- Rotate API keys if accidentally exposed
+- For production deployment, use secret management (AWS Secrets Manager, etc.)
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| `main.py` | FastAPI app entry point |
+| `services/ai_refinement.py` | Public API (thin wrapper) |
+| `services/audience_rules.py` | Rule-based audience recommendation |
+| `llm/gateway.py` | Provider routing & fallback chain |
+| `llm/client.py` | Hosted LLM (Groq/OpenAI) client |
+| `llm/fallback.py` | Local Ollama client |
+| `llm/prompt_builder.py` | Prompt templates with anti-hallucination rules |
+| `llm/validators.py` | Output validation |
+| `config/ai_settings.py` | Environment configuration |
+| `env_example.txt` | Environment template |
+
+## Flutter Integration
 
 - Call `POST http://localhost:8000/refine` with the draft text; show `original_text` and `refined_text` for review.
 - Optionally call `POST http://localhost:8000/recommend-audiences` with the refined text; show `audiences` and `matched_rules` as suggestions.
