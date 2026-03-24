@@ -684,6 +684,68 @@ async function sendPushToUser(userId, title, body, data) {
   await sendMulticast(tokens, title, body, data);
 }
 
+function isPendingValue(value) {
+  return String(value || '').trim().toLowerCase() === 'pending';
+}
+
+async function getApprovalsSettings() {
+  try {
+    const settingsSnap = await db.collection('publicSettings').doc('approvals').get();
+    const data = settingsSnap.exists ? settingsSnap.data() || {} : {};
+    return {
+      autoApproveProducts: data.autoApproveProducts === true,
+      autoApproveTasks: data.autoApproveTasks === true,
+    };
+  } catch (e) {
+    console.error('Failed to load publicSettings/approvals:', e);
+    return {
+      autoApproveProducts: false,
+      autoApproveTasks: false,
+    };
+  }
+}
+
+exports.onProductCreatedAutoApprove = functions.firestore
+  .document('products/{productId}')
+  .onCreate(async (snap, context) => {
+    const { productId } = context.params;
+    const product = snap.data() || {};
+    if (!isPendingValue(product.status)) return;
+
+    const { autoApproveProducts } = await getApprovalsSettings();
+    if (!autoApproveProducts) return;
+
+    try {
+      await snap.ref.update({
+        status: 'Approved',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      console.error(`Auto-approve product failed for ${productId}:`, e);
+    }
+  });
+
+exports.onTaskCreatedAutoApprove = functions.firestore
+  .document('tasks/{taskId}')
+  .onCreate(async (snap, context) => {
+    const { taskId } = context.params;
+    const task = snap.data() || {};
+    const currentApproval = task.approvalStatus || task.status;
+    if (!isPendingValue(currentApproval)) return;
+
+    const { autoApproveTasks } = await getApprovalsSettings();
+    if (!autoApproveTasks) return;
+
+    try {
+      await snap.ref.update({
+        approvalStatus: 'Approved',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      console.error(`Auto-approve task failed for ${taskId}:`, e);
+    }
+  });
+
 exports.onPostLikeCreated = functions.firestore
   .document('posts/{postId}/likes/{likeId}')
   .onCreate(async (snap, context) => {

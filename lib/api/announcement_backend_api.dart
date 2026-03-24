@@ -15,17 +15,28 @@ const String kAnnouncementBackendBaseUrl = 'http://localhost:8000';
 
 /// Base URL for push endpoints (send-announcement-push, send-account-approval, send-user-push).
 /// When set, the admin app calls this URL for push so you don't need to run the Python backend.
-/// Use your deployed Cloud Function URL, e.g. https://us-central1-linkod-db.cloudfunctions.net/api
-/// (Replace region if your functions are in another region; see Firebase Console > Functions.)
-/// If null or empty, push requests use [kAnnouncementBackendBaseUrl] (requires local backend on port 8000).
-// TODO: Verify Cloud Function is deployed and accessible before enabling this
+/// Currently deployed to: https://us-central1-linkod-db.cloudfunctions.net/api
 const String? kPushApiBaseUrl =
-    null; // Temporarily use local backend at http://localhost:8000
+    'https://us-central1-linkod-db.cloudfunctions.net/api';
 
 String get _pushBaseUrl =>
     (kPushApiBaseUrl != null && kPushApiBaseUrl!.trim().isNotEmpty)
-    ? kPushApiBaseUrl!.trim()
+    ? _normalizePushBaseUrl(kPushApiBaseUrl!.trim())
     : kAnnouncementBackendBaseUrl;
+
+String _normalizePushBaseUrl(String baseUrl) {
+  var normalized = baseUrl.trim();
+  if (normalized.endsWith('/')) {
+    normalized = normalized.substring(0, normalized.length - 1);
+  }
+
+  // Guard against missing /api when using the Express HTTP function URL.
+  if (normalized.contains('cloudfunctions.net') &&
+      !normalized.endsWith('/api')) {
+    normalized = '$normalized/api';
+  }
+  return normalized;
+}
 
 /// Result of POST /refine: original and refined text.
 class RefineResponse {
@@ -216,11 +227,11 @@ Future<SendAccountApprovalResponse> sendAccountApprovalPush({
       .timeout(const Duration(seconds: 15));
 
   if (response.statusCode != 200) {
-    final body = response.body;
+    final responseBody = response.body;
     throw AnnouncementBackendException(
-      body.isNotEmpty
-          ? body
-          : 'Send account approval push failed (${response.statusCode})',
+      responseBody.isNotEmpty
+          ? '$responseBody\n(request: $uri)'
+          : 'Send account approval push failed (${response.statusCode}) (request: $uri)',
       response.statusCode,
     );
   }
@@ -256,9 +267,11 @@ Future<SendUserPushResponse> sendUserPush({
       .timeout(const Duration(seconds: 15));
 
   if (response.statusCode != 200) {
-    final body = response.body;
+    final responseBody = response.body;
     throw AnnouncementBackendException(
-      body.isNotEmpty ? body : 'Send user push failed (${response.statusCode})',
+      responseBody.isNotEmpty
+          ? '$responseBody\n(request: $uri)'
+          : 'Send user push failed (${response.statusCode}) (request: $uri)',
       response.statusCode,
     );
   }
@@ -359,9 +372,11 @@ Future<SendAnnouncementPushResponse> sendAnnouncementPush({
       .timeout(const Duration(seconds: 30));
 
   if (response.statusCode != 200) {
-    final body = response.body;
+    final responseBody = response.body;
     throw AnnouncementBackendException(
-      body.isNotEmpty ? body : 'Send push failed (${response.statusCode})',
+      responseBody.isNotEmpty
+          ? '$responseBody\n(request: $uri)'
+          : 'Send push failed (${response.statusCode}) (request: $uri)',
       response.statusCode,
     );
   }

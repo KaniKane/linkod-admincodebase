@@ -1218,7 +1218,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                         },
                       ),
                       const Text(
-                        'Auto-approve posts',
+                        'Auto-approve announcement',
                         style: TextStyle(fontSize: 13),
                       ),
                     ],
