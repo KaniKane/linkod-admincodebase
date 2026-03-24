@@ -23,7 +23,45 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _isLoading = false;
   String? _errorMessage;
+  String? _emailFieldError;
+  String? _passwordFieldError;
   bool _passwordObscure = true;
+
+  void _clearFieldErrors() {
+    if (_emailFieldError == null && _passwordFieldError == null) return;
+    setState(() {
+      _emailFieldError = null;
+      _passwordFieldError = null;
+    });
+  }
+
+  void _setFieldErrors({String? emailError, String? passwordError}) {
+    setState(() {
+      _emailFieldError = emailError;
+      _passwordFieldError = passwordError;
+    });
+  }
+
+  String _mapFirebaseAuthErrorToMessage(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'invalid-email':
+        return 'Enter a valid email address.';
+      case 'user-not-found':
+        return 'No account found for this email.';
+      case 'wrong-password':
+        return 'Incorrect password. Try again.';
+      case 'invalid-credential':
+        return 'Incorrect email or password.';
+      case 'user-disabled':
+        return 'This account has been disabled. Contact support.';
+      case 'too-many-requests':
+        return 'Too many attempts. Try again in a few minutes.';
+      case 'network-request-failed':
+        return 'Network error. Check your internet connection and try again.';
+      default:
+        return 'Login failed. Please try again.';
+    }
+  }
 
   @override
   void initState() {
@@ -54,6 +92,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
+    _clearFieldErrors();
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
@@ -142,9 +181,34 @@ class _LoginScreenState extends State<LoginScreen> {
           MaterialPageRoute(builder: (context) => const DashboardScreen()),
         );
       });
+    } on FirebaseAuthException catch (e) {
+      final message = _mapFirebaseAuthErrorToMessage(e);
+
+      if (e.code == 'invalid-email' || e.code == 'user-not-found') {
+        _setFieldErrors(emailError: message);
+      } else if (e.code == 'wrong-password') {
+        _setFieldErrors(passwordError: message);
+      } else if (e.code == 'invalid-credential') {
+        final email = _emailController.text.trim().toLowerCase();
+        try {
+          final methods = await FirebaseAuth.instance
+              .fetchSignInMethodsForEmail(email);
+          if (methods.isEmpty) {
+            _setFieldErrors(emailError: 'No account found for this email.');
+          } else {
+            _setFieldErrors(passwordError: 'Incorrect password. Try again.');
+          }
+        } catch (_) {
+          _setFieldErrors(passwordError: message);
+        }
+      } else {
+        setState(() {
+          _errorMessage = message;
+        });
+      }
     } catch (e) {
       setState(() {
-        _errorMessage = 'Login failed: $e';
+        _errorMessage = 'Login failed. Please try again.';
       });
     } finally {
       if (mounted) {
@@ -279,13 +343,22 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 8),
               Container(
-                height: 50,
                 decoration: BoxDecoration(
                   color: AppColors.inputBg,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: TextFormField(
                   controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  onChanged: (_) {
+                    if (_errorMessage != null || _emailFieldError != null) {
+                      setState(() {
+                        _errorMessage = null;
+                        _emailFieldError = null;
+                      });
+                    }
+                  },
                   validator: (value) {
                     final email = value?.trim() ?? '';
                     if (email.isEmpty) {
@@ -303,14 +376,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     fontSize: 16,
                     color: AppColors.darkGrey,
                   ),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: 'name@example.com',
-                    hintStyle: TextStyle(
+                    hintStyle: const TextStyle(
                       fontSize: 16,
                       color: AppColors.lightGrey,
                     ),
+                    errorText: _emailFieldError,
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
+                    contentPadding: const EdgeInsets.symmetric(
                       horizontal: 15,
                       vertical: 15,
                     ),
@@ -330,7 +404,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 8),
               Container(
-                height: 50,
                 decoration: BoxDecoration(
                   color: AppColors.inputBg,
                   borderRadius: BorderRadius.circular(10),
@@ -338,6 +411,20 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: TextFormField(
                   controller: _passwordController,
                   obscureText: _passwordObscure,
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) {
+                    if (!_isLoading) {
+                      _handleLogin();
+                    }
+                  },
+                  onChanged: (_) {
+                    if (_errorMessage != null || _passwordFieldError != null) {
+                      setState(() {
+                        _errorMessage = null;
+                        _passwordFieldError = null;
+                      });
+                    }
+                  },
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Password is required';
@@ -357,6 +444,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       fontSize: 16,
                       color: AppColors.lightGrey,
                     ),
+                    errorText: _passwordFieldError,
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 15,
