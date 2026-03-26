@@ -842,7 +842,70 @@ exports.onProductReplyCreated = functions.firestore
     });
   });
 
-// --- Firestore triggers: task volunteer and volunteer acceptance (Phase 1 fix) ---
+// --- Firestore triggers: send admin notification on new awaitingApproval document ---
+
+async function getAdminTokens() {
+  const tokens = [];
+  const seen = new Set();
+  const adminsSnapshot = await db.collection('users')
+    .where('role', 'in', ['super_admin', 'admin'])
+    .where('isActive', '==', true)
+    .get();
+  
+  for (const doc of adminsSnapshot.docs) {
+    const data = doc.data() || {};
+    const uid = doc.id;
+    normalizeTokenList(data.fcmTokens || []).forEach((t) => {
+      if (!seen.has(t)) {
+        seen.add(t);
+        tokens.push(t);
+      }
+    });
+    const devicesSnap = await db.collection('users').doc(uid).collection('devices').get();
+    devicesSnap.docs.forEach((d) => {
+      const token = d.data().fcmToken;
+      if (typeof token === 'string' && token.trim() && !seen.has(token.trim())) {
+        seen.add(token.trim());
+        tokens.push(token.trim());
+      }
+    });
+  }
+  return tokens;
+}
+
+exports.onAwaitingApprovalCreated = functions.firestore
+  .document('awaitingApproval/{requestId}')
+  .onCreate(async (snap, context) => {
+    const { requestId } = context.params;
+    const data = snap.data() || {};
+    
+    const fullName = data.fullName || 'Someone';
+    const isResubmission = (data.reapplicationCount || 0) > 0;
+    
+    const title = isResubmission ? 'Account Resubmission' : 'New Account Request';
+    const body = isResubmission 
+      ? `${fullName} resubmitted their application`
+      : `${fullName} requested a new account`;
+    
+    try {
+      const tokens = await getAdminTokens();
+      if (tokens.length === 0) {
+        console.log(`No admin tokens found for ${requestId}`);
+        return;
+      }
+      
+      const { successCount, failureCount } = await sendMulticast(tokens, title, body, {
+        type: 'new_account_request',
+        requestId,
+        userType: data.userType || 'admin',
+      });
+      
+      console.log(`Admin notification sent for ${requestId}: ${successCount} success, ${failureCount} failure`);
+    } catch (e) {
+      console.error(`Failed to send admin notification for ${requestId}:`, e);
+    }
+  });
+
 
 exports.onTaskVolunteerCreated = functions.firestore
   .document('tasks/{taskId}/volunteers/{volunteerId}')

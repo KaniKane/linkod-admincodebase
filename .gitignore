@@ -67,4 +67,36 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+# Build outputs
+dist/
+build/
+
+# Python
+__pycache__/
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Logs
+*.log
+logs/
+
+# Test coverage
+coverage/
+*.coverage
+
+# Misc temp files
+*.tmp
+*.temp
+*.pid
+*.seed
+*.pid.lock
+
+# Firebase service account key (already specific)
 backend/linkod-db-firebase-adminsdk-fbsvc-db4270d732.json
+backend/*.json
