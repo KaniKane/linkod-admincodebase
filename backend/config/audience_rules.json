@@ -43,11 +43,7 @@
         "lawas",
         "kahimsog"
       ],
-      "audiences": [
-        "Senior",
-        "PWD",
-        "Parent"
-      ]
+      "audiences": ["Senior", "PWD", "Parent"]
     },
     {
       "keywords": [
@@ -78,7 +74,6 @@
         "catch",
         "trabaho",
         "hanapbuhay",
-        "kita",
         "sweldo",
         "panginabuhian",
         "uma",
@@ -101,12 +96,16 @@
         "palengke",
         "tinda"
       ],
-      "audiences": [
-        "Farmer",
-        "Fisherman",
-        "Small Business Owner",
-        "4Ps"
-      ]
+      "weak_keywords": [
+        "job",
+        "work",
+        "training",
+        "seminar",
+        "loan",
+        "capital",
+        "tinda"
+      ],
+      "audiences": ["Farmer", "Fisherman", "Small Business Owner", "4Ps"]
     },
     {
       "keywords": [
@@ -129,6 +128,8 @@
         "kk",
         "katipunan ng kabataan",
         "kabataan",
+        "kabatan-onan",
+        "kabatanonan",
         "bata",
         "estudyante",
         "eskwela",
@@ -141,10 +142,40 @@
         "liga",
         "basketball"
       ],
-      "audiences": [
-        "Youth",
-        "Student"
-      ]
+      "weak_keywords": [
+        "young",
+        "teen",
+        "teenager",
+        "child",
+        "children",
+        "kid",
+        "pupil",
+        "learner",
+        "school",
+        "education",
+        "class",
+        "bata",
+        "eskwela",
+        "tulunghaan",
+        "klase",
+        "linghud",
+        "liga"
+      ],
+      "strong_keywords": [
+        "sk",
+        "sangguniang kabataan",
+        "katipunan ng kabataan",
+        "kabataan",
+        "kabatanonan",
+        "kabatan-onan",
+        "basketball",
+        "sports",
+        "student",
+        "estudyante"
+      ],
+      "require_strong_keyword": true,
+      "min_score": 1.3,
+      "audiences": ["Youth", "Student"]
     },
     {
       "keywords": [
@@ -166,9 +197,29 @@
         "rehistro",
         "sakayan"
       ],
-      "audiences": [
-        "Tricycle Driver"
-      ]
+      "weak_keywords": [
+        "transport",
+        "vehicle",
+        "traffic",
+        "license",
+        "registration",
+        "motor",
+        "pasahero"
+      ],
+      "strong_keywords": [
+        "tricycle",
+        "traysikol",
+        "drayber",
+        "driver",
+        "franchise",
+        "prangkisa",
+        "lisensya",
+        "rehistro",
+        "sakayan"
+      ],
+      "require_strong_keyword": true,
+      "min_score": 1.3,
+      "audiences": ["Tricycle Driver"]
     },
     {
       "keywords": [
@@ -188,9 +239,7 @@
         "patrol",
         "seguridad"
       ],
-      "audiences": [
-        "Tanod"
-      ]
+      "audiences": ["Tanod"]
     },
     {
       "keywords": [
@@ -212,9 +261,30 @@
         "meeting",
         "pulong"
       ],
-      "audiences": [
-        "Barangay Official"
-      ]
+      "weak_keywords": [
+        "session",
+        "meeting",
+        "pulong",
+        "secretary",
+        "treasurer",
+        "sec",
+        "tess"
+      ],
+      "strong_keywords": [
+        "barangay official",
+        "captain",
+        "kapitan",
+        "chairman",
+        "councilor",
+        "kagawad",
+        "sk chairman",
+        "brgy",
+        "opisyales",
+        "konsehal"
+      ],
+      "require_strong_keyword": true,
+      "min_score": 1.3,
+      "audiences": ["Barangay Official"]
     },
     {
       "keywords": [
@@ -236,9 +306,16 @@
         "kwarta",
         "tabang"
       ],
-      "audiences": [
-        "4Ps"
-      ]
+      "weak_keywords": [
+        "social",
+        "welfare",
+        "poor",
+        "cash",
+        "kwarta",
+        "tabang"
+      ],
+      "strong_keywords": ["4ps", "4p's", "pantawid", "cct", "dswd"],
+      "audiences": ["4Ps"]
     },
     {
       "keywords": [
@@ -256,9 +333,7 @@
         "pomyendo",
         "senior citizen"
       ],
-      "audiences": [
-        "Senior"
-      ]
+      "audiences": ["Senior"]
     },
     {
       "keywords": [
@@ -280,9 +355,7 @@
         "bungol",
         "buta"
       ],
-      "audiences": [
-        "PWD"
-      ]
+      "audiences": ["PWD"]
     },
     {
       "keywords": [
@@ -306,9 +379,7 @@
         "opt",
         "operation timbang"
       ],
-      "audiences": [
-        "Parent"
-      ]
+      "audiences": ["Parent"]
     }
   ]
 }

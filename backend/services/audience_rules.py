@@ -11,6 +11,56 @@ import sys
 from pathlib import Path
 from typing import Any, List, Optional
 
+
+def _to_float(value: Any, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _build_keyword_pattern(keyword: str) -> str:
+    """Build a safe boundary-aware regex; plurals are only expanded for simple alpha tokens."""
+    kw = (keyword or "").strip().lower()
+    if not kw:
+        return ""
+
+    escaped = re.escape(kw)
+    is_simple_alpha_word = bool(re.fullmatch(r"[a-z]{3,}", kw))
+    suffix = r"(?:s|es)?" if is_simple_alpha_word else ""
+
+    # Use non-word boundaries so keywords with apostrophes/hyphens still match safely.
+    return rf"(?<!\w){escaped}{suffix}(?!\w)"
+
+
+def _keyword_weight(
+    keyword: str,
+    weak_keywords: set[str],
+    strong_keywords: set[str],
+) -> float:
+    kw = (keyword or "").strip().lower()
+    if not kw:
+        return 0.0
+    if kw in strong_keywords:
+        return 1.3
+    if kw in weak_keywords:
+        return 0.35
+
+    token_count = len(re.findall(r"[a-z0-9']+", kw))
+    if token_count >= 2:
+        return 1.2
+    if any(ch.isdigit() for ch in kw):
+        return 1.2
+
+    normalized_len = len(re.sub(r"[^a-z0-9]", "", kw))
+    if normalized_len >= 9:
+        return 1.1
+    if normalized_len >= 6:
+        return 1.0
+    if normalized_len >= 4:
+        return 0.8
+    return 0.6
+
 def _default_rules_path() -> Path:
     """Config path: dev = backend root; PyInstaller = bundle root or next to exe."""
     base = Path(__file__).resolve().parent.parent
@@ -80,31 +130,64 @@ def recommend_audiences(
     for rule in rules:
         keywords = rule.get("keywords") or rule.get("keyword_list") or []
         audiences = rule.get("audiences") or rule.get("audience_groups") or []
+        require_strong_keyword = bool(rule.get("require_strong_keyword", False))
+        weak_keywords = {
+            (k or "").strip().lower()
+            for k in (rule.get("weak_keywords") or [])
+            if (k or "").strip()
+        }
+        strong_keywords = {
+            (k or "").strip().lower()
+            for k in (rule.get("strong_keywords") or [])
+            if (k or "").strip()
+        }
+        min_score = _to_float(rule.get("min_score"), 1.0)
+
         if not keywords or not audiences:
             continue
         if not isinstance(keywords, list):
             keywords = [keywords]
         if not isinstance(audiences, list):
             audiences = [audiences]
-        # Check if any keyword matches using regex (case-insensitive due to text_lower)
+
+        matched_keywords: list[str] = []
+        score = 0.0
+        matched_strong_keyword = False
+
+        # Score all matched keywords; ignore very weak single-word accidental matches.
         for kw in keywords:
             kw_clean = (kw or "").strip().lower()
             if not kw_clean:
                 continue
-            
-            # Escape keyword but allow for simple English plurals (s or es) at the end
-            # \b ensures distinct word boundaries (e.g. "task" won't match "sk")
-            # We use re.escape to handle special chars like "4p's" safely
-            pattern = r'\b' + re.escape(kw_clean) + r'(?:s|es)?\b'
-            
+
+            pattern = _build_keyword_pattern(kw_clean)
+            if not pattern:
+                continue
             if re.search(pattern, text_lower):
-                matched_rules.append({"keywords": keywords, "audiences": audiences})
-                for a in audiences:
-                    a_str = (a or "").strip()
-                    if a_str and a_str not in seen_audiences:
-                        seen_audiences.add(a_str)
-                        audiences_ordered.append(a_str)
-                break
+                matched_keywords.append(kw_clean)
+                if kw_clean in strong_keywords:
+                    matched_strong_keyword = True
+                score += _keyword_weight(kw_clean, weak_keywords, strong_keywords)
+
+        if not matched_keywords or score < min_score:
+            continue
+
+        if require_strong_keyword and strong_keywords and not matched_strong_keyword:
+            continue
+
+        # Prevent generic one-word matches like "kita" from deciding a demographic.
+        if len(matched_keywords) == 1:
+            only_kw = matched_keywords[0]
+            only_weight = _keyword_weight(only_kw, weak_keywords, strong_keywords)
+            if only_weight < 0.7:
+                continue
+
+        matched_rules.append({"keywords": keywords, "audiences": audiences})
+        for a in audiences:
+            a_str = (a or "").strip()
+            if a_str and a_str not in seen_audiences:
+                seen_audiences.add(a_str)
+                audiences_ordered.append(a_str)
 
     if not audiences_ordered:
         return [DEFAULT_AUDIENCE], []

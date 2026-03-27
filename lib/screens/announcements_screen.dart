@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -39,11 +41,24 @@ class AnnouncementsScreen extends StatefulWidget {
 
 class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   static const String _lastTabPrefsKey = 'announcements_last_tab';
+  static const String _composeTitlePrefsKey = 'announcements_compose_title';
+  static const String _composeContentPrefsKey = 'announcements_compose_content';
+  static const String _composeAiRefinedPrefsKey =
+      'announcements_compose_ai_refined';
+  static const String _composeIsAiRefinedPrefsKey =
+      'announcements_compose_is_ai_refined';
+  static const String _composeAudiencesPrefsKey =
+      'announcements_compose_audiences';
+  static const String _composeHasSuggestedPrefsKey =
+      'announcements_compose_has_suggested';
+  static const String _composeSuggestedAudiencesPrefsKey =
+      'announcements_compose_suggested_audiences';
 
   int _activeTabIndex = 0;
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
   final _aiRefinedController = TextEditingController();
+  Timer? _composeAutosaveTimer;
   Set<String> _selectedAudiences = {};
   bool _isAIRefined = false;
   List<String> _suggestedAudiences = ['Senior', 'PWD'];
@@ -95,16 +110,119 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   @override
   void initState() {
     super.initState();
+    _bindComposeAutosaveListeners();
     _activeTabIndex = widget.initialTabIndex.clamp(0, 2);
     if (widget.rememberLastTab) {
       _restoreLastTabIndex();
     } else {
       _persistActiveTabIndex();
     }
+    _restoreComposeState();
     _loadDrafts();
     _loadCurrentUserRole();
     _loadPublishedAnnouncements();
     _loadPendingCounts();
+  }
+
+  void _bindComposeAutosaveListeners() {
+    _titleController.addListener(_queuePersistComposeState);
+    _contentController.addListener(_queuePersistComposeState);
+    _aiRefinedController.addListener(_queuePersistComposeState);
+  }
+
+  void _queuePersistComposeState() {
+    _composeAutosaveTimer?.cancel();
+    _composeAutosaveTimer = Timer(
+      const Duration(milliseconds: 350),
+      _persistComposeState,
+    );
+  }
+
+  Future<void> _persistComposeState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final audiencesJson = jsonEncode(_selectedAudiences.toList());
+    final suggestedJson = jsonEncode(_suggestedAudiences);
+
+    await Future.wait([
+      prefs.setString(_composeTitlePrefsKey, _titleController.text),
+      prefs.setString(_composeContentPrefsKey, _contentController.text),
+      prefs.setString(_composeAiRefinedPrefsKey, _aiRefinedController.text),
+      prefs.setBool(_composeIsAiRefinedPrefsKey, _isAIRefined),
+      prefs.setString(_composeAudiencesPrefsKey, audiencesJson),
+      prefs.setBool(
+        _composeHasSuggestedPrefsKey,
+        _hasTriggeredAudienceSuggestion,
+      ),
+      prefs.setString(_composeSuggestedAudiencesPrefsKey, suggestedJson),
+    ]);
+  }
+
+  Future<void> _resetComposeState() async {
+    _composeAutosaveTimer?.cancel();
+    if (!mounted) return;
+
+    setState(() {
+      _titleController.clear();
+      _contentController.clear();
+      _aiRefinedController.clear();
+      _selectedAudiences = {};
+      _isAIRefined = false;
+      _suggestedAudiences = ['Senior', 'PWD'];
+      _hasTriggeredAudienceSuggestion = false;
+      _isRefining = false;
+      _isSuggestingDemographic = false;
+      _currentDraftId = null;
+      _currentEditingAnnouncementId = null;
+      _announcementImageUrls = [];
+      _pickedImages = [];
+    });
+
+    await _persistComposeState();
+  }
+
+  Future<void> _restoreComposeState() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+
+    List<String> restoredAudiences = [];
+    List<String> restoredSuggestedAudiences = [];
+
+    final audiencesRaw = prefs.getString(_composeAudiencesPrefsKey);
+    final suggestedRaw = prefs.getString(_composeSuggestedAudiencesPrefsKey);
+
+    if (audiencesRaw != null && audiencesRaw.isNotEmpty) {
+      try {
+        restoredAudiences = (jsonDecode(audiencesRaw) as List)
+            .whereType<String>()
+            .toList();
+      } catch (_) {
+        restoredAudiences = [];
+      }
+    }
+
+    if (suggestedRaw != null && suggestedRaw.isNotEmpty) {
+      try {
+        restoredSuggestedAudiences = (jsonDecode(suggestedRaw) as List)
+            .whereType<String>()
+            .toList();
+      } catch (_) {
+        restoredSuggestedAudiences = [];
+      }
+    }
+
+    setState(() {
+      _titleController.text = prefs.getString(_composeTitlePrefsKey) ?? '';
+      _contentController.text = prefs.getString(_composeContentPrefsKey) ?? '';
+      _aiRefinedController.text =
+          prefs.getString(_composeAiRefinedPrefsKey) ?? '';
+      _isAIRefined = prefs.getBool(_composeIsAiRefinedPrefsKey) ?? false;
+      _selectedAudiences = restoredAudiences.toSet();
+      _hasTriggeredAudienceSuggestion =
+          prefs.getBool(_composeHasSuggestedPrefsKey) ?? false;
+      if (restoredSuggestedAudiences.isNotEmpty) {
+        _suggestedAudiences = restoredSuggestedAudiences;
+      }
+    });
   }
 
   Future<void> _restoreLastTabIndex() async {
@@ -270,6 +388,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
 
   @override
   void dispose() {
+    _composeAutosaveTimer?.cancel();
     _titleController.dispose();
     _contentController.dispose();
     _aiRefinedController.dispose();
@@ -350,6 +469,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         _selectedAudiences.add(audience);
       }
     });
+    _queuePersistComposeState();
   }
 
   Future<void> _handleRefineWithAI() async {
@@ -370,7 +490,6 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
 
     setState(() {
       _isRefining = true;
-      _hasTriggeredAudienceSuggestion = true;
     });
     try {
       final result = await refineAnnouncementText(original);
@@ -380,31 +499,6 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         _isAIRefined = true;
         _isRefining = false;
       });
-      // Rule-based audience recommendation from refined text (no AI; transparent)
-      try {
-        final audienceResult = await recommendAudiences(result.refinedText);
-        if (!mounted) return;
-        setState(() {
-          _suggestedAudiences = audienceResult.audiences.isNotEmpty
-              ? audienceResult.audiences
-              : _suggestedAudiences;
-        });
-      } catch (_) {
-        // Keep previous suggested audiences if recommend-audiences fails
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const DraftSavedNotification(
-                message:
-                    'Audience suggestion unavailable. You can still select audiences manually.',
-              ),
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      }
     } on AnnouncementBackendException catch (e) {
       if (!mounted) return;
       setState(() => _isRefining = false);
@@ -446,12 +540,21 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     setState(() {
       _isAIRefined = false;
     });
+    _queuePersistComposeState();
   }
 
   void _handleAddSuggestedAudience(String audience) {
     setState(() {
       _selectedAudiences.add(audience);
     });
+    _queuePersistComposeState();
+  }
+
+  void _handleDismissSuggestedAudiences() {
+    setState(() {
+      _hasTriggeredAudienceSuggestion = false;
+    });
+    _queuePersistComposeState();
   }
 
   void _handleEditDraft(AnnouncementDraft draft) {
@@ -468,6 +571,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       _pickedImages = [];
       _hasTriggeredAudienceSuggestion = true;
     });
+    _queuePersistComposeState();
     _setActiveTab(0); // Switch to Compose tab
   }
 
@@ -588,7 +692,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     final title = _titleController.text.trim();
     final refined = _aiRefinedController.text.trim();
     final original = _contentController.text.trim();
-    final body = refined.isNotEmpty ? refined : original;
+    // Prefer original text for targeting so AI rewording does not skew audience detection.
+    final body = original.isNotEmpty ? original : refined;
     final text = [title, body].where((s) => s.isNotEmpty).join('\n\n');
     if (text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -608,6 +713,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       _isSuggestingDemographic = true;
       _hasTriggeredAudienceSuggestion = true;
     });
+    _queuePersistComposeState();
     try {
       final audienceResult = await recommendAudiences(text);
       if (!mounted) return;
@@ -617,6 +723,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             : _suggestedAudiences;
         _isSuggestingDemographic = false;
       });
+      _queuePersistComposeState();
     } on AnnouncementBackendException catch (e) {
       if (!mounted) return;
       setState(() => _isSuggestingDemographic = false);
@@ -720,6 +827,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       await _loadDrafts();
 
       if (!mounted) return;
+
+      await _resetComposeState();
 
       showDialog(
         context: context,
@@ -1019,6 +1128,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             ? 'Announcement is posted successfully'
             : 'Announcement submitted for approval. It will appear after admin approval.';
 
+        await _resetComposeState();
+
         showDialog(
           context: context,
           barrierColor: Colors.transparent,
@@ -1254,20 +1365,48 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           const SizedBox(height: 8),
           Container(
             decoration: BoxDecoration(
-              color: const Color(0xFFF1F1F1),
+              color: (_isAIRefined || _isRefining)
+                  ? const Color(0xFFDCDCDC)
+                  : const Color(0xFFF1F1F1),
               borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: (_isAIRefined || _isRefining)
+                    ? const Color(0xFFB8B8B8)
+                    : Colors.transparent,
+                width: (_isAIRefined || _isRefining) ? 1.5 : 0,
+              ),
             ),
             child: TextField(
               controller: _contentController,
+              enabled: !_isAIRefined && !_isRefining,
+              readOnly: _isAIRefined || _isRefining,
               minLines: 5,
               maxLines: null,
-              style: const TextStyle(fontSize: 16, color: AppColors.darkGrey),
+              style: TextStyle(
+                fontSize: 16,
+                color: (_isAIRefined || _isRefining)
+                    ? AppColors.mediumGrey
+                    : AppColors.darkGrey,
+              ),
               decoration: const InputDecoration(
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.all(15),
               ),
             ),
           ),
+          if (_isAIRefined || _isRefining) ...[
+            const SizedBox(height: 6),
+            const Row(
+              children: [
+                Icon(Icons.lock_outline, size: 14, color: AppColors.mediumGrey),
+                SizedBox(width: 6),
+                Text(
+                  'Content is locked. Click Edit Original to modify.',
+                  style: TextStyle(fontSize: 12, color: AppColors.mediumGrey),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 16),
           // AI Refine and Suggest demographic buttons
           Row(
@@ -1355,19 +1494,38 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Icon(
-                        Icons.lightbulb_outline,
-                        color: AppColors.darkGrey,
-                        size: 20,
+                      const Row(
+                        children: [
+                          Icon(
+                            Icons.lightbulb_outline,
+                            color: AppColors.darkGrey,
+                            size: 20,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Suggested Audiences',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.darkGrey,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Suggested Audiences',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.darkGrey,
+                      MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          onTap: _handleDismissSuggestedAudiences,
+                          child: const Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(
+                              Icons.close,
+                              size: 20,
+                              color: AppColors.mediumGrey,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -1390,7 +1548,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                         audience,
                       );
                       return MouseRegion(
-                        cursor: SystemMouseCursors.click,
+                        cursor: isAlreadySelected
+                            ? SystemMouseCursors.basic
+                            : SystemMouseCursors.click,
                         child: GestureDetector(
                           onTap: () {
                             if (!isAlreadySelected) {
@@ -1403,10 +1563,14 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                               vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: AppColors.white,
+                              color: isAlreadySelected
+                                  ? AppColors.selectedAudienceBg
+                                  : AppColors.white,
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: AppColors.primaryGreen,
+                                color: isAlreadySelected
+                                    ? AppColors.primaryGreen.withOpacity(0.55)
+                                    : AppColors.lightGrey,
                                 width: 1,
                               ),
                             ),

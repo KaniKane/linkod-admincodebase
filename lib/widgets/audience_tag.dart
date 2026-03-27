@@ -38,7 +38,9 @@ class _AudienceTagState extends State<AudienceTag> {
                 : AppColors.white,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: AppColors.lightGrey,
+              color: widget.isSelected
+                  ? AppColors.primaryGreen.withOpacity(0.55)
+                  : AppColors.lightGrey,
               width: 1,
             ),
           ),
