@@ -47,6 +47,36 @@
     },
     {
       "keywords": [
+        "pregnant",
+        "lactating",
+        "breastfeeding",
+        "prenatal",
+        "postnatal",
+        "maternal",
+        "buntis",
+        "nagpasuso",
+        "nagpapasuso",
+        "pagmabdos",
+        "inahan",
+        "nanay"
+      ],
+      "strong_keywords": [
+        "pregnant",
+        "lactating",
+        "breastfeeding",
+        "prenatal",
+        "postnatal",
+        "buntis",
+        "nagpasuso",
+        "nagpapasuso",
+        "pagmabdos"
+      ],
+      "require_strong_keyword": true,
+      "min_score": 1.3,
+      "audiences": ["Pregnant/Lactating Mother"]
+    },
+    {
+      "keywords": [
         "livelihood",
         "job",
         "work",
@@ -219,7 +249,7 @@
       ],
       "require_strong_keyword": true,
       "min_score": 1.3,
-      "audiences": ["Tricycle Driver"]
+      "audiences": ["Public Utility Drivers"]
     },
     {
       "keywords": [
@@ -285,6 +315,47 @@
       "require_strong_keyword": true,
       "min_score": 1.3,
       "audiences": ["Barangay Official"]
+    },
+    {
+      "keywords": [
+        "bhw",
+        "barangay health worker",
+        "barangay health workers",
+        "health worker",
+        "midwife",
+        "hilot",
+        "health volunteer"
+      ],
+      "strong_keywords": [
+        "bhw",
+        "barangay health worker",
+        "barangay health workers"
+      ],
+      "require_strong_keyword": true,
+      "min_score": 1.3,
+      "audiences": ["Barangay Health Worker(BHW)"]
+    },
+    {
+      "keywords": [
+        "indigenous",
+        "indigenous people",
+        "ip",
+        "tribe",
+        "tribal",
+        "lumad",
+        "katutubo",
+        "katutuboan"
+      ],
+      "strong_keywords": [
+        "indigenous",
+        "indigenous people",
+        "ip",
+        "lumad",
+        "katutubo"
+      ],
+      "require_strong_keyword": true,
+      "min_score": 1.3,
+      "audiences": ["Indigenous People(IP)"]
     },
     {
       "keywords": [

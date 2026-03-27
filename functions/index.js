@@ -389,7 +389,22 @@ async function queryTargetUsers(audiences) {
     .where('isActive', '==', true)
     .get();
   if (filterAudiences.length === 0) return snapshot.docs;
-  const filterLower = filterAudiences.map((a) => a.toLowerCase());
+
+  // Keep category matching backward-compatible across renamed demographics.
+  const audienceAliases = {
+    'public utility drivers': ['tricycle driver'],
+    'tricycle driver': ['public utility drivers'],
+  };
+
+  const expanded = new Set();
+  filterAudiences.forEach((a) => {
+    const lower = String(a || '').toLowerCase().trim();
+    if (!lower) return;
+    expanded.add(lower);
+    (audienceAliases[lower] || []).forEach((alias) => expanded.add(alias));
+  });
+
+  const filterLower = [...expanded];
   return snapshot.docs.filter((doc) => {
     const categories = doc.data().categories || [];
     const userLower = categories.map((c) => String(c).toLowerCase().trim()).filter(Boolean);
@@ -851,7 +866,7 @@ async function getAdminTokens() {
     .where('role', 'in', ['super_admin', 'admin'])
     .where('isActive', '==', true)
     .get();
-  
+
   for (const doc of adminsSnapshot.docs) {
     const data = doc.data() || {};
     const uid = doc.id;
@@ -878,28 +893,28 @@ exports.onAwaitingApprovalCreated = functions.firestore
   .onCreate(async (snap, context) => {
     const { requestId } = context.params;
     const data = snap.data() || {};
-    
+
     const fullName = data.fullName || 'Someone';
     const isResubmission = (data.reapplicationCount || 0) > 0;
-    
+
     const title = isResubmission ? 'Account Resubmission' : 'New Account Request';
-    const body = isResubmission 
+    const body = isResubmission
       ? `${fullName} resubmitted their application`
       : `${fullName} requested a new account`;
-    
+
     try {
       const tokens = await getAdminTokens();
       if (tokens.length === 0) {
         console.log(`No admin tokens found for ${requestId}`);
         return;
       }
-      
+
       const { successCount, failureCount } = await sendMulticast(tokens, title, body, {
         type: 'new_account_request',
         requestId,
         userType: data.userType || 'admin',
       });
-      
+
       console.log(`Admin notification sent for ${requestId}: ${successCount} success, ${failureCount} failure`);
     } catch (e) {
       console.error(`Failed to send admin notification for ${requestId}:`, e);

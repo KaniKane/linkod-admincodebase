@@ -94,16 +94,19 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   final List<String> _audienceOptions = [
     'General Residents',
     'Senior',
+    'Pregnant/Lactating Mother',
     'Student',
     'PWD',
     'Youth',
     'Farmer',
     'Fisherman',
-    'Tricycle Driver',
+    'Public Utility Drivers',
     'Small Business Owner',
     '4Ps',
     'Tanod',
     'Barangay Official',
+    'Barangay Health Worker(BHW)',
+    'Indigenous People(IP)',
     'Parent',
   ];
 

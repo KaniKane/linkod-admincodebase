@@ -1822,16 +1822,19 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }) {
     const audienceOptions = [
       'Senior',
+      'Pregnant/Lactating Mother',
       'Student',
       'PWD',
       'Youth',
       'Farmer',
       'Fisherman',
-      'Tricycle Driver',
+      'Public Utility Drivers',
       'Small Business Owner',
       '4Ps',
       'Tanod',
       'Barangay Official',
+      'Barangay Health Worker(BHW)',
+      'Indigenous People(IP)',
       'Parent',
     ];
 
