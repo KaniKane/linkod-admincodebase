@@ -8,10 +8,35 @@
 
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-/// Base URL for the local FastAPI backend (refine, recommend-audiences). Change if backend runs elsewhere.
-const String kAnnouncementBackendBaseUrl = 'http://localhost:8000';
+/// Optional override for the FastAPI backend base URL.
+///
+/// Set with:
+/// flutter run --dart-define=ANNOUNCEMENT_API_BASE_URL=http://<host>:8000
+const String _kAnnouncementBackendBaseUrlOverride = String.fromEnvironment(
+  'ANNOUNCEMENT_API_BASE_URL',
+  defaultValue: '',
+);
+
+/// Base URL for the FastAPI backend (refine, recommend-audiences).
+///
+/// Defaults:
+/// - Android emulator: http://10.0.2.2:8000
+/// - Other platforms (Windows/macOS/Linux/iOS/Web): http://localhost:8000
+String get kAnnouncementBackendBaseUrl {
+  final override = _kAnnouncementBackendBaseUrlOverride.trim();
+  if (override.isNotEmpty) {
+    return _normalizeBaseUrl(override);
+  }
+
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    return 'http://10.0.2.2:8000';
+  }
+
+  return 'http://localhost:8000';
+}
 
 /// Base URL for push endpoints (send-announcement-push, send-account-approval, send-user-push).
 /// When set, the admin app calls this URL for push so you don't need to run the Python backend.
@@ -25,15 +50,20 @@ String get _pushBaseUrl =>
     : kAnnouncementBackendBaseUrl;
 
 String _normalizePushBaseUrl(String baseUrl) {
-  var normalized = baseUrl.trim();
-  if (normalized.endsWith('/')) {
-    normalized = normalized.substring(0, normalized.length - 1);
-  }
+  var normalized = _normalizeBaseUrl(baseUrl);
 
   // Guard against missing /api when using the Express HTTP function URL.
   if (normalized.contains('cloudfunctions.net') &&
       !normalized.endsWith('/api')) {
     normalized = '$normalized/api';
+  }
+  return normalized;
+}
+
+String _normalizeBaseUrl(String baseUrl) {
+  var normalized = baseUrl.trim();
+  if (normalized.endsWith('/')) {
+    normalized = normalized.substring(0, normalized.length - 1);
   }
   return normalized;
 }

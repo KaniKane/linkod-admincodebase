@@ -408,11 +408,18 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     } on AnnouncementBackendException catch (e) {
       if (!mounted) return;
       setState(() => _isRefining = false);
-      final message = e.statusCode == 503
-          ? 'Refinement failed. Is the backend running and Ollama available (llama3.2:3b)?'
-          : (e.message.length > 80
-                ? 'Refinement failed. Check backend.'
-                : e.message);
+      final message = switch (e.statusCode) {
+        503 =>
+          e.message.trim().isNotEmpty
+              ? (e.message.length > 220
+                    ? 'Refinement unavailable. Backend AI provider failed. Check Ollama (llama3.2:3b) and backend logs.'
+                    : 'Refinement unavailable: ${e.message}')
+              : 'Refinement unavailable. Backend AI provider failed. Check Ollama (llama3.2:3b) and backend logs.',
+        _ =>
+          e.message.length > 80
+              ? 'Refinement failed. Check backend.'
+              : e.message,
+      };
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: DraftSavedNotification(message: message),
