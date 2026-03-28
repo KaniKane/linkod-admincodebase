@@ -18,8 +18,10 @@ import '../widgets/error_notification.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/outline_button.dart';
 import '../widgets/dialog_container.dart';
+import '../widgets/fast_fade_in.dart';
 import '../models/announcement_draft.dart';
 import '../utils/app_colors.dart';
+import '../utils/admin_navigation.dart';
 import 'dashboard_screen.dart';
 import 'approvals_screen.dart';
 import 'user_management_screen.dart';
@@ -414,52 +416,32 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       return;
     }
     if (route == '/dashboard') {
-      Navigator.pushReplacement(
+      navigateToAdminScreen(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const DashboardScreen(),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-              child,
-        ),
+        currentRoute: '/announcements',
+        targetRoute: route,
+        page: const DashboardScreen(),
       );
     } else if (route == '/approvals') {
-      Navigator.pushReplacement(
+      navigateToAdminScreen(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const ApprovalsScreen(),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-              child,
-        ),
+        currentRoute: '/announcements',
+        targetRoute: route,
+        page: const ApprovalsScreen(),
       );
     } else if (route == '/user-management') {
-      Navigator.pushReplacement(
+      navigateToAdminScreen(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const UserManagementScreen(initialTabIndex: 2),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-              child,
-        ),
+        currentRoute: '/announcements',
+        targetRoute: route,
+        page: const UserManagementScreen(initialTabIndex: 2),
       );
     } else if (route == '/barangay-information') {
-      Navigator.pushReplacement(
+      navigateToAdminScreen(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              BarangayInformationScreen(),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-              child,
-        ),
+        currentRoute: '/announcements',
+        targetRoute: route,
+        page: const BarangayInformationScreen(),
       );
     }
   }
@@ -1186,9 +1168,10 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           ),
           // Main content
           Expanded(
-            child: Container(
-              color: AppColors.white,
-              child: Column(
+            child: FastFadeIn(
+              child: Container(
+                color: AppColors.white,
+                child: Column(
                 children: [
                   // Top header
                   Container(
@@ -1235,6 +1218,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                   ),
                 ],
               ),
+            ),
             ),
           ),
         ],

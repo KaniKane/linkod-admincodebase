@@ -19,6 +19,12 @@ class UserHeader extends StatefulWidget {
 }
 
 class _UserHeaderState extends State<UserHeader> {
+  static String? _cachedProfileImageUrl;
+  static String? _cachedFullName;
+  static String? _cachedUserPosition;
+  static DateTime? _lastProfileFetchAt;
+  static const Duration _cacheTtl = Duration(minutes: 10);
+
   bool _isHovered = false;
   String? _profileImageUrl;
   String? _fullName;
@@ -29,7 +35,29 @@ class _UserHeaderState extends State<UserHeader> {
   @override
   void initState() {
     super.initState();
+    _hydrateFromCache();
     _loadAdminProfile();
+  }
+
+  void _hydrateFromCache() {
+    final hasUsableCache =
+        _lastProfileFetchAt != null &&
+        DateTime.now().difference(_lastProfileFetchAt!) <= _cacheTtl;
+    if (!hasUsableCache) {
+      return;
+    }
+
+    _profileImageUrl = _cachedProfileImageUrl;
+    _fullName = _cachedFullName;
+    _userPosition = _cachedUserPosition;
+    _isLoading = false;
+  }
+
+  void _precacheProfileImage(String url) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(precacheImage(NetworkImage(url), context));
+    });
   }
 
   Future<void> _loadAdminProfile() async {
@@ -49,10 +77,23 @@ class _UserHeaderState extends State<UserHeader> {
 
       if (userDoc.exists) {
         final data = userDoc.data();
+        final nextFullName = data?['fullName'] as String?;
+        final nextProfileImageUrl = data?['profileImageUrl'] as String?;
+        final nextUserPosition = data?['position'] as String?;
+
+        _cachedFullName = nextFullName;
+        _cachedProfileImageUrl = nextProfileImageUrl;
+        _cachedUserPosition = nextUserPosition;
+        _lastProfileFetchAt = DateTime.now();
+
+        if (nextProfileImageUrl != null && nextProfileImageUrl.isNotEmpty) {
+          _precacheProfileImage(nextProfileImageUrl);
+        }
+
         setState(() {
-          _fullName = data?['fullName'] as String?;
-          _profileImageUrl = data?['profileImageUrl'] as String?;
-          _userPosition = data?['position'] as String?;
+          _fullName = nextFullName;
+          _profileImageUrl = nextProfileImageUrl;
+          _userPosition = nextUserPosition;
           _isLoading = false;
         });
       } else {
@@ -273,6 +314,10 @@ class _UserHeaderState extends State<UserHeader> {
         _profileImageUrl = url;
       });
 
+      _cachedProfileImageUrl = url;
+      _lastProfileFetchAt = DateTime.now();
+      _precacheProfileImage(url);
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -330,6 +375,9 @@ class _UserHeaderState extends State<UserHeader> {
       setState(() {
         _profileImageUrl = null;
       });
+
+      _cachedProfileImageUrl = null;
+      _lastProfileFetchAt = DateTime.now();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -404,6 +452,7 @@ class _UserHeaderState extends State<UserHeader> {
                         width: avatarSize,
                         height: avatarSize,
                         fit: BoxFit.cover,
+                        gaplessPlayback: true,
                         loadingBuilder: (context, child, loadingProgress) {
                           if (loadingProgress == null) return child;
                           return Center(

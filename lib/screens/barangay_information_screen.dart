@@ -9,10 +9,12 @@ import '../services/barangay_posting_service.dart';
 import '../services/barangay_branding_service.dart';
 import '../widgets/category_edit_dialog.dart';
 import '../widgets/posting_edit_dialog.dart';
+import '../widgets/fast_fade_in.dart';
 import '../utils/app_colors.dart';
 import '../widgets/success_notification.dart';
 import '../widgets/draft_saved_notification.dart';
 import '../widgets/error_notification.dart';
+import '../utils/admin_navigation.dart';
 import 'dashboard_screen.dart';
 import 'announcements_screen.dart';
 import 'approvals_screen.dart';
@@ -425,52 +427,32 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
       return;
     }
     if (route == '/dashboard') {
-      Navigator.pushReplacement(
+      navigateToAdminScreen(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const DashboardScreen(),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-              child,
-        ),
+        currentRoute: '/barangay-information',
+        targetRoute: route,
+        page: const DashboardScreen(),
       );
     } else if (route == '/announcements') {
-      Navigator.pushReplacement(
+      navigateToAdminScreen(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const AnnouncementsScreen(),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-              child,
-        ),
+        currentRoute: '/barangay-information',
+        targetRoute: route,
+        page: const AnnouncementsScreen(),
       );
     } else if (route == '/approvals') {
-      Navigator.pushReplacement(
+      navigateToAdminScreen(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const ApprovalsScreen(),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-              child,
-        ),
+        currentRoute: '/barangay-information',
+        targetRoute: route,
+        page: const ApprovalsScreen(),
       );
     } else if (route == '/user-management') {
-      Navigator.pushReplacement(
+      navigateToAdminScreen(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const UserManagementScreen(initialTabIndex: 2),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-              child,
-        ),
+        currentRoute: '/barangay-information',
+        targetRoute: route,
+        page: const UserManagementScreen(initialTabIndex: 2),
       );
     }
   }
@@ -927,9 +909,10 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
             onNavigate: _navigateTo,
           ),
           Expanded(
-            child: Container(
-              color: AppColors.white,
-              child: Column(
+            child: FastFadeIn(
+              child: Container(
+                color: AppColors.white,
+                child: Column(
                 children: [
                   Container(
                     color: AppColors.white,
@@ -986,6 +969,7 @@ class _BarangayInformationScreenState extends State<BarangayInformationScreen> {
                   ),
                 ],
               ),
+            ),
             ),
           ),
         ],

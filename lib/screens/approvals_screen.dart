@@ -9,10 +9,12 @@ import '../widgets/custom_tabs.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/outline_button.dart';
 import '../widgets/dialog_container.dart';
+import '../widgets/fast_fade_in.dart';
 import '../widgets/draft_saved_notification.dart';
 import '../widgets/error_notification.dart';
 import '../widgets/success_notification.dart';
 import '../api/announcement_backend_api.dart';
+import '../utils/admin_navigation.dart';
 import 'dashboard_screen.dart';
 import 'announcements_screen.dart';
 import 'user_management_screen.dart';
@@ -95,9 +97,11 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     await _loadCurrentUserRole();
     if (mounted && (_currentUserRole ?? '').toLowerCase() != 'super_admin') {
       if (!context.mounted) return;
-      Navigator.pushReplacement(
+      navigateToAdminScreen(
         context,
-        MaterialPageRoute(builder: (context) => const DashboardScreen()),
+        currentRoute: '/approvals',
+        targetRoute: '/dashboard',
+        page: const DashboardScreen(),
       );
       return;
     }
@@ -209,54 +213,34 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       return;
     }
     if (route == '/dashboard') {
-      Navigator.pushReplacement(
+      navigateToAdminScreen(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const DashboardScreen(),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-              child,
-        ),
+        currentRoute: '/approvals',
+        targetRoute: route,
+        page: const DashboardScreen(),
       );
     } else if (route == '/announcements') {
-      Navigator.pushReplacement(
+      navigateToAdminScreen(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const AnnouncementsScreen(),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-              child,
-        ),
+        currentRoute: '/approvals',
+        targetRoute: route,
+        page: const AnnouncementsScreen(),
       );
     } else if (route == '/user-management') {
-      Navigator.pushReplacement(
+      navigateToAdminScreen(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const UserManagementScreen(initialTabIndex: 2),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-              child,
-        ),
+        currentRoute: '/approvals',
+        targetRoute: route,
+        page: const UserManagementScreen(initialTabIndex: 2),
       );
     } else if (route == '/approvals') {
       // Already here
     } else if (route == '/barangay-information') {
-      Navigator.pushReplacement(
+      navigateToAdminScreen(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              BarangayInformationScreen(),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-              child,
-        ),
+        currentRoute: '/approvals',
+        targetRoute: route,
+        page: const BarangayInformationScreen(),
       );
     }
   }
@@ -1310,9 +1294,10 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
             onNavigate: _navigateTo,
           ),
           Expanded(
-            child: Container(
-              color: AppColors.white,
-              child: Column(
+            child: FastFadeIn(
+              child: Container(
+                color: AppColors.white,
+                child: Column(
                 children: [
                   Container(
                     color: AppColors.white,
@@ -1394,6 +1379,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                   ),
                 ],
               ),
+            ),
             ),
           ),
         ],

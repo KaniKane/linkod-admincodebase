@@ -14,8 +14,10 @@ import '../widgets/error_notification.dart';
 import '../widgets/decline_reason_dialog.dart';
 import '../widgets/draft_saved_notification.dart';
 import '../widgets/full_screen_image_viewer.dart';
+import '../widgets/fast_fade_in.dart';
 import '../api/announcement_backend_api.dart';
 import '../utils/app_colors.dart';
+import '../utils/admin_navigation.dart';
 import 'dashboard_screen.dart';
 import 'announcements_screen.dart';
 import 'approvals_screen.dart';
@@ -180,9 +182,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           });
           if (role != 'super_admin' && mounted) {
             if (!context.mounted) return;
-            Navigator.pushReplacement(
+            navigateToAdminScreen(
               context,
-              MaterialPageRoute(builder: (context) => const DashboardScreen()),
+              currentRoute: '/user-management',
+              targetRoute: '/dashboard',
+              page: const DashboardScreen(),
             );
           }
         }
@@ -409,52 +413,32 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       return;
     }
     if (route == '/dashboard') {
-      Navigator.pushReplacement(
+      navigateToAdminScreen(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const DashboardScreen(),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-              child,
-        ),
+        currentRoute: '/user-management',
+        targetRoute: route,
+        page: const DashboardScreen(),
       );
     } else if (route == '/announcements') {
-      Navigator.pushReplacement(
+      navigateToAdminScreen(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const AnnouncementsScreen(),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-              child,
-        ),
+        currentRoute: '/user-management',
+        targetRoute: route,
+        page: const AnnouncementsScreen(),
       );
     } else if (route == '/approvals') {
-      Navigator.pushReplacement(
+      navigateToAdminScreen(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const ApprovalsScreen(),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-              child,
-        ),
+        currentRoute: '/user-management',
+        targetRoute: route,
+        page: const ApprovalsScreen(),
       );
     } else if (route == '/barangay-information') {
-      Navigator.pushReplacement(
+      navigateToAdminScreen(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              BarangayInformationScreen(),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-              child,
-        ),
+        currentRoute: '/user-management',
+        targetRoute: route,
+        page: const BarangayInformationScreen(),
       );
     }
   }
@@ -708,9 +692,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           ),
           // Main content
           Expanded(
-            child: Container(
-              color: AppColors.white,
-              child: Column(
+            child: FastFadeIn(
+              child: Container(
+                color: AppColors.white,
+                child: Column(
                 children: [
                   // Top header
                   Container(
@@ -867,6 +852,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   ),
                 ],
               ),
+            ),
             ),
           ),
         ],

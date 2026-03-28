@@ -30,6 +30,9 @@ class AppSidebar extends StatefulWidget {
 class _AppSidebarState extends State<AppSidebar> {
   static const String _seenApprovalsKey = 'sidebar_seen_post_approvals';
   static const String _seenUsersKey = 'sidebar_seen_user_approvals';
+  static const AssetImage _sidebarLogoImage = AssetImage(
+    'assets/img/logo/linkod_logo_2.png',
+  );
 
   int _seenApprovals = 0;
   int _seenUsers = 0;
@@ -49,6 +52,10 @@ class _AppSidebarState extends State<AppSidebar> {
       _seenUsers = widget.pendingUsersCount;
     }
     _initSeenState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      precacheImage(_sidebarLogoImage, context);
+    });
   }
 
   @override
@@ -168,6 +175,7 @@ class _AppSidebarState extends State<AppSidebar> {
                         'assets/img/logo/linkod_logo_2.png',
                         height: isSmallScreen ? 54 : 82,
                         fit: BoxFit.contain,
+                        gaplessPlayback: true,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -296,7 +304,7 @@ class _NavItemState extends State<_NavItem> {
         : (disabled ? AppColors.lightGrey : AppColors.darkGrey);
 
     return GestureDetector(
-      onTap: widget.onTap,
+      onTap: (disabled || effectiveActive) ? null : widget.onTap,
       child: Container(
         padding: EdgeInsets.symmetric(
           horizontal: widget.isSmallScreen ? 12 : 16,
