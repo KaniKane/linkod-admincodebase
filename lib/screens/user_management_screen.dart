@@ -293,6 +293,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         final position = (data['position'] ?? '') as String;
         final category =
             (data['category'] ?? data['demographicCategory'] ?? '') as String;
+        final subDemographyEnabled = data['subDemographyEnabled'] == true;
+        final subDemographies =
+          (data['subDemographies'] as List<dynamic>? ?? const [])
+            .whereType<String>()
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
 
         loadedAwaiting.add({
           'id': doc.id,
@@ -307,6 +314,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           'role': role,
           'userType': inferredUserType,
           'position': position,
+          'subDemographyEnabled': subDemographyEnabled ? 'true' : 'false',
+          'subDemographies': subDemographies.join(', '),
           'source': 'awaitingApproval',
         });
       }
@@ -335,6 +344,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         final position = (data['position'] ?? '') as String;
         final category =
             (data['category'] ?? data['demographicCategory'] ?? '') as String;
+        final subDemographyEnabled = data['subDemographyEnabled'] == true;
+        final subDemographies =
+          (data['subDemographies'] as List<dynamic>? ?? const [])
+            .whereType<String>()
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
         loadedAwaiting.add({
           'id': doc.id,
           'name': fullName.isNotEmpty ? fullName : 'Unnamed user',
@@ -346,6 +362,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           'role': role,
           'userType': inferredUserType,
           'position': position,
+          'subDemographyEnabled': subDemographyEnabled ? 'true' : 'false',
+          'subDemographies': subDemographies.join(', '),
           'source': 'users',
           'reapplication': 'true',
         });
@@ -2726,6 +2744,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 '')
             as String;
     final role = ((data['role'] ?? user['role'] ?? '') as String).toLowerCase();
+    final subDemographyEnabled = data['subDemographyEnabled'] == true;
+    final subDemographies =
+      (data['subDemographies'] as List<dynamic>? ?? const [])
+        .whereType<String>()
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
     final proofOfResidenceUrl = data['proofOfResidenceUrl'] as String?;
 
     if (!mounted) return;
@@ -2764,6 +2789,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   ? category
                   : (role == 'admin' ? 'Admin' : role),
             ),
+            if (subDemographyEnabled) ...[
+              _detailRow(
+                'Sub-demographies',
+                subDemographies.isNotEmpty
+                    ? subDemographies.join(', ')
+                    : ((user['subDemographies'] ?? '').isNotEmpty
+                          ? user['subDemographies']!
+                          : '—'),
+              ),
+            ],
             const SizedBox(height: 12),
             const Text(
               'Proof of residence',
@@ -3129,6 +3164,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   user['category'] ??
                   '')
               as String;
+        final subDemographyEnabled = data['subDemographyEnabled'] == true;
+        final subDemographies =
+          (data['subDemographies'] as List<dynamic>? ?? const [])
+            .whereType<String>()
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
       final proofOfResidenceUrl = data['proofOfResidenceUrl'] as String?;
 
       if (phone.isEmpty && requestedEmail.isEmpty) {
@@ -3228,7 +3270,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           .split(',')
           .map((e) => e.trim())
           .where((e) => e.isNotEmpty)
+          .toSet()
           .toList();
+      if (subDemographyEnabled && subDemographies.isNotEmpty) {
+        categoriesList.addAll(
+          subDemographies.where((entry) => !categoriesList.contains(entry)),
+        );
+      }
 
       // 3) As admin (primary Auth unchanged): create/update users/{uid}
       // Also copy FCM tokens from awaitingApproval to users doc to ensure push notification can find them
@@ -3260,9 +3308,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           'position': position.isNotEmpty ? position : 'Admin',
         if (firestoreRole == 'resident') ...{
           // Keep `category` (string) for existing UI and documents.
-          'category': category.isNotEmpty ? category : 'User',
+          'category': categoriesList.isNotEmpty
+              ? categoriesList.join(', ')
+              : (category.isNotEmpty ? category : 'User'),
           // Add `categories` (array) so we can query audience targeting efficiently.
           'categories': categoriesList,
+          'subDemographyEnabled': subDemographyEnabled,
+          'subDemographies': subDemographies,
         },
       };
 

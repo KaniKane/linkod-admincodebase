@@ -17,6 +17,8 @@ class AdminNotificationService {
   StreamSubscription<QuerySnapshot>? _subscription;
   StreamSubscription<User?>? _authSubscription;
   bool _isInitialized = false;
+  bool _hasSeenInitialSnapshot = false;
+  DateTime? _listenerStartedAt;
 
   /// Initialize the notification service and start listening
   Future<void> initialize() async {
@@ -49,16 +51,18 @@ class AdminNotificationService {
   Future<void> _handleAuthStateChanged(User? user) async {
     await _subscription?.cancel();
     _subscription = null;
+    _hasSeenInitialSnapshot = false;
+    _listenerStartedAt = null;
 
     if (user == null) {
       return;
     }
 
-    final isSuperAdmin = await _isSuperAdmin(user.uid);
-    if (!isSuperAdmin) {
+    final isAdminPanelUser = await _isAdminPanelUser(user.uid);
+    if (!isAdminPanelUser) {
       if (kDebugMode) {
         debugPrint(
-          'AdminNotificationService: disabled for non-super-admin account.',
+          'AdminNotificationService: disabled for non-admin-panel account.',
         );
       }
       return;
@@ -67,7 +71,7 @@ class AdminNotificationService {
     _startListening();
   }
 
-  Future<bool> _isSuperAdmin(String uid) async {
+  Future<bool> _isAdminPanelUser(String uid) async {
     try {
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
@@ -76,13 +80,20 @@ class AdminNotificationService {
       if (!userDoc.exists) return false;
 
       final role = (userDoc.data()?['role'] as String? ?? '').toLowerCase();
-      return role == 'super_admin';
+      final userType =
+          (userDoc.data()?['userType'] as String? ?? '').toLowerCase();
+      return role == 'super_admin' ||
+          role == 'admin' ||
+          role == 'official' ||
+          role == 'staff' ||
+          userType == 'admin';
     } catch (_) {
       return false;
     }
   }
 
   void _startListening() {
+    _listenerStartedAt = DateTime.now();
     _subscription = FirebaseFirestore.instance
         .collection('awaitingApproval')
         .snapshots()
@@ -97,13 +108,40 @@ class AdminNotificationService {
   }
 
   void _handleSnapshot(QuerySnapshot snapshot) {
-    // Only process document CHANGES, not the initial snapshot
-    // This prevents 100 notifications on app startup
+    // Skip the first snapshot to avoid replaying existing pending docs.
+    if (!_hasSeenInitialSnapshot) {
+      _hasSeenInitialSnapshot = true;
+
+      // Handle race condition: if a request is created while listener is booting,
+      // it can appear in the first snapshot and would otherwise be missed.
+      for (final change in snapshot.docChanges) {
+        if (change.type == DocumentChangeType.added &&
+            _isRecentRequest(change.doc)) {
+          _showNotification(change.doc);
+        }
+      }
+      return;
+    }
+
+    // Process only newly added docs after initialization.
     for (final change in snapshot.docChanges) {
       if (change.type == DocumentChangeType.added) {
         _showNotification(change.doc);
       }
     }
+  }
+
+  bool _isRecentRequest(DocumentSnapshot doc) {
+    final startedAt = _listenerStartedAt;
+    if (startedAt == null) return false;
+
+    final data = doc.data() as Map<String, dynamic>?;
+    if (data == null) return false;
+    final createdAt = data['createdAt'];
+    if (createdAt is! Timestamp) return false;
+
+    // Small grace window covers clock skew/server timestamp delays.
+    return createdAt.toDate().isAfter(startedAt.subtract(const Duration(seconds: 5)));
   }
 
   void _showNotification(DocumentSnapshot doc) {

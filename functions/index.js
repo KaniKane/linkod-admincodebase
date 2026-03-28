@@ -862,13 +862,30 @@ exports.onProductReplyCreated = functions.firestore
 async function getAdminTokens() {
   const tokens = [];
   const seen = new Set();
-  const adminsSnapshot = await db.collection('users')
-    .where('role', 'in', ['super_admin', 'admin'])
-    .where('isActive', '==', true)
-    .get();
+  const seenUserIds = new Set();
+  const snapshots = await Promise.all([
+    db.collection('users').where('role', 'in', ['super_admin', 'admin', 'official', 'staff']).get(),
+    db.collection('users').where('userType', '==', 'admin').get(),
+  ]);
 
-  for (const doc of adminsSnapshot.docs) {
+  for (const snapshot of snapshots) {
+    for (const doc of snapshot.docs) {
+      if (seenUserIds.has(doc.id)) {
+        continue;
+      }
+      seenUserIds.add(doc.id);
+
     const data = doc.data() || {};
+    const isActiveByFlag = data.isActive === true;
+    const accountStatus = String(data.accountStatus || '').toLowerCase();
+    const isApproved = data.isApproved === true;
+
+    // Support both old and new account-state conventions.
+    const isActiveAccount = isActiveByFlag || accountStatus === 'active' || isApproved;
+    if (!isActiveAccount) {
+      continue;
+    }
+
     const uid = doc.id;
     normalizeTokenList(data.fcmTokens || []).forEach((t) => {
       if (!seen.has(t)) {
@@ -884,6 +901,7 @@ async function getAdminTokens() {
         tokens.push(token.trim());
       }
     });
+    }
   }
   return tokens;
 }
