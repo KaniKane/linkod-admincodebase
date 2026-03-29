@@ -20,7 +20,7 @@
 ; - Backend EXE in backend\dist\linkod_admin_backend\
 
 #define MyAppName "LINKod Admin"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "LINKod"
 #define MyAppExeName "linkod_admin.exe"
 #define MyBackendExeName "linkod_admin_backend.exe"
@@ -47,8 +47,7 @@ PrivilegesRequired=admin
 ; NOTE: For the installer icon, create linkod_logo.ico from linkod_logo.png
 ; You can use an online converter or ImageMagick:
 ;   magick convert assets/img/logo/linkod_logo.png -define icon:auto-resize=256,128,64,48,32,16 installer/linkod_logo.ico
-; SetupIconFile=installer\linkod_logo.ico
-; Uninstaller
+SetupIconFile=..\assets\img\logo\linkod_icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 UninstallDisplayName={#MyAppName}
 ; Minimum Windows version (Windows 10)

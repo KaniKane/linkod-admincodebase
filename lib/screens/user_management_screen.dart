@@ -236,12 +236,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         final position = (data['position'] ?? '') as String;
         final demographicCategory =
             (data['category'] ?? data['demographicCategory'] ?? '') as String;
+        final purok = (data['purok'] ?? '').toString().trim();
 
         if (accountStatus == 'declined' || accountStatus == 'suspended') {
           loadedInactive.add({
             'id': doc.id,
             'name': fullName.isNotEmpty ? fullName : 'Unnamed',
             'phone': contact,
+            'purok': purok,
             'category': role == 'super_admin' || role == 'admin'
                 ? (position.isNotEmpty ? position : 'Admin')
                 : (demographicCategory.isNotEmpty
@@ -258,6 +260,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             'id': doc.id,
             'name': fullName.isNotEmpty ? fullName : 'Unnamed admin',
             'phone': contact,
+            'purok': purok,
             'position': position.isNotEmpty ? position : 'Admin',
           });
         } else {
@@ -272,6 +275,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             'id': doc.id,
             'name': fullName.isNotEmpty ? fullName : 'Unnamed user',
             'phone': residentContact,
+            'purok': purok,
             'category': demographicCategory.isNotEmpty
                 ? demographicCategory
                 : (role.isNotEmpty ? role : 'User'),
@@ -295,6 +299,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             ? (phoneNumber.isNotEmpty ? phoneNumber : email)
             : _residentDisplayContact(phone: phoneNumber, email: email);
         final position = (data['position'] ?? '') as String;
+        final purok = (data['purok'] ?? '').toString().trim();
         final category =
             (data['category'] ?? data['demographicCategory'] ?? '') as String;
         final subDemographyEnabled = data['subDemographyEnabled'] == true;
@@ -310,6 +315,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           'name': fullName.isNotEmpty ? fullName : 'Unnamed user',
           'phone': awaitingContact,
           'email': email,
+            'purok': purok,
           'category': category.isNotEmpty
               ? category
               : (role == 'admin'
@@ -346,6 +352,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             ? (phoneNumber.isNotEmpty ? phoneNumber : email)
             : _residentDisplayContact(phone: phoneNumber, email: email);
         final position = (data['position'] ?? '') as String;
+        final purok = (data['purok'] ?? '').toString().trim();
         final category =
             (data['category'] ?? data['demographicCategory'] ?? '') as String;
         final subDemographyEnabled = data['subDemographyEnabled'] == true;
@@ -360,6 +367,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           'name': fullName.isNotEmpty ? fullName : 'Unnamed user',
           'phone': awaitingContact,
           'email': email,
+            'purok': purok,
           'category': category.isNotEmpty
               ? category
               : (role.isNotEmpty ? role : 'User'),
@@ -996,6 +1004,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
+            final maxDialogHeight = MediaQuery.of(context).size.height * 0.9;
             return Dialog(
               backgroundColor: Colors.transparent,
               insetPadding: const EdgeInsets.all(20),
@@ -1003,7 +1012,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 key: formKey,
                 child: Center(
                   child: Container(
-                    constraints: const BoxConstraints(maxWidth: 520),
+                    constraints: BoxConstraints(
+                      maxWidth: 520,
+                      maxHeight: maxDialogHeight,
+                    ),
                     padding: const EdgeInsets.all(32),
                     decoration: BoxDecoration(
                       color: AppColors.white,
@@ -1016,10 +1028,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ),
                       ],
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
                         Text(
                           isAdmin ? 'Add New Admin' : 'Add New User',
                           style: const TextStyle(
@@ -1362,7 +1375,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             ),
                           ],
                         ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1391,6 +1405,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
+            final maxDialogHeight = MediaQuery.of(context).size.height * 0.9;
             return Dialog(
               backgroundColor: Colors.transparent,
               insetPadding: const EdgeInsets.all(20),
@@ -1398,7 +1413,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 key: formKey,
                 child: Center(
                   child: Container(
-                    constraints: const BoxConstraints(maxWidth: 520),
+                    constraints: BoxConstraints(
+                      maxWidth: 520,
+                      maxHeight: maxDialogHeight,
+                    ),
                     padding: const EdgeInsets.all(32),
                     decoration: BoxDecoration(
                       color: AppColors.white,
@@ -1411,10 +1429,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ),
                       ],
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
                         const Text(
                           'Create Official Account',
                           style: TextStyle(
@@ -1766,7 +1785,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             ),
                           ],
                         ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1917,6 +1937,39 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 vertical: 12,
               ),
             ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDialogReadOnlyField({
+    required String label,
+    required String value,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.normal,
+            color: AppColors.darkGrey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 48,
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 15),
+          decoration: BoxDecoration(
+            color: AppColors.inputBg,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            value.isEmpty ? '—' : value,
+            style: const TextStyle(fontSize: 14, color: AppColors.darkGrey),
           ),
         ),
       ],
@@ -2712,6 +2765,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final fullName = (data['fullName'] ?? user['name'] ?? '') as String;
     final email = (data['email'] ?? user['email'] ?? '') as String;
     final phone = (data['phoneNumber'] ?? user['phone'] ?? '') as String;
+    String purok = (data['purok'] ?? user['purok'] ?? '').toString().trim();
     final userTypeRaw = ((data['userType'] ?? user['userType'] ?? '') as String)
         .toLowerCase();
     final userType = userTypeRaw.isNotEmpty
@@ -2737,7 +2791,33 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .toList();
-    final proofOfResidenceUrl = data['proofOfResidenceUrl'] as String?;
+    String? proofOfResidenceUrl = data['proofOfResidenceUrl'] as String?;
+    if ((proofOfResidenceUrl == null || proofOfResidenceUrl.isEmpty) &&
+        !isReapplication) {
+      final candidateUid =
+          ((data['uid'] as String?)?.trim().isNotEmpty ?? false)
+              ? (data['uid'] as String).trim()
+              : docId.trim();
+      if (candidateUid.isNotEmpty) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(candidateUid)
+            .get();
+        if (userDoc.exists) {
+          final fallback = userDoc.data()?['proofOfResidenceUrl'] as String?;
+          if (fallback != null && fallback.isNotEmpty) {
+            proofOfResidenceUrl = fallback;
+          }
+          if (purok.isEmpty) {
+            final purokFallback =
+                (userDoc.data()?['purok'] ?? '').toString().trim();
+            if (purokFallback.isNotEmpty) {
+              purok = purokFallback;
+            }
+          }
+        }
+      }
+    }
 
     if (!mounted) return;
     showDialog(
@@ -2765,6 +2845,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             _detailRow('Full Name', fullName),
             _detailRow('Email', email),
             _detailRow('Phone Number', phone),
+            _detailRow('Purok', purok),
             _detailRow(
               'Account Type',
               userType == 'admin' ? 'Admin Account' : 'Resident',
@@ -3632,6 +3713,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   Future<void> _showEditAwaitingDialog(Map<String, String> user) async {
     final nameController = TextEditingController(text: user['name'] ?? '');
     final phoneController = TextEditingController(text: user['phone'] ?? '');
+    final purok = (user['purok'] ?? '').trim();
     final formKey = GlobalKey<FormState>();
     bool isSubmitting = false;
     String? dialogError;
@@ -3662,6 +3744,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
+            final maxDialogHeight = MediaQuery.of(context).size.height * 0.9;
             return Dialog(
               backgroundColor: Colors.transparent,
               insetPadding: const EdgeInsets.all(20),
@@ -3669,7 +3752,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 key: formKey,
                 child: Center(
                   child: Container(
-                    constraints: const BoxConstraints(maxWidth: 520),
+                    constraints: BoxConstraints(
+                      maxWidth: 520,
+                      maxHeight: maxDialogHeight,
+                    ),
                     padding: const EdgeInsets.all(32),
                     decoration: BoxDecoration(
                       color: AppColors.white,
@@ -3682,10 +3768,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ),
                       ],
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
                         const Text(
                           'Edit Approval Request',
                           style: TextStyle(
@@ -3711,6 +3798,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               value == null || value.trim().isEmpty
                               ? 'Email or phone is required'
                               : null,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDialogReadOnlyField(
+                          label: 'Purok',
+                          value: purok,
                         ),
                         const SizedBox(height: 16),
                         if (isAdmin) ...[
@@ -3898,7 +3990,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             ),
                           ],
                         ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -3920,6 +4013,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final currentStatus =
         (doc.data()?['accountStatus'] as String?)?.toLowerCase() ?? 'active';
     final currentNote = (doc.data()?['adminNote'] as String?) ?? '';
+    final currentPurok =
+      ((doc.data()?['purok'] ?? user['purok'] ?? '').toString()).trim();
 
     final nameController = TextEditingController(text: user['name'] ?? '');
     final phoneController = TextEditingController(text: user['phone'] ?? '');
@@ -3938,6 +4033,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         selectedStatus != 'suspended') {
       selectedStatus = 'active';
     }
+    String selectedDeclineReason = kDeclineReasonPresets.first;
+    for (final preset in kDeclineReasonPresets) {
+      if (currentNote.toLowerCase().startsWith(preset.toLowerCase())) {
+        selectedDeclineReason = preset;
+        break;
+      }
+    }
     final formKey = GlobalKey<FormState>();
     bool isSubmitting = false;
     String? dialogError;
@@ -3948,6 +4050,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
+            final maxDialogHeight = MediaQuery.of(context).size.height * 0.9;
             return Dialog(
               backgroundColor: Colors.transparent,
               insetPadding: const EdgeInsets.all(20),
@@ -3955,7 +4058,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 key: formKey,
                 child: Center(
                   child: Container(
-                    constraints: const BoxConstraints(maxWidth: 520),
+                    constraints: BoxConstraints(
+                      maxWidth: 520,
+                      maxHeight: maxDialogHeight,
+                    ),
                     padding: const EdgeInsets.all(32),
                     decoration: BoxDecoration(
                       color: AppColors.white,
@@ -3968,10 +4074,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ),
                       ],
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
                         const Text(
                           'Edit User',
                           style: TextStyle(
@@ -3997,6 +4104,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               value == null || value.trim().isEmpty
                               ? 'Email or phone is required'
                               : null,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDialogReadOnlyField(
+                          label: 'Purok',
+                          value: currentPurok,
                         ),
                         const SizedBox(height: 16),
                         const Text(
@@ -4037,6 +4149,43 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                   () => selectedStatus = v ?? 'active',
                                 ),
                         ),
+                        if (selectedStatus == 'declined') ...[
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Reason for disapproval',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.darkGrey,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            value: selectedDeclineReason,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                            ),
+                            items: kDeclineReasonPresets
+                                .map(
+                                  (reason) => DropdownMenuItem(
+                                    value: reason,
+                                    child: Text(reason),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: isSubmitting
+                                ? null
+                                : (v) => setState(
+                                    () =>
+                                        selectedDeclineReason =
+                                            v ?? kDeclineReasonPresets.first,
+                                  ),
+                          ),
+                        ],
                         const SizedBox(height: 16),
                         _buildDialogTextField(
                           label: 'Admin note (optional)',
@@ -4102,32 +4251,45 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                         });
 
                                         try {
+                                          final adminNoteText =
+                                            adminNoteController.text.trim();
+                                          final combinedDeclineNote =
+                                            adminNoteText.isEmpty
+                                            ? selectedDeclineReason
+                                            : '$selectedDeclineReason. $adminNoteText';
+                                          final updates = <String, dynamic>{
+                                          'fullName': nameController.text
+                                            .trim(),
+                                          'phoneNumber': phoneController.text
+                                            .trim(),
+                                          'category': selectedCategories
+                                              .isEmpty
+                                            ? 'User'
+                                            : selectedCategories.join(', '),
+                                          'categories': selectedCategories
+                                            .toList(),
+                                          'accountStatus': selectedStatus,
+                                          'adminNote': selectedStatus ==
+                                              'declined'
+                                            ? combinedDeclineNote
+                                            : adminNoteText,
+                                          'lastUpdated':
+                                            FieldValue.serverTimestamp(),
+                                          'updatedAt':
+                                            FieldValue.serverTimestamp(),
+                                          };
+                                          if (selectedStatus == 'declined') {
+                                          updates['reapplyType'] =
+                                            kProofOnlyPresets.contains(
+                                                selectedDeclineReason,
+                                              )
+                                            ? 'proof_only'
+                                            : 'full';
+                                          }
                                           await FirebaseFirestore.instance
                                               .collection('users')
                                               .doc(docId)
-                                              .update({
-                                                'fullName': nameController.text
-                                                    .trim(),
-                                                'phoneNumber': phoneController
-                                                    .text
-                                                    .trim(),
-                                                'category':
-                                                    selectedCategories.isEmpty
-                                                    ? 'User'
-                                                    : selectedCategories.join(
-                                                        ', ',
-                                                      ),
-                                                'categories': selectedCategories
-                                                    .toList(),
-                                                'accountStatus': selectedStatus,
-                                                'adminNote': adminNoteController
-                                                    .text
-                                                    .trim(),
-                                                'lastUpdated':
-                                                    FieldValue.serverTimestamp(),
-                                                'updatedAt':
-                                                    FieldValue.serverTimestamp(),
-                                              });
+                                            .update(updates);
                                           if (mounted) {
                                             await _loadAccounts();
                                             Navigator.of(context).pop();
@@ -4157,7 +4319,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             ),
                           ],
                         ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -4172,6 +4335,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   Future<void> _showEditAdminDialog(Map<String, String> admin) async {
     final nameController = TextEditingController(text: admin['name'] ?? '');
     final phoneController = TextEditingController(text: admin['phone'] ?? '');
+    final purok = (admin['purok'] ?? '').trim();
     String? selectedPosition = admin['position'];
     final formKey = GlobalKey<FormState>();
     bool isSubmitting = false;
@@ -4233,6 +4397,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               value == null || value.trim().isEmpty
                               ? 'Email or phone is required'
                               : null,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDialogReadOnlyField(
+                          label: 'Purok',
+                          value: purok,
                         ),
                         const SizedBox(height: 16),
                         _buildPositionSelector(
