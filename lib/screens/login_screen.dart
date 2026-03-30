@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/app_colors.dart';
 import '../widgets/custom_link.dart';
@@ -66,22 +65,59 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSavedEmail();
+    _tryAutoLoginFromExistingSession();
   }
 
-  Future<void> _loadSavedEmail() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedEmail = prefs.getString('last_login_email');
-    if (savedEmail != null && savedEmail.isNotEmpty) {
-      setState(() {
-        _emailController.text = savedEmail;
+  Future<void> _tryAutoLoginFromExistingSession() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+
+      if (!userDoc.exists) {
+        await FirebaseAuth.instance.signOut();
+        return;
+      }
+
+      final data = userDoc.data() ?? {};
+      final accountStatus = (data['accountStatus'] as String? ?? '')
+          .toLowerCase();
+      final role = (data['role'] as String? ?? '').toLowerCase();
+
+      final isAllowedRole = role == 'super_admin' || role == 'admin';
+      final isApproved = accountStatus != 'pending';
+
+      if (!isAllowedRole || !isApproved) {
+        await FirebaseAuth.instance.signOut();
+        return;
+      }
+
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const DashboardScreen()),
+        );
       });
+    } catch (_) {
+      await FirebaseAuth.instance.signOut();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
-  }
-
-  Future<void> _saveEmail(String email) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('last_login_email', email);
   }
 
   @override
@@ -103,9 +139,6 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final email = _emailController.text.trim().toLowerCase();
       final password = _passwordController.text;
-
-      // Save email for next login (but not password)
-      await _saveEmail(email);
 
       // Sign in with Firebase Authentication
       final userCredential = await FirebaseAuth.instance
