@@ -24,11 +24,20 @@ class AdminNotificationService {
   Future<void> initialize() async {
     if (_isInitialized) return;
 
-    // Initialize local notifier for Windows
-    await localNotifier.setup(
-      appName: 'LINKod Admin',
-      shortcutPolicy: ShortcutPolicy.requireCreate,
-    );
+    // Initialize local notifier for Windows.
+    // Some locked-down machines can block shortcut creation/notification APIs.
+    try {
+      await localNotifier.setup(
+        appName: 'LINKod Admin',
+        shortcutPolicy: ShortcutPolicy.requireCreate,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('AdminNotificationService setup failed: $e');
+      }
+      // Keep app functional even when desktop notifications are unavailable.
+      return;
+    }
 
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen(
       (user) => _handleAuthStateChanged(user),

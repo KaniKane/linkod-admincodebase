@@ -63,8 +63,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _bootstrap() async {
     await _loadCurrentUserRole();
     await _loadDashboardData();
-    // Initialize admin notification service after login (real-time alerts for new registrations)
-    await AdminNotificationService().initialize();
+
+    // Never let notification setup crash the dashboard on startup.
+    try {
+      // Initialize admin notification service after login
+      // (real-time alerts for new registrations).
+      await AdminNotificationService().initialize();
+    } catch (_) {
+      // Keep the app usable even if Windows notification APIs are unavailable.
+    }
   }
 
   Future<void> _loadCurrentUserRole() async {

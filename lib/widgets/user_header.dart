@@ -109,7 +109,14 @@ class _UserHeaderState extends State<UserHeader> {
     }
   }
 
-  void _handleLogout() {
+  Future<void> _handleLogout() async {
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (e) {
+      debugPrint('Logout signOut failed: $e');
+    }
+
+    if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -169,7 +176,7 @@ class _UserHeaderState extends State<UserHeader> {
       } else if (value == 'password') {
         _showChangePasswordDialog();
       } else if (value == 'logout') {
-        _handleLogout();
+        unawaited(_handleLogout());
       }
     });
   }

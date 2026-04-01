@@ -63,64 +63,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    _tryAutoLoginFromExistingSession();
-  }
-
-  Future<void> _tryAutoLoginFromExistingSession() async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) return;
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUser.uid)
-          .get();
-
-      if (!userDoc.exists) {
-        await FirebaseAuth.instance.signOut();
-        return;
-      }
-
-      final data = userDoc.data() ?? {};
-      final accountStatus = (data['accountStatus'] as String? ?? '')
-          .toLowerCase();
-      final role = (data['role'] as String? ?? '').toLowerCase();
-
-      final isAllowedRole = role == 'super_admin' || role == 'admin';
-      final isApproved = accountStatus != 'pending';
-
-      if (!isAllowedRole || !isApproved) {
-        await FirebaseAuth.instance.signOut();
-        return;
-      }
-
-      if (!mounted) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const DashboardScreen()),
-        );
-      });
-    } catch (_) {
-      await FirebaseAuth.instance.signOut();
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
@@ -305,14 +247,14 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 // Logo image
                 Image.asset(
-                  'assets/img/logo/linkod_logo.png',
-                  width: 400,
-                  height: 400,
+                  'assets/img/logo/linkod_logo_3.png',
+                  width: 280,
+                  height: 280,
                   fit: BoxFit.contain,
                 ),
                 // Subtitle positioned directly below logo
                 Transform.translate(
-                  offset: const Offset(140, -160),
+                  offset: const Offset(8, -102),
                   child: const Text(
                     'Ai-Assisted Barangay-based Social Platform',
                     style: TextStyle(

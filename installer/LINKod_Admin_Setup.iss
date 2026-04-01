@@ -20,7 +20,7 @@
 ; - Backend EXE in backend\dist\linkod_admin_backend\
 
 #define MyAppName "LINKod Admin"
-#define MyAppVersion "1.0.1"
+#define MyAppVersion "1.0.3"
 #define MyAppPublisher "LINKod"
 #define MyAppExeName "linkod_admin.exe"
 #define MyBackendExeName "linkod_admin_backend.exe"

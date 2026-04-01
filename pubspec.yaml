@@ -2,7 +2,7 @@ name: linkod_admin
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -68,7 +68,6 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
@@ -78,6 +77,8 @@ flutter:
   assets:
     - assets/img/logo/linkod_logo.png
     - assets/img/logo/linkod_logo_2.png
+    - assets/img/logo/linkod_logo_3.png
+
     - assets/img/icon/boxes.png
     - assets/img/icon/sound_mute.png
     - assets/img/icon/user-profile-group.png
