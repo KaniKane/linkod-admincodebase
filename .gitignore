@@ -70,6 +70,7 @@ app.*.map.json
 # Build outputs
 dist/
 build/
+installer/output/
 
 # Python
 __pycache__/

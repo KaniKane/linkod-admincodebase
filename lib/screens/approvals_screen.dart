@@ -406,6 +406,16 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
               audiences: audiences,
               requestedByUserId: postedByUserId,
             );
+
+            if (d['eventDateAt'] != null) {
+              final approverUid = FirebaseAuth.instance.currentUser?.uid;
+              if (approverUid != null && approverUid.isNotEmpty) {
+                await scheduleAnnouncementReminder(
+                  announcementId: id,
+                  requestedByUserId: approverUid,
+                );
+              }
+            }
           }
         } catch (pushError) {
           if (mounted) {
@@ -599,6 +609,16 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
             audiences: audiences,
             requestedByUserId: postedByUserId,
           );
+
+          if (d['eventDateAt'] != null) {
+            final approverUid = FirebaseAuth.instance.currentUser?.uid;
+            if (approverUid != null && approverUid.isNotEmpty) {
+              await scheduleAnnouncementReminder(
+                announcementId: id,
+                requestedByUserId: approverUid,
+              );
+            }
+          }
         }
         success++;
       } catch (e) {

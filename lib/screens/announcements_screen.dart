@@ -55,6 +55,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       'announcements_compose_has_suggested';
   static const String _composeSuggestedAudiencesPrefsKey =
       'announcements_compose_suggested_audiences';
+  static const String _composeEventDateAtPrefsKey =
+      'announcements_compose_event_date_at';
 
   int _activeTabIndex = 0;
   final _titleController = TextEditingController();
@@ -67,6 +69,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   bool _isRefining = false;
   bool _isSuggestingDemographic = false;
   bool _hasTriggeredAudienceSuggestion = false;
+  DateTime? _eventDateAt;
 
   // Drafts loaded from Firestore
   List<AnnouncementDraft> _drafts = [];
@@ -159,6 +162,10 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         _hasTriggeredAudienceSuggestion,
       ),
       prefs.setString(_composeSuggestedAudiencesPrefsKey, suggestedJson),
+      prefs.setString(
+        _composeEventDateAtPrefsKey,
+        _eventDateAt?.toUtc().toIso8601String() ?? '',
+      ),
     ]);
   }
 
@@ -176,6 +183,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       _hasTriggeredAudienceSuggestion = false;
       _isRefining = false;
       _isSuggestingDemographic = false;
+      _eventDateAt = null;
       _currentDraftId = null;
       _currentEditingAnnouncementId = null;
       _announcementImageUrls = [];
@@ -224,6 +232,11 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       _selectedAudiences = restoredAudiences.toSet();
       _hasTriggeredAudienceSuggestion =
           prefs.getBool(_composeHasSuggestedPrefsKey) ?? false;
+      final eventDateRaw =
+          (prefs.getString(_composeEventDateAtPrefsKey) ?? '').trim();
+      _eventDateAt = eventDateRaw.isEmpty
+          ? null
+          : DateTime.tryParse(eventDateRaw)?.toLocal();
       if (restoredSuggestedAudiences.isNotEmpty) {
         _suggestedAudiences = restoredSuggestedAudiences;
       }
@@ -555,6 +568,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       _announcementImageUrls = List.from(draft.imageUrls);
       _pickedImages = [];
       _hasTriggeredAudienceSuggestion = true;
+      _eventDateAt = draft.eventDateAt;
     });
     _queuePersistComposeState();
     _setActiveTab(0); // Switch to Compose tab
@@ -649,6 +663,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         final imageUrlsRaw = data['imageUrls'] as List<dynamic>?;
         final imageUrls =
             imageUrlsRaw?.whereType<String>().toList() ?? <String>[];
+        final eventDateAt = _parseTimestamp(data['eventDateAt']);
         return AnnouncementDraft(
           id: doc.id,
           title: (data['title'] ?? '') as String,
@@ -657,6 +672,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           selectedAudiences: audiences.toSet(),
           aiRefinedContent: data['aiRefinedContent'] as String?,
           imageUrls: imageUrls,
+          eventDateAt: eventDateAt,
         );
       }).toList();
 
@@ -793,6 +809,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       'aiRefinedContent': refinedContent.isNotEmpty ? refinedContent : null,
       'audiences': _selectedAudiences.toList(),
       'imageUrls': imageUrls,
+      if (_eventDateAt != null)
+        'eventDateAt': Timestamp.fromDate(_eventDateAt!.toUtc()),
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
@@ -995,6 +1013,18 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                   : null,
               'audiences': _selectedAudiences.toList(),
               'imageUrls': imageUrls,
+              'eventDateAt': _eventDateAt == null
+                  ? null
+                  : Timestamp.fromDate(_eventDateAt!.toUtc()),
+              'reminderStatus': 'none',
+              'reminderTaskName': FieldValue.delete(),
+              'reminderScheduledFor': _eventDateAt == null
+                  ? null
+                  : Timestamp.fromDate(
+                      _eventDateAt!
+                          .toUtc()
+                          .subtract(const Duration(days: 1)),
+                    ),
               'updatedAt': FieldValue.serverTimestamp(),
             });
 
@@ -1023,6 +1053,13 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                   : null,
               'audiences': _selectedAudiences.toList(),
               'imageUrls': imageUrls,
+              if (_eventDateAt != null)
+                'eventDateAt': Timestamp.fromDate(_eventDateAt!.toUtc()),
+              'reminderStatus': 'none',
+              if (_eventDateAt != null)
+                'reminderScheduledFor': Timestamp.fromDate(
+                  _eventDateAt!.toUtc().subtract(const Duration(days: 1)),
+                ),
               'status': status,
               'postedBy': postedBy,
               if (postedByPosition != null && postedByPosition.isNotEmpty)
@@ -1057,6 +1094,31 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               'createdAt': FieldValue.serverTimestamp(),
             });
           } catch (_) {}
+        }
+
+        if (canPublishDirectly && _eventDateAt != null) {
+          final requesterUid = postedByUserId ?? currentUser?.uid;
+          if (requesterUid != null && requesterUid.isNotEmpty) {
+            try {
+              await scheduleAnnouncementReminder(
+                announcementId: announcementRef.id,
+                requestedByUserId: requesterUid,
+              );
+            } catch (e) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: ErrorNotification(
+                      message: 'Announcement posted, but reminder schedule failed: $e',
+                    ),
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            }
+          }
         }
 
         // Only send push when SUPER ADMIN chose "post and send push". OFFICIAL posts are Pending — push sent when admin approves.
@@ -1611,6 +1673,68 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             ),
           ),
           const SizedBox(height: 32),
+          const Text(
+            'Event Date/Time (optional)',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.normal,
+              color: AppColors.darkGrey,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _pickEventDateAt,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    side: BorderSide(
+                      color: AppColors.mediumGrey.withOpacity(0.7),
+                    ),
+                  ),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      _eventDateAt == null
+                          ? 'Set event date and time'
+                          : _formatDateTime(_eventDateAt!),
+                      style: const TextStyle(
+                        color: AppColors.darkGrey,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              OutlinedButton(
+                onPressed: _eventDateAt == null ? null : _clearEventDateAt,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text('Clear'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'If you set a date, the system will automatically send the reminder 1 day before.',
+            style: TextStyle(fontSize: 12, color: AppColors.lightGrey),
+          ),
+          const SizedBox(height: 32),
           // Images section (optional)
           const Text(
             'Images (optional)',
@@ -1705,6 +1829,50 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         ),
       ),
     );
+  }
+
+  String _formatDateTime(DateTime value) {
+    final local = value.toLocal();
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    final year = local.year.toString();
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '$year-$month-$day $hour:$minute';
+  }
+
+  Future<void> _pickEventDateAt() async {
+    final now = DateTime.now();
+    final initial = _eventDateAt ?? now.add(const Duration(hours: 1));
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 5),
+    );
+    if (pickedDate == null || !mounted) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (pickedTime == null || !mounted) return;
+
+    setState(() {
+      _eventDateAt = DateTime(
+        pickedDate.year,
+        pickedDate.month,
+        pickedDate.day,
+        pickedTime.hour,
+        pickedTime.minute,
+      );
+    });
+    _queuePersistComposeState();
+  }
+
+  void _clearEventDateAt() {
+    setState(() => _eventDateAt = null);
+    _queuePersistComposeState();
   }
 
   Future<void> _pickAnnouncementImages() async {

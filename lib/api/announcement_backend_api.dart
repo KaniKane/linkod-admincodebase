@@ -38,7 +38,9 @@ String get kAnnouncementBackendBaseUrl {
   return 'http://localhost:8000';
 }
 
-/// Base URL for push endpoints (send-announcement-push, send-account-approval, send-user-push).
+/// Base URL for push/scheduling endpoints
+/// (send-announcement-push, send-account-approval, send-user-push,
+/// schedule-announcement-reminder, cancel-announcement-reminder).
 /// When set, the admin app calls this URL for push so you don't need to run the Python backend.
 /// Currently deployed to: https://us-central1-linkod-db.cloudfunctions.net/api
 const String? kPushApiBaseUrl =
@@ -234,6 +236,58 @@ class SendUserPushResponse {
   final Map<String, int> errorCounts;
 }
 
+/// Result of POST /schedule-announcement-reminder.
+class ScheduleAnnouncementReminderResponse {
+  const ScheduleAnnouncementReminderResponse({
+    required this.enabled,
+    required this.status,
+    this.taskName,
+    this.scheduledForMs,
+    this.reason,
+  });
+
+  factory ScheduleAnnouncementReminderResponse.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return ScheduleAnnouncementReminderResponse(
+      enabled: json['enabled'] as bool? ?? true,
+      status: json['status'] as String? ?? 'unknown',
+      taskName: json['task_name'] as String?,
+      scheduledForMs: (json['scheduled_for_ms'] as num?)?.toInt(),
+      reason: json['reason'] as String?,
+    );
+  }
+
+  final bool enabled;
+  final String status;
+  final String? taskName;
+  final int? scheduledForMs;
+  final String? reason;
+}
+
+/// Result of POST /cancel-announcement-reminder.
+class CancelAnnouncementReminderResponse {
+  const CancelAnnouncementReminderResponse({
+    required this.enabled,
+    required this.status,
+    required this.hadTask,
+  });
+
+  factory CancelAnnouncementReminderResponse.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return CancelAnnouncementReminderResponse(
+      enabled: json['enabled'] as bool? ?? true,
+      status: json['status'] as String? ?? 'unknown',
+      hadTask: json['had_task'] as bool? ?? false,
+    );
+  }
+
+  final bool enabled;
+  final String status;
+  final bool hadTask;
+}
+
 /// Calls POST /send-account-approval to notify the approved user (single-user push).
 /// Fetches fcmTokens from awaitingApproval on the backend. Non-blocking: do not fail approval if this throws.
 Future<SendAccountApprovalResponse> sendAccountApprovalPush({
@@ -311,6 +365,78 @@ Future<SendUserPushResponse> sendUserPush({
     throw AnnouncementBackendException('Empty response from send-user-push');
   }
   return SendUserPushResponse.fromJson(json);
+}
+
+/// Calls POST /schedule-announcement-reminder.
+Future<ScheduleAnnouncementReminderResponse> scheduleAnnouncementReminder({
+  required String announcementId,
+  required String requestedByUserId,
+}) async {
+  final uri = Uri.parse('$_pushBaseUrl/schedule-announcement-reminder');
+  final response = await http
+      .post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'announcement_id': announcementId,
+          'requested_by_user_id': requestedByUserId,
+        }),
+      )
+      .timeout(const Duration(seconds: 20));
+
+  if (response.statusCode != 200) {
+    final responseBody = response.body;
+    throw AnnouncementBackendException(
+      responseBody.isNotEmpty
+          ? '$responseBody\n(request: $uri)'
+          : 'Schedule reminder failed (${response.statusCode}) (request: $uri)',
+      response.statusCode,
+    );
+  }
+
+  final json = jsonDecode(response.body) as Map<String, dynamic>?;
+  if (json == null) {
+    throw AnnouncementBackendException(
+      'Empty response from schedule-announcement-reminder',
+    );
+  }
+  return ScheduleAnnouncementReminderResponse.fromJson(json);
+}
+
+/// Calls POST /cancel-announcement-reminder.
+Future<CancelAnnouncementReminderResponse> cancelAnnouncementReminder({
+  required String announcementId,
+  required String requestedByUserId,
+}) async {
+  final uri = Uri.parse('$_pushBaseUrl/cancel-announcement-reminder');
+  final response = await http
+      .post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'announcement_id': announcementId,
+          'requested_by_user_id': requestedByUserId,
+        }),
+      )
+      .timeout(const Duration(seconds: 20));
+
+  if (response.statusCode != 200) {
+    final responseBody = response.body;
+    throw AnnouncementBackendException(
+      responseBody.isNotEmpty
+          ? '$responseBody\n(request: $uri)'
+          : 'Cancel reminder failed (${response.statusCode}) (request: $uri)',
+      response.statusCode,
+    );
+  }
+
+  final json = jsonDecode(response.body) as Map<String, dynamic>?;
+  if (json == null) {
+    throw AnnouncementBackendException(
+      'Empty response from cancel-announcement-reminder',
+    );
+  }
+  return CancelAnnouncementReminderResponse.fromJson(json);
 }
 
 /// Calls POST /refine with [rawText]. Returns original and refined text.

@@ -4,6 +4,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
+const { CloudTasksClient } = require('@google-cloud/tasks');
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -11,8 +12,255 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 const messaging = admin.messaging();
+const tasksClient = new CloudTasksClient();
 const MAX_TOKENS_PER_BATCH = 500;
 const OTP_TTL_MINUTES = 5;
+const REMINDER_OFFSET_MS = 24 * 60 * 60 * 1000;
+const REMINDER_QUEUE_ID = 'announcement-reminders';
+const REMINDER_LOCK_COLLECTION = '_announcement_reminder_locks';
+
+let reminderQueueInitPromise = null;
+
+function boolFromEnv(value, fallback = false) {
+  if (typeof value === 'boolean') return value;
+  if (value == null) return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return fallback;
+}
+
+function isReminderSchedulingEnabled() {
+  const envFlag = process.env.ENABLE_ANNOUNCEMENT_REMINDER_SCHEDULING;
+  if (envFlag != null) {
+    return boolFromEnv(envFlag, false);
+  }
+  return boolFromEnv(functions.config()?.features?.enable_announcement_reminder_scheduling, false);
+}
+
+function getProjectId() {
+  return process.env.GCLOUD_PROJECT || process.env.PROJECT_ID || process.env.GCP_PROJECT || null;
+}
+
+function getFunctionsRegion() {
+  return process.env.FUNCTION_REGION || process.env.GCLOUD_REGION || 'us-central1';
+}
+
+function toMillis(value) {
+  if (!value) return null;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const ms = Date.parse(value);
+    return Number.isFinite(ms) ? ms : null;
+  }
+  return null;
+}
+
+function normalizeRole(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isAdminRole(role) {
+  return ['super_admin', 'admin', 'official', 'staff'].includes(normalizeRole(role));
+}
+
+async function assertAdminRequester(requestedByUserId) {
+  const uid = String(requestedByUserId || '').trim();
+  if (!uid) {
+    throw new Error('requested_by_user_id is required');
+  }
+
+  const userSnap = await db.collection('users').doc(uid).get();
+  if (!userSnap.exists) {
+    throw new Error('Requester not found');
+  }
+
+  const data = userSnap.data() || {};
+  if (!isAdminRole(data.role) && normalizeRole(data.userType) !== 'admin') {
+    throw new Error('Requester is not allowed to schedule reminders');
+  }
+}
+
+function buildReminderQueuePath(projectId, region) {
+  return tasksClient.queuePath(projectId, region, REMINDER_QUEUE_ID);
+}
+
+function buildReminderTargetUrl(projectId, region) {
+  return `https://${region}-${projectId}.cloudfunctions.net/api/internal/send-announcement-reminder-task`;
+}
+
+function sanitizeTaskPart(value) {
+  return String(value || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 120);
+}
+
+function buildReminderTaskId(announcementId, scheduledForMs) {
+  const safeId = sanitizeTaskPart(announcementId) || 'announcement';
+  return `announcement-reminder-${safeId}-${scheduledForMs}`;
+}
+
+async function ensureReminderQueue(projectId, region) {
+  if (!reminderQueueInitPromise) {
+    reminderQueueInitPromise = (async () => {
+      const queuePath = buildReminderQueuePath(projectId, region);
+      try {
+        await tasksClient.getQueue({ name: queuePath });
+        return queuePath;
+      } catch (e) {
+        if (e && e.code !== 5) {
+          throw e;
+        }
+      }
+
+      const parent = tasksClient.locationPath(projectId, region);
+      await tasksClient.createQueue({
+        parent,
+        queue: {
+          name: queuePath,
+          rateLimits: { maxConcurrentDispatches: 10 },
+          retryConfig: { maxAttempts: 5 },
+        },
+      });
+      return queuePath;
+    })().catch((e) => {
+      reminderQueueInitPromise = null;
+      throw e;
+    });
+  }
+  return reminderQueueInitPromise;
+}
+
+async function deleteTaskIfExists(taskName) {
+  const name = String(taskName || '').trim();
+  if (!name) return;
+  try {
+    await tasksClient.deleteTask({ name });
+  } catch (e) {
+    if (e && e.code === 5) {
+      return;
+    }
+    throw e;
+  }
+}
+
+function getReminderScheduleMsFromAnnouncement(announcementData) {
+  const eventMs = toMillis(announcementData.eventDateAt);
+  if (!eventMs) return null;
+  return eventMs - REMINDER_OFFSET_MS;
+}
+
+function buildReminderPushBody(announcementData) {
+  const custom = String(announcementData.reminderBody || '').trim();
+  if (custom) return custom;
+  const content = String(announcementData.content || '').trim();
+  if (!content) return 'Your scheduled barangay announcement is tomorrow.';
+  return content.length > 140 ? `${content.substring(0, 137)}...` : content;
+}
+
+async function sendAnnouncementReminderForId(announcementId, sourceTaskName) {
+  const ref = db.collection('announcements').doc(announcementId);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    return { status: 'skipped', reason: 'announcement_not_found' };
+  }
+
+  const data = snap.data() || {};
+  const isApproved = String(data.status || '').toLowerCase() === 'approved';
+  const isActive = data.isActive !== false;
+  const reminderStatus = String(data.reminderStatus || '').toLowerCase();
+  if (!isApproved || !isActive || reminderStatus !== 'scheduled') {
+    return { status: 'skipped', reason: 'guard_not_met' };
+  }
+
+  const lockRef = db.collection(REMINDER_LOCK_COLLECTION).doc(announcementId);
+  let notificationDispatched = false;
+  let userCount = 0;
+  let tokenCount = 0;
+  let sendResult = { successCount: 0, failureCount: 0 };
+  try {
+    await lockRef.create({
+      announcementId,
+      taskName: sourceTaskName || null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    if (e && (e.code === 6 || e.code === 'already-exists' || e.code === 'ALREADY_EXISTS')) {
+      return { status: 'duplicate' };
+    }
+    throw e;
+  }
+
+  try {
+    const titleSource = String(data.title || 'Announcement').trim();
+    const title = `Reminder: ${titleSource}`;
+    const body = buildReminderPushBody(data);
+    const audiences = (Array.isArray(data.reminderTargetAudiences)
+      ? data.reminderTargetAudiences
+      : data.audiences
+    ).map((a) => String(a));
+
+    const userDocs = await queryTargetUsers(audiences);
+    const tokens = await collectTokensFromUserDocs(userDocs);
+    userCount = userDocs.length;
+    tokenCount = tokens.length;
+    if (tokens.length > 0) {
+      sendResult = await sendMulticast(tokens, title, body, {
+        type: 'announcement',
+        notificationKind: 'announcement_reminder',
+        announcementId,
+      });
+      notificationDispatched = true;
+    }
+
+    await ref.update({
+      reminderStatus: 'sent',
+      reminderSentAt: admin.firestore.FieldValue.serverTimestamp(),
+      reminderLastError: admin.firestore.FieldValue.delete(),
+      reminderLastResult: {
+        user_count: userDocs.length,
+        token_count: tokens.length,
+        success_count: sendResult.successCount,
+        failure_count: sendResult.failureCount,
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return {
+      status: 'sent',
+      userCount,
+      tokenCount,
+      successCount: sendResult.successCount,
+      failureCount: sendResult.failureCount,
+    };
+  } catch (e) {
+    await ref.set(
+      {
+        reminderLastError: String(e.message || e),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    ).catch(() => {});
+
+    if (notificationDispatched) {
+      return {
+        status: 'sent_with_state_update_error',
+        userCount,
+        tokenCount,
+        successCount: sendResult.successCount,
+        failureCount: sendResult.failureCount,
+      };
+    }
+
+    await lockRef.delete().catch(() => {});
+    throw e;
+  }
+}
 
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
@@ -626,6 +874,203 @@ app.post('/send-announcement-push', async (req, res) => {
     });
   } catch (e) {
     console.error('send-announcement-push error:', e);
+    return res.status(503).json({ error: String(e.message || e) });
+  }
+});
+
+app.post('/schedule-announcement-reminder', async (req, res) => {
+  try {
+    if (!isReminderSchedulingEnabled()) {
+      return res.status(200).json({ enabled: false, status: 'disabled' });
+    }
+
+    const { announcement_id: announcementId, requested_by_user_id: requestedBy } = req.body || {};
+    if (!announcementId) {
+      return res.status(400).json({ error: 'announcement_id is required' });
+    }
+    await assertAdminRequester(requestedBy);
+
+    const docRef = db.collection('announcements').doc(String(announcementId));
+    const snap = await docRef.get();
+    if (!snap.exists) {
+      return res.status(404).json({ error: 'Announcement not found' });
+    }
+    const data = snap.data() || {};
+
+    const isApproved = String(data.status || '').toLowerCase() === 'approved';
+    const isActive = data.isActive !== false;
+    if (!isApproved || !isActive) {
+      await docRef.set(
+        {
+          reminderStatus: 'skipped',
+          reminderTaskName: admin.firestore.FieldValue.delete(),
+          reminderLastError: 'Cannot schedule: announcement not approved/active.',
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      return res.status(200).json({ status: 'skipped', reason: 'guard_not_met' });
+    }
+
+    const scheduledForMs = getReminderScheduleMsFromAnnouncement(data);
+    if (!scheduledForMs) {
+      await docRef.set(
+        {
+          reminderStatus: 'skipped',
+          reminderTaskName: admin.firestore.FieldValue.delete(),
+          reminderLastError: 'Cannot schedule: eventDateAt is missing or invalid.',
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      return res.status(200).json({ status: 'skipped', reason: 'invalid_event_date' });
+    }
+
+    if (scheduledForMs <= Date.now()) {
+      await docRef.set(
+        {
+          reminderStatus: 'skipped',
+          reminderTaskName: admin.firestore.FieldValue.delete(),
+          reminderScheduledFor: admin.firestore.Timestamp.fromMillis(scheduledForMs),
+          reminderLastError: 'Cannot schedule: reminder time is already in the past.',
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      return res.status(200).json({ status: 'skipped', reason: 'past_due' });
+    }
+
+    const projectId = getProjectId();
+    if (!projectId) {
+      return res.status(500).json({ error: 'Unable to determine GCP project id' });
+    }
+    const region = getFunctionsRegion();
+    const queuePath = await ensureReminderQueue(projectId, region);
+    const targetUrl = buildReminderTargetUrl(projectId, region);
+
+    const taskId = buildReminderTaskId(announcementId, scheduledForMs);
+    const taskName = `${queuePath}/tasks/${taskId}`;
+    const taskPayload = {
+      announcement_id: String(announcementId),
+      requested_by_user_id: String(requestedBy),
+    };
+
+    try {
+      await tasksClient.createTask({
+        parent: queuePath,
+        task: {
+          name: taskName,
+          httpRequest: {
+            httpMethod: 'POST',
+            url: targetUrl,
+            headers: { 'Content-Type': 'application/json' },
+            body: Buffer.from(JSON.stringify(taskPayload)).toString('base64'),
+          },
+          scheduleTime: {
+            seconds: Math.floor(scheduledForMs / 1000),
+          },
+        },
+      });
+    } catch (e) {
+      if (!(e && e.code === 6)) {
+        throw e;
+      }
+    }
+
+    const previousTaskName = String(data.reminderTaskName || '').trim();
+    if (previousTaskName && previousTaskName !== taskName) {
+      await deleteTaskIfExists(previousTaskName);
+    }
+
+    await docRef.set(
+      {
+        reminderStatus: 'scheduled',
+        reminderTaskName: taskName,
+        reminderScheduledFor: admin.firestore.Timestamp.fromMillis(scheduledForMs),
+        reminderTargetAudiences: Array.isArray(data.audiences) ? data.audiences : [],
+        reminderLastError: admin.firestore.FieldValue.delete(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    return res.status(200).json({
+      enabled: true,
+      status: 'scheduled',
+      task_name: taskName,
+      scheduled_for_ms: scheduledForMs,
+    });
+  } catch (e) {
+    console.error('schedule-announcement-reminder error:', e);
+    return res.status(503).json({ error: String(e.message || e) });
+  }
+});
+
+app.post('/cancel-announcement-reminder', async (req, res) => {
+  try {
+    if (!isReminderSchedulingEnabled()) {
+      return res.status(200).json({ enabled: false, status: 'disabled' });
+    }
+
+    const { announcement_id: announcementId, requested_by_user_id: requestedBy } = req.body || {};
+    if (!announcementId) {
+      return res.status(400).json({ error: 'announcement_id is required' });
+    }
+    await assertAdminRequester(requestedBy);
+
+    const docRef = db.collection('announcements').doc(String(announcementId));
+    const snap = await docRef.get();
+    if (!snap.exists) {
+      return res.status(404).json({ error: 'Announcement not found' });
+    }
+
+    const data = snap.data() || {};
+    const taskName = String(data.reminderTaskName || '').trim();
+    if (taskName) {
+      await deleteTaskIfExists(taskName);
+    }
+
+    await docRef.set(
+      {
+        reminderStatus: 'canceled',
+        reminderTaskName: admin.firestore.FieldValue.delete(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    return res.status(200).json({
+      enabled: true,
+      status: 'canceled',
+      had_task: Boolean(taskName),
+    });
+  } catch (e) {
+    console.error('cancel-announcement-reminder error:', e);
+    return res.status(503).json({ error: String(e.message || e) });
+  }
+});
+
+app.post('/internal/send-announcement-reminder-task', async (req, res) => {
+  try {
+    if (!isReminderSchedulingEnabled()) {
+      return res.status(200).json({ enabled: false, status: 'disabled' });
+    }
+
+    // Guard against direct public invocations: this header is provided by Cloud Tasks.
+    const taskName = req.header('X-CloudTasks-TaskName');
+    if (!taskName) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const announcementId = String(req.body?.announcement_id || '').trim();
+    if (!announcementId) {
+      return res.status(400).json({ error: 'announcement_id is required' });
+    }
+
+    const result = await sendAnnouncementReminderForId(announcementId, taskName);
+    return res.status(200).json(result);
+  } catch (e) {
+    console.error('send-announcement-reminder-task error:', e);
     return res.status(503).json({ error: String(e.message || e) });
   }
 });

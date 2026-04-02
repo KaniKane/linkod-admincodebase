@@ -8,6 +8,7 @@ class AnnouncementDraft {
   final String? aiRefinedContent;
   /// URLs of images attached to the announcement (from draft or after upload).
   final List<String> imageUrls;
+  final DateTime? eventDateAt;
 
   AnnouncementDraft({
     required this.id,
@@ -17,5 +18,6 @@ class AnnouncementDraft {
     required this.selectedAudiences,
     this.aiRefinedContent,
     this.imageUrls = const [],
+    this.eventDateAt,
   });
 }
