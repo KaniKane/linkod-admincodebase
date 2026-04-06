@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -65,6 +67,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, int> _demographicsBreakdown = const {};
   List<TrendPoint> _userGrowthTrendPoints = const [];
   List<VerticalBarDatum> _topAnnouncementViews = const [];
+  final List<StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>
+  _dashboardRealtimeSubscriptions = [];
+  Timer? _dashboardReloadDebounce;
+  bool _queuedRealtimeReload = false;
 
   @override
   void initState() {
@@ -84,7 +90,73 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _startDeferredDashboardBoot() async {
     await _loadDashboardData();
+    _startDashboardRealtimeListeners();
     await _initializeNotificationsDeferred();
+  }
+
+  void _startDashboardRealtimeListeners() {
+    _stopDashboardRealtimeListeners();
+
+    final firestore = FirebaseFirestore.instance;
+
+    void attachListener(Query<Map<String, dynamic>> query) {
+      var hasSeenInitialSnapshot = false;
+      final subscription = query.snapshots().listen(
+        (_) {
+          // Skip each stream's initial snapshot to avoid duplicate startup load.
+          if (!hasSeenInitialSnapshot) {
+            hasSeenInitialSnapshot = true;
+            return;
+          }
+          _scheduleDashboardRealtimeReload();
+        },
+        onError: (_, __) {
+          // Keep dashboard usable if a listener stream fails temporarily.
+        },
+      );
+      _dashboardRealtimeSubscriptions.add(subscription);
+    }
+
+    attachListener(firestore.collection('users'));
+    attachListener(firestore.collection('announcements'));
+    attachListener(firestore.collection('products'));
+    attachListener(firestore.collection('tasks'));
+    attachListener(firestore.collection('adminActivities'));
+
+    if ((_currentUserRole ?? '').toLowerCase() == 'super_admin') {
+      attachListener(firestore.collection('awaitingApproval'));
+    }
+  }
+
+  void _scheduleDashboardRealtimeReload() {
+    _dashboardReloadDebounce?.cancel();
+    _dashboardReloadDebounce = Timer(const Duration(milliseconds: 700), () {
+      if (!mounted) return;
+      _triggerRealtimeReload();
+    });
+  }
+
+  Future<void> _triggerRealtimeReload() async {
+    if (_isLoading) {
+      _queuedRealtimeReload = true;
+      return;
+    }
+
+    await _loadDashboardData();
+
+    if (_queuedRealtimeReload) {
+      _queuedRealtimeReload = false;
+      _scheduleDashboardRealtimeReload();
+    }
+  }
+
+  void _stopDashboardRealtimeListeners() {
+    for (final subscription in _dashboardRealtimeSubscriptions) {
+      subscription.cancel();
+    }
+    _dashboardRealtimeSubscriptions.clear();
+    _dashboardReloadDebounce?.cancel();
+    _dashboardReloadDebounce = null;
   }
 
   Future<void> _initializeNotificationsDeferred() async {
@@ -735,23 +807,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await _loadDashboardData();
   }
 
-  Future<void> _handleManualRefresh() async {
-    await _loadDashboardData();
-    AdminRefreshBus.requestUserManagementRefresh();
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const DraftSavedNotification(
-          message: 'Dashboard data refreshed.',
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
   void _navigateToMetricDestination({
     required String route,
     int? initialTabIndex,
@@ -940,6 +995,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   @override
+  void dispose() {
+    _stopDashboardRealtimeListeners();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.white,
@@ -1021,22 +1082,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   color: AppColors.darkGrey,
                                 ),
                               ),
-                            ),
-                          ),
-                          Tooltip(
-                            message: 'Refresh dashboard data',
-                            child: OutlinedButton.icon(
-                              onPressed: _isLoading ? null : _handleManualRefresh,
-                              icon: _isLoading
-                                  ? const SizedBox(
-                                      width: 14,
-                                      height: 14,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.refresh),
-                              label: Text(_isLoading ? 'Refreshing...' : 'Refresh'),
                             ),
                           ),
                         ],

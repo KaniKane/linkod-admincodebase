@@ -3780,6 +3780,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       final requestUserType =
           ((data['userType'] ?? user['userType'] ?? '') as String)
               .toLowerCase();
+        var purok = (data['purok'] ?? user['purok'] ?? '').toString().trim();
       final userType = requestUserType.isNotEmpty
           ? requestUserType
           : ((role == 'admin' || role == 'super_admin') ? 'admin' : 'resident');
@@ -3798,6 +3799,22 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               .where((e) => e.isNotEmpty)
               .toList();
       final proofOfResidenceUrl = data['proofOfResidenceUrl'] as String?;
+
+      if (purok.isEmpty &&
+          existingUid != null &&
+          existingUid.toString().trim().isNotEmpty) {
+        try {
+          final existingUserDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(existingUid.toString().trim())
+              .get();
+          if (existingUserDoc.exists) {
+            purok = (existingUserDoc.data()?['purok'] ?? '').toString().trim();
+          }
+        } catch (_) {
+          // Approval should not fail if fallback purok lookup is unavailable.
+        }
+      }
 
       if (phone.isEmpty && requestedEmail.isEmpty) {
         if (mounted)
@@ -3933,6 +3950,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         if (firestoreRole == 'admin')
           'position': position.isNotEmpty ? position : 'Admin',
         if (firestoreRole == 'resident') ...{
+          if (purok.isNotEmpty) 'purok': purok,
           // Keep `category` (string) for existing UI and documents.
           'category': categoriesList.isNotEmpty
               ? categoriesList.join(', ')
