@@ -235,8 +235,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       _selectedAudiences = restoredAudiences.toSet();
       _hasTriggeredAudienceSuggestion =
           prefs.getBool(_composeHasSuggestedPrefsKey) ?? false;
-      final eventDateRaw =
-          (prefs.getString(_composeEventDateAtPrefsKey) ?? '').trim();
+      final eventDateRaw = (prefs.getString(_composeEventDateAtPrefsKey) ?? '')
+          .trim();
       _eventDateAt = eventDateRaw.isEmpty
           ? null
           : DateTime.tryParse(eventDateRaw)?.toLocal();
@@ -1048,9 +1048,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               'reminderScheduledFor': _eventDateAt == null
                   ? null
                   : Timestamp.fromDate(
-                      _eventDateAt!
-                          .toUtc()
-                          .subtract(const Duration(days: 1)),
+                      _eventDateAt!.toUtc().subtract(const Duration(days: 1)),
                     ),
               'updatedAt': FieldValue.serverTimestamp(),
             });
@@ -1136,7 +1134,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: ErrorNotification(
-                      message: 'Announcement posted, but reminder schedule failed: $e',
+                      message:
+                          'Announcement posted, but reminder schedule failed: $e',
                     ),
                     backgroundColor: Colors.transparent,
                     elevation: 0,
@@ -1261,53 +1260,53 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               child: Container(
                 color: AppColors.white,
                 child: Column(
-                children: [
-                  // Top header
-                  Container(
-                    color: AppColors.white,
-                    padding: const EdgeInsets.all(24),
-                    child: const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Announcements',
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.darkGrey,
+                  children: [
+                    // Top header
+                    Container(
+                      color: AppColors.white,
+                      padding: const EdgeInsets.all(24),
+                      child: const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Announcements',
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.darkGrey,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  // Content area with inner background panel
-                  Expanded(
-                    child: Container(
-                      margin: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: AppColors.dashboardInnerBg,
-                        borderRadius: BorderRadius.circular(32),
-                      ),
-                      child: Column(
-                        children: [
-                          // Tabs bar at top of inner panel
-                          _buildTabsBar(),
-                          // Content area
-                          Expanded(
-                            child: SingleChildScrollView(
-                              padding: const EdgeInsets.all(32),
-                              child: _activeTabIndex == 0
-                                  ? _buildComposeTab()
-                                  : _activeTabIndex == 1
-                                  ? _buildDraftTab()
-                                  : _buildPostsTab(),
+                    // Content area with inner background panel
+                    Expanded(
+                      child: Container(
+                        margin: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: AppColors.dashboardInnerBg,
+                          borderRadius: BorderRadius.circular(32),
+                        ),
+                        child: Column(
+                          children: [
+                            // Tabs bar at top of inner panel
+                            _buildTabsBar(),
+                            // Content area
+                            Expanded(
+                              child: SingleChildScrollView(
+                                padding: const EdgeInsets.all(32),
+                                child: _activeTabIndex == 0
+                                    ? _buildComposeTab()
+                                    : _activeTabIndex == 1
+                                    ? _buildDraftTab()
+                                    : _buildPostsTab(),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
             ),
           ),
         ],
@@ -2410,9 +2409,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       return chunks;
     }
 
-    Future<Map<String, String>> _resolveUserNames(
-      List<String> userIds,
-    ) async {
+    Future<Map<String, String>> _resolveUserNames(List<String> userIds) async {
       final nameLookup = <String, String>{};
       for (final batch in _chunkList(userIds, _viewReadersUserBatchSize)) {
         final usersSnapshot = await FirebaseFirestore.instance
@@ -2455,13 +2452,15 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             ? await viewsQuery.get()
             : await viewsQuery.startAfterDocument(lastViewDoc!).get();
 
-        final pageReaders = pageSnapshot.docs.map((doc) {
-          final data = doc.data();
-          return {
-            'userId': (data['userId'] as String? ?? doc.id).trim(),
-            'viewedAt': _parseTimestamp(data['viewedAt']),
-          };
-        }).toList(growable: false);
+        final pageReaders = pageSnapshot.docs
+            .map((doc) {
+              final data = doc.data();
+              return {
+                'userId': (data['userId'] as String? ?? doc.id).trim(),
+                'viewedAt': _parseTimestamp(data['viewedAt']),
+              };
+            })
+            .toList(growable: false);
 
         final userIds = pageReaders
             .map((reader) => reader['userId'] as String? ?? '')
@@ -2473,14 +2472,16 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             ? <String, String>{}
             : await _resolveUserNames(userIds);
 
-        final hydratedReaders = pageReaders.map((reader) {
-          final userId = reader['userId'] as String? ?? '';
-          return {
-            'userId': userId,
-            'fullName': nameLookup[userId] ?? userId,
-            'viewedAt': reader['viewedAt'],
-          };
-        }).toList(growable: false);
+        final hydratedReaders = pageReaders
+            .map((reader) {
+              final userId = reader['userId'] as String? ?? '';
+              return {
+                'userId': userId,
+                'fullName': nameLookup[userId] ?? userId,
+                'viewedAt': reader['viewedAt'],
+              };
+            })
+            .toList(growable: false);
 
         if (reset) {
           readersWithNames
@@ -2512,7 +2513,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     ) {
       final fullName = (reader['fullName'] as String? ?? '').toLowerCase();
       final userId = (reader['userId'] as String? ?? '').toLowerCase();
-      return fullName.contains(normalizedQuery) || userId.contains(normalizedQuery);
+      return fullName.contains(normalizedQuery) ||
+          userId.contains(normalizedQuery);
     }
 
     Future<void> _autoLoadSearchMatches(
@@ -2522,7 +2524,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       final normalizedQuery = query.trim().toLowerCase();
       if (normalizedQuery.isEmpty || isAutoLoadingSearchResults) return;
 
-      if (readersWithNames.any((reader) => _readerMatchesQuery(reader, normalizedQuery))) {
+      if (readersWithNames.any(
+        (reader) => _readerMatchesQuery(reader, normalizedQuery),
+      )) {
         return;
       }
 
@@ -2533,7 +2537,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           if (!mounted) return;
           refresh(() {});
           if (loadError != null) return;
-          if (readersWithNames.any((reader) => _readerMatchesQuery(reader, normalizedQuery))) {
+          if (readersWithNames.any(
+            (reader) => _readerMatchesQuery(reader, normalizedQuery),
+          )) {
             return;
           }
         }
@@ -2561,13 +2567,15 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             final filteredReaders = readersWithNames.where((reader) {
               final query = searchQuery.trim().toLowerCase();
               if (query.isEmpty) return true;
-              final fullName = (reader['fullName'] as String? ?? '').toLowerCase();
+              final fullName = (reader['fullName'] as String? ?? '')
+                  .toLowerCase();
               final userId = (reader['userId'] as String? ?? '').toLowerCase();
               return fullName.contains(query) || userId.contains(query);
             }).toList();
 
             return DialogContainer(
-              title: 'View Readers: ${title.isNotEmpty ? title : announcementId}',
+              title:
+                  'View Readers: ${title.isNotEmpty ? title : announcementId}',
               maxWidth: 560,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2610,7 +2618,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.loginGreen),
+                        borderSide: const BorderSide(
+                          color: AppColors.loginGreen,
+                        ),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 14,
@@ -2642,13 +2652,15 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                         Text(
                           searchQuery.trim().isEmpty
                               ? 'No readers yet.'
-                              : isLoadingMoreReaders || isAutoLoadingSearchResults
-                                  ? 'Searching older viewers...'
-                                  : 'No readers match your search.',
+                              : isLoadingMoreReaders ||
+                                    isAutoLoadingSearchResults
+                              ? 'Searching older viewers...'
+                              : 'No readers match your search.',
                           style: const TextStyle(color: AppColors.mediumGrey),
                         ),
                         if (searchQuery.trim().isNotEmpty &&
-                            (isLoadingMoreReaders || isAutoLoadingSearchResults)) ...[
+                            (isLoadingMoreReaders ||
+                                isAutoLoadingSearchResults)) ...[
                           const SizedBox(height: 12),
                           const Center(
                             child: SizedBox(
@@ -2658,7 +2670,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                             ),
                           ),
                         ],
-                        if (searchQuery.trim().isNotEmpty && hasMoreReaders) ...[
+                        if (searchQuery.trim().isNotEmpty &&
+                            hasMoreReaders) ...[
                           const SizedBox(height: 8),
                           TextButton(
                             onPressed: isLoadingMoreReaders
@@ -2976,6 +2989,163 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
     }
   }
 
+  Future<void> _showAnnouncementDetails() async {
+    final title = widget.announcement['title'] as String? ?? '';
+    final content = widget.announcement['content'] as String? ?? '';
+    final createdAt = widget.announcement['createdAt'] as DateTime?;
+    final status = widget.announcement['status'] as String? ?? 'Published';
+    final imageUrls =
+        (widget.announcement['imageUrls'] as List?)
+            ?.whereType<String>()
+            .toList() ??
+        <String>[];
+
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return DialogContainer(
+          title: title.isNotEmpty ? title : 'Announcement',
+          maxWidth: 700,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(dialogContext).size.height * 0.7,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (createdAt != null)
+                        Text(
+                          _formatDate(createdAt),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                      if (createdAt != null) const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8F5EC),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          status,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF2E7D32),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    content.isNotEmpty ? content : 'No content available.',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.55,
+                      color: Color(0xFF374151),
+                    ),
+                  ),
+                  if (imageUrls.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Images',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1F2937),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: imageUrls.map((url) {
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 10),
+                            child: GestureDetector(
+                              onTap: () => _showFullScreenImage(url),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.network(
+                                  url,
+                                  width: 120,
+                                  height: 120,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Container(
+                                        width: 120,
+                                        height: 120,
+                                        color: const Color(0xFFF3F4F6),
+                                        alignment: Alignment.center,
+                                        child: const Icon(
+                                          Icons.broken_image_outlined,
+                                        ),
+                                      ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              SizedBox(
+                width: 110,
+                child: OutlineButton(
+                  text: 'Close',
+                  isFullWidth: true,
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showFullScreenImage(String url) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            InteractiveViewer(child: Image.network(url, fit: BoxFit.contain)),
+            Positioned(
+              top: -8,
+              right: -8,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                onPressed: () => Navigator.of(ctx).pop(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<List<String>> _uploadImages(List<XFile> files) async {
     if (files.isEmpty) return [];
     final ref = FirebaseStorage.instance.ref();
@@ -3032,198 +3202,209 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
       return _buildEditingCard();
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFEAECF0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: _showAnnouncementDetails,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFEAECF0)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header row: Title and PopupMenu
-            Row(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title.isNotEmpty ? title : 'Untitled',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1F2937),
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 8),
-                      // Metadata row with status badge
-                      Row(
+                // Header row: Title and PopupMenu
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            dateStr,
+                            title.isNotEmpty ? title : 'Untitled',
                             style: const TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF6B7280),
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1F2937),
                             ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE8F5EC),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              status,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF2E7D32),
-                                fontWeight: FontWeight.w500,
+                          const SizedBox(height: 8),
+                          // Metadata row with status badge
+                          Row(
+                            children: [
+                              Text(
+                                dateStr,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF6B7280),
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE8F5EC),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  status,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF2E7D32),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                // Popup menu for Edit/Delete
-                PopupMenuButton<String>(
-                  icon: const Icon(
-                    Icons.more_vert,
-                    color: AppColors.mediumGrey,
-                    size: 20,
-                  ),
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'edit',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.edit_outlined,
-                            size: 18,
-                            color: AppColors.darkGrey,
-                          ),
-                          SizedBox(width: 8),
-                          Text('Edit'),
                         ],
                       ),
                     ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.delete_outline,
-                            size: 18,
-                            color: Colors.red,
+                    // Popup menu for Edit/Delete
+                    PopupMenuButton<String>(
+                      icon: const Icon(
+                        Icons.more_vert,
+                        color: AppColors.mediumGrey,
+                        size: 20,
+                      ),
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.edit_outlined,
+                                size: 18,
+                                color: AppColors.darkGrey,
+                              ),
+                              SizedBox(width: 8),
+                              Text('Edit'),
+                            ],
                           ),
-                          SizedBox(width: 8),
-                          Text('Delete', style: TextStyle(color: Colors.red)),
-                        ],
+                        ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.delete_outline,
+                                size: 18,
+                                color: Colors.red,
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Delete',
+                                style: TextStyle(color: Colors.red),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      onSelected: (value) {
+                        if (value == 'edit') {
+                          _startEditing();
+                        } else if (value == 'delete') {
+                          widget.onDelete();
+                        }
+                      },
+                    ),
+                  ],
+                ),
+                // Content preview
+                if (content.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    content,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF4B5563),
+                      height: 1.5,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                const SizedBox(height: 16),
+                // Actions row
+                Row(
+                  children: [
+                    // View Readers button - neutral outline style
+                    MouseRegion(
+                      cursor: _isViewingReaders
+                          ? SystemMouseCursors.basic
+                          : SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: _isViewingReaders ? null : _handleViewReaders,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _isViewingReaders
+                                ? const Color(0xFFF9FAFB)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFFD1D5DB)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (_isViewingReaders)
+                                const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Color(0xFF6B7280),
+                                    ),
+                                  ),
+                                )
+                              else
+                                const Icon(
+                                  Icons.visibility_outlined,
+                                  size: 14,
+                                  color: Color(0xFF6B7280),
+                                ),
+                              const SizedBox(width: 6),
+                              Text(
+                                _isViewingReaders
+                                    ? 'Loading...'
+                                    : 'View Readers',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF374151),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ],
-                  onSelected: (value) {
-                    if (value == 'edit') {
-                      _startEditing();
-                    } else if (value == 'delete') {
-                      widget.onDelete();
-                    }
-                  },
                 ),
               ],
             ),
-            // Content preview
-            if (content.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text(
-                content,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Color(0xFF4B5563),
-                  height: 1.5,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-            const SizedBox(height: 16),
-            // Actions row
-            Row(
-              children: [
-                // View Readers button - neutral outline style
-                MouseRegion(
-                  cursor: _isViewingReaders
-                      ? SystemMouseCursors.basic
-                      : SystemMouseCursors.click,
-                  child: GestureDetector(
-                    onTap: _isViewingReaders ? null : _handleViewReaders,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _isViewingReaders
-                            ? const Color(0xFFF9FAFB)
-                            : Colors.white,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFFD1D5DB)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (_isViewingReaders)
-                            const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Color(0xFF6B7280),
-                                ),
-                              ),
-                            )
-                          else
-                            const Icon(
-                              Icons.visibility_outlined,
-                              size: 14,
-                              color: Color(0xFF6B7280),
-                            ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _isViewingReaders ? 'Loading...' : 'View Readers',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF374151),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );
