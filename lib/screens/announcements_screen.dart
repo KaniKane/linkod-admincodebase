@@ -42,6 +42,9 @@ class AnnouncementsScreen extends StatefulWidget {
 }
 
 class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
+  static const int _viewReadersPageSize = 25;
+  static const int _viewReadersUserBatchSize = 10;
+
   static const String _lastTabPrefsKey = 'announcements_last_tab';
   static const String _composeTitlePrefsKey = 'announcements_compose_title';
   static const String _composeContentPrefsKey = 'announcements_compose_content';
@@ -279,6 +282,30 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     if (t is Timestamp) return t.toDate();
     if (t is DateTime) return t;
     return null;
+  }
+
+  static String _formatViewedAt(DateTime date) {
+    final local = date.toLocal();
+    final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
+    final minute = local.minute.toString().padLeft(2, '0');
+    final period = local.hour >= 12 ? 'PM' : 'AM';
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+
+    return '${months[local.month - 1]} ${local.day}, ${local.year} '
+        '$hour:$minute $period';
   }
 
   Future<void> _loadPendingCounts() async {
@@ -2362,110 +2389,391 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     String announcementId,
     String title,
   ) async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('announcements')
-        .doc(announcementId)
-        .collection('views')
-        .get();
-    final readers = snapshot.docs.map((doc) {
-      final d = doc.data();
-      final viewedAt = _parseTimestamp(d['viewedAt']);
-      return {'userId': d['userId'] as String? ?? doc.id, 'viewedAt': viewedAt};
-    }).toList();
-
+    final searchController = TextEditingController();
+    String searchQuery = '';
     final readersWithNames = <Map<String, dynamic>>[];
-    for (final reader in readers) {
-      final userId = reader['userId'] as String?;
-      if (userId != null && userId.isNotEmpty) {
-        try {
-          final userDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(userId)
-              .get();
-          final fullName = userDoc.exists
-              ? (userDoc.data()?['fullName'] as String? ?? userId)
-              : userId;
-          readersWithNames.add({
+    DocumentSnapshot<Map<String, dynamic>>? lastViewDoc;
+    bool hasMoreReaders = true;
+    bool isLoadingInitialReaders = true;
+    bool isLoadingMoreReaders = false;
+    bool isAutoLoadingSearchResults = false;
+    String? loadError;
+    bool didStartInitialLoad = false;
+
+    List<List<T>> _chunkList<T>(List<T> items, int chunkSize) {
+      if (items.isEmpty) return const [];
+      final chunks = <List<T>>[];
+      for (var i = 0; i < items.length; i += chunkSize) {
+        final end = i + chunkSize > items.length ? items.length : i + chunkSize;
+        chunks.add(items.sublist(i, end));
+      }
+      return chunks;
+    }
+
+    Future<Map<String, String>> _resolveUserNames(
+      List<String> userIds,
+    ) async {
+      final nameLookup = <String, String>{};
+      for (final batch in _chunkList(userIds, _viewReadersUserBatchSize)) {
+        final usersSnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .where(FieldPath.documentId, whereIn: batch)
+            .get();
+        for (final userDoc in usersSnapshot.docs) {
+          final fullName = (userDoc.data()['fullName'] as String? ?? userDoc.id)
+              .trim();
+          nameLookup[userDoc.id] = fullName.isEmpty ? userDoc.id : fullName;
+        }
+      }
+      return nameLookup;
+    }
+
+    Future<void> _loadReadersPage({bool reset = false}) async {
+      if (reset) {
+        lastViewDoc = null;
+        hasMoreReaders = true;
+        readersWithNames.clear();
+      } else if (!hasMoreReaders || isLoadingMoreReaders) {
+        return;
+      }
+
+      if (reset) {
+        isLoadingInitialReaders = true;
+      } else {
+        isLoadingMoreReaders = true;
+      }
+
+      try {
+        final viewsQuery = FirebaseFirestore.instance
+            .collection('announcements')
+            .doc(announcementId)
+            .collection('views')
+            .orderBy('viewedAt', descending: true)
+            .limit(_viewReadersPageSize);
+
+        final pageSnapshot = lastViewDoc == null
+            ? await viewsQuery.get()
+            : await viewsQuery.startAfterDocument(lastViewDoc!).get();
+
+        final pageReaders = pageSnapshot.docs.map((doc) {
+          final data = doc.data();
+          return {
+            'userId': (data['userId'] as String? ?? doc.id).trim(),
+            'viewedAt': _parseTimestamp(data['viewedAt']),
+          };
+        }).toList(growable: false);
+
+        final userIds = pageReaders
+            .map((reader) => reader['userId'] as String? ?? '')
+            .where((userId) => userId.isNotEmpty)
+            .toSet()
+            .toList(growable: false);
+
+        final nameLookup = userIds.isEmpty
+            ? <String, String>{}
+            : await _resolveUserNames(userIds);
+
+        final hydratedReaders = pageReaders.map((reader) {
+          final userId = reader['userId'] as String? ?? '';
+          return {
             'userId': userId,
-            'fullName': fullName,
+            'fullName': nameLookup[userId] ?? userId,
             'viewedAt': reader['viewedAt'],
-          });
-        } catch (_) {
-          readersWithNames.add({
-            'userId': userId,
-            'fullName': userId,
-            'viewedAt': reader['viewedAt'],
-          });
+          };
+        }).toList(growable: false);
+
+        if (reset) {
+          readersWithNames
+            ..clear()
+            ..addAll(hydratedReaders);
+        } else {
+          readersWithNames.addAll(hydratedReaders);
+        }
+
+        if (pageSnapshot.docs.isNotEmpty) {
+          lastViewDoc = pageSnapshot.docs.last;
+        }
+        hasMoreReaders = pageSnapshot.docs.length == _viewReadersPageSize;
+        loadError = null;
+      } catch (e) {
+        loadError = 'Failed to load readers: $e';
+      } finally {
+        if (reset) {
+          isLoadingInitialReaders = false;
+        } else {
+          isLoadingMoreReaders = false;
         }
       }
     }
 
-    readersWithNames.sort((a, b) {
-      final aT = a['viewedAt'] as DateTime? ?? DateTime(0);
-      final bT = b['viewedAt'] as DateTime? ?? DateTime(0);
-      return bT.compareTo(aT);
-    });
+    bool _readerMatchesQuery(
+      Map<String, dynamic> reader,
+      String normalizedQuery,
+    ) {
+      final fullName = (reader['fullName'] as String? ?? '').toLowerCase();
+      final userId = (reader['userId'] as String? ?? '').toLowerCase();
+      return fullName.contains(normalizedQuery) || userId.contains(normalizedQuery);
+    }
+
+    Future<void> _autoLoadSearchMatches(
+      String query,
+      void Function(void Function()) refresh,
+    ) async {
+      final normalizedQuery = query.trim().toLowerCase();
+      if (normalizedQuery.isEmpty || isAutoLoadingSearchResults) return;
+
+      if (readersWithNames.any((reader) => _readerMatchesQuery(reader, normalizedQuery))) {
+        return;
+      }
+
+      isAutoLoadingSearchResults = true;
+      try {
+        while (mounted && hasMoreReaders && !isLoadingMoreReaders) {
+          await _loadReadersPage();
+          if (!mounted) return;
+          refresh(() {});
+          if (loadError != null) return;
+          if (readersWithNames.any((reader) => _readerMatchesQuery(reader, normalizedQuery))) {
+            return;
+          }
+        }
+      } finally {
+        isAutoLoadingSearchResults = false;
+      }
+    }
 
     if (!mounted) return;
-    showDialog(
-      context: context,
-      builder: (context) => DialogContainer(
-        title: 'View Readers: ${title.isNotEmpty ? title : announcementId}',
-        maxWidth: 480,
-        child: readersWithNames.isEmpty
-            ? const Text(
-                'No readers yet.',
-                style: TextStyle(color: AppColors.mediumGrey),
-              )
-            : ListView.builder(
-                shrinkWrap: true,
-                itemCount: readersWithNames.length,
-                itemBuilder: (context, i) {
-                  final r = readersWithNames[i];
-                  final viewedAt = r['viewedAt'] as DateTime?;
-                  final viewedStr = viewedAt != null
-                      ? '${viewedAt.toIso8601String().substring(0, 16)}'
-                      : '—';
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
+    try {
+      await showDialog(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setModalState) {
+            if (!didStartInitialLoad) {
+              didStartInitialLoad = true;
+              scheduleMicrotask(() async {
+                await _loadReadersPage(reset: true);
+                if (mounted) {
+                  setModalState(() {});
+                }
+              });
+            }
+
+            final filteredReaders = readersWithNames.where((reader) {
+              final query = searchQuery.trim().toLowerCase();
+              if (query.isEmpty) return true;
+              final fullName = (reader['fullName'] as String? ?? '').toLowerCase();
+              final userId = (reader['userId'] as String? ?? '').toLowerCase();
+              return fullName.contains(query) || userId.contains(query);
+            }).toList();
+
+            return DialogContainer(
+              title: 'View Readers: ${title.isNotEmpty ? title : announcementId}',
+              maxWidth: 560,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: searchController,
+                    onChanged: (value) {
+                      setModalState(() => searchQuery = value);
+                      if (value.trim().isNotEmpty) {
+                        scheduleMicrotask(() async {
+                          await _autoLoadSearchMatches(value, setModalState);
+                          if (mounted) {
+                            setModalState(() {});
+                          }
+                        });
+                      }
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Search reader',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: searchQuery.isNotEmpty
+                          ? IconButton(
+                              onPressed: () {
+                                searchController.clear();
+                                setModalState(() => searchQuery = '');
+                              },
+                              icon: const Icon(Icons.close),
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: const Color(0xFFF9FAFB),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.loginGreen),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (isLoadingInitialReaders && readersWithNames.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    )
+                  else if (loadError != null && readersWithNames.isEmpty)
+                    Text(
+                      loadError!,
+                      style: const TextStyle(color: AppColors.mediumGrey),
+                    )
+                  else if (filteredReaders.isEmpty)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Expanded(
-                          child: Text(
-                            r['fullName'] as String? ??
-                                r['userId'] as String? ??
-                                '',
-                            style: const TextStyle(fontSize: 13),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
                         Text(
-                          viewedStr,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.mediumGrey,
-                          ),
+                          searchQuery.trim().isEmpty
+                              ? 'No readers yet.'
+                              : isLoadingMoreReaders || isAutoLoadingSearchResults
+                                  ? 'Searching older viewers...'
+                                  : 'No readers match your search.',
+                          style: const TextStyle(color: AppColors.mediumGrey),
                         ),
+                        if (searchQuery.trim().isNotEmpty &&
+                            (isLoadingMoreReaders || isAutoLoadingSearchResults)) ...[
+                          const SizedBox(height: 12),
+                          const Center(
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                        ],
+                        if (searchQuery.trim().isNotEmpty && hasMoreReaders) ...[
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: isLoadingMoreReaders
+                                ? null
+                                : () async {
+                                    await _loadReadersPage();
+                                    if (mounted) {
+                                      setModalState(() {});
+                                    }
+                                  },
+                            child: Text(
+                              isLoadingMoreReaders
+                                  ? 'Loading more readers...'
+                                  : 'Load more readers to search older entries',
+                            ),
+                          ),
+                        ],
+                      ],
+                    )
+                  else
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: filteredReaders.length,
+                          separatorBuilder: (context, index) =>
+                              const SizedBox(height: 10),
+                          itemBuilder: (context, i) {
+                            final r = filteredReaders[i];
+                            final viewedAt = r['viewedAt'] as DateTime?;
+                            final viewedStr = viewedAt != null
+                                ? _formatViewedAt(viewedAt)
+                                : '—';
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF9FAFB),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: const Color(0xFFE5E7EB),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      r['fullName'] as String? ??
+                                          r['userId'] as String? ??
+                                          '',
+                                      style: const TextStyle(fontSize: 13),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    viewedStr,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.mediumGrey,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                        if (hasMoreReaders) ...[
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlineButton(
+                              text: isLoadingMoreReaders
+                                  ? 'Loading more...'
+                                  : 'Load more readers',
+                              onPressed: isLoadingMoreReaders
+                                  ? null
+                                  : () async {
+                                      await _loadReadersPage();
+                                      if (mounted) {
+                                        setModalState(() {});
+                                      }
+                                    },
+                              isFullWidth: true,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
-                  );
-                },
+                ],
               ),
-        actions: Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            SizedBox(
-              width: 110,
-              child: OutlineButton(
-                text: 'Close',
-                onPressed: () => Navigator.of(context).pop(),
-                isFullWidth: true,
+              actions: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  SizedBox(
+                    width: 110,
+                    child: OutlineButton(
+                      text: 'Close',
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      isFullWidth: true,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
+            );
+          },
         ),
-      ),
-    );
+      );
+    } finally {
+      searchController.dispose();
+    }
   }
 
   void _handleDeleteAnnouncement(String announcementId) {
@@ -2556,7 +2864,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
 /// Card widget for displaying an announcement in the Posts tab.
 class _AnnouncementCard extends StatefulWidget {
   final Map<String, dynamic> announcement;
-  final VoidCallback onViewReaders;
+  final Future<void> Function() onViewReaders;
   final Function(Map<String, dynamic> updatedData) onSave;
   final VoidCallback onDelete;
 
@@ -2578,6 +2886,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
   late List<String> _editImageUrls;
   List<XFile> _newImages = [];
   bool _isSaving = false;
+  bool _isViewingReaders = false;
 
   @override
   void initState() {
@@ -2650,6 +2959,19 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+      }
+    }
+  }
+
+  Future<void> _handleViewReaders() async {
+    if (_isViewingReaders) return;
+
+    setState(() => _isViewingReaders = true);
+    try {
+      await widget.onViewReaders();
+    } finally {
+      if (mounted) {
+        setState(() => _isViewingReaders = false);
       }
     }
   }
@@ -2848,31 +3170,47 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
               children: [
                 // View Readers button - neutral outline style
                 MouseRegion(
-                  cursor: SystemMouseCursors.click,
+                  cursor: _isViewingReaders
+                      ? SystemMouseCursors.basic
+                      : SystemMouseCursors.click,
                   child: GestureDetector(
-                    onTap: widget.onViewReaders,
+                    onTap: _isViewingReaders ? null : _handleViewReaders,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 14,
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: _isViewingReaders
+                            ? const Color(0xFFF9FAFB)
+                            : Colors.white,
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(color: const Color(0xFFD1D5DB)),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            Icons.visibility_outlined,
-                            size: 14,
-                            color: Color(0xFF6B7280),
-                          ),
-                          SizedBox(width: 6),
+                          if (_isViewingReaders)
+                            const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Color(0xFF6B7280),
+                                ),
+                              ),
+                            )
+                          else
+                            const Icon(
+                              Icons.visibility_outlined,
+                              size: 14,
+                              color: Color(0xFF6B7280),
+                            ),
+                          const SizedBox(width: 6),
                           Text(
-                            'View Readers',
-                            style: TextStyle(
+                            _isViewingReaders ? 'Loading...' : 'View Readers',
+                            style: const TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
                               color: Color(0xFF374151),

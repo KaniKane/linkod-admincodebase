@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../services/admin_notification_service.dart';
 import '../widgets/app_sidebar.dart';
 import '../widgets/activity_item.dart';
+import '../widgets/dashboard_analytics_widgets.dart';
 import '../widgets/draft_saved_notification.dart';
 import '../widgets/fast_fade_in.dart';
 import '../utils/app_colors.dart';
@@ -53,6 +54,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // Pending counts for sidebar badges
   int _pendingApprovalsCount = 0;
   int _pendingUsersCount = 0;
+  int _pendingProductsCount = 0;
+  int _pendingTasksCount = 0;
+  int _totalAnnouncementViews = 0;
+  int _usersThisWeek = 0;
+  String _actionableInsight = '';
+
+  Map<String, int> _demographicsBreakdown = const {};
+  List<TrendPoint> _userGrowthTrendPoints = const [];
+  List<VerticalBarDatum> _topAnnouncementViews = const [];
 
   @override
   void initState() {
@@ -107,6 +117,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     int pendingUsersGrowth = 0;
     int postedAnnouncementsGrowth = 0;
     int pendingAnnouncementsGrowth = 0;
+    int pendingProductsCount = 0;
+    int pendingTasksCount = 0;
+    int totalAnnouncementViews = 0;
+
+    final demographicsBreakdown = <String, int>{};
+    final acceptedUserCreatedDates = <DateTime>[];
+    final topAnnouncementViews = <Map<String, dynamic>>[];
 
     final dateWindow = _buildDateWindow();
     final rangeStart = Timestamp.fromDate(dateWindow.start);
@@ -122,6 +139,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final data = doc.data();
         if (_isAcceptedUser(data)) {
           acceptedUsers++;
+          final createdAtDate = _extractDate(data['createdAt']);
+          if (createdAtDate != null) {
+            acceptedUserCreatedDates.add(createdAtDate);
+          }
+
+          final purok = (data['purok'] ?? '').toString().trim();
+          final userType = (data['userType'] ?? '').toString().trim();
+          final demographicLabel = purok.isNotEmpty
+              ? _formatPurokLabel(purok)
+              : (userType.isNotEmpty ? _toTitleCase(userType) : 'Unspecified');
+          demographicsBreakdown[demographicLabel] =
+              (demographicsBreakdown[demographicLabel] ?? 0) + 1;
+
           if (_isInDateWindow(data['createdAt'], dateWindow)) {
             acceptedUsersGrowth++;
           }
@@ -180,6 +210,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         if (normalizedStatus == 'approved') {
           postedAnnouncements++;
+          final viewCount = _asInt(data['viewCount']);
+          totalAnnouncementViews += viewCount;
+          topAnnouncementViews.add({
+            'title': (data['title'] as String? ?? 'Announcement').trim(),
+            'views': viewCount,
+          });
+
           if (_isInDateWindow(data['createdAt'], dateWindow)) {
             postedAnnouncementsGrowth++;
           }
@@ -219,6 +256,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             .count()
             .get();
         pendingProducts = pendingProductsSnap.count ?? 0;
+        pendingProductsCount = pendingProducts;
       } catch (_) {}
       try {
         final pendingTasksSnap = await FirebaseFirestore.instance
@@ -227,6 +265,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             .count()
             .get();
         pendingTasks = pendingTasksSnap.count ?? 0;
+        pendingTasksCount = pendingTasks;
       } catch (_) {}
 
       final activities = <Map<String, dynamic>>[];
@@ -305,6 +344,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
       });
 
       if (!mounted) return;
+      topAnnouncementViews.sort(
+        (a, b) => ((b['views'] as int?) ?? 0).compareTo((a['views'] as int?) ?? 0),
+      );
+
+      final userGrowthTrendPoints = _buildUserGrowthTrend(
+        acceptedUserCreatedDates,
+        dateWindow,
+      );
+
+      final topAnnouncementBars = topAnnouncementViews
+          .take(3)
+          .map(
+            (entry) => VerticalBarDatum(
+              label: _shortenLabel((entry['title'] as String?) ?? 'Announcement'),
+              value: (entry['views'] as int?) ?? 0,
+            ),
+          )
+          .toList(growable: false);
+
+      final usersThisWeek = _countUsersWithinDays(acceptedUserCreatedDates, 7);
+
+      final topDemographic = demographicsBreakdown.entries.isEmpty
+          ? null
+          : (demographicsBreakdown.entries.toList()
+                ..sort((a, b) => b.value.compareTo(a.value)))
+              .first;
+      final topPercent = acceptedUsers <= 0 || topDemographic == null
+          ? 0
+          : ((topDemographic.value / acceptedUsers) * 100).round();
+
+      final queueTotal = pendingUsers + pendingAnnouncements + pendingProducts + pendingTasks;
+      final actionableInsight = topDemographic != null
+          ? 'Most active resident segment: ${topDemographic.key} ($topPercent%).'
+          : (queueTotal > 0
+                ? 'You have $queueTotal items waiting in the approval queue.'
+                : 'No pending queue items right now. Operations are up to date.');
+
       setState(() {
         _acceptedUsers = acceptedUsers;
         _pendingUsers = pendingUsers;
@@ -317,6 +393,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _pendingApprovalsCount =
             pendingAnnouncements + pendingProducts + pendingTasks;
         _pendingUsersCount = pendingUsers;
+        _pendingProductsCount = pendingProductsCount;
+        _pendingTasksCount = pendingTasksCount;
+        _totalAnnouncementViews = totalAnnouncementViews;
+        _usersThisWeek = usersThisWeek;
+        _actionableInsight = actionableInsight;
+        _demographicsBreakdown = demographicsBreakdown;
+        _userGrowthTrendPoints = userGrowthTrendPoints;
+        _topAnnouncementViews = topAnnouncementBars;
         _recentActivities
           ..clear()
           ..addAll(activities);
@@ -446,6 +530,153 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ? createdAt.toDate()
         : createdAt as DateTime;
     return !date.isBefore(window.start) && !date.isAfter(window.end);
+  }
+
+  int _asInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
+  DateTime? _extractDate(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    return null;
+  }
+
+  String _toTitleCase(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return trimmed;
+    return trimmed
+        .split(RegExp(r'\s+'))
+        .map(
+          (word) => word.isEmpty
+              ? word
+              : '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}',
+        )
+        .join(' ');
+  }
+
+  String _shortenLabel(String label) {
+    if (label.length <= 22) return label;
+    return '${label.substring(0, 21)}...';
+  }
+
+  String _formatPurokLabel(String raw) {
+    final normalized = raw.trim();
+    if (normalized.isEmpty) return 'Unspecified';
+    final lower = normalized.toLowerCase();
+    if (lower.startsWith('purok')) return _toTitleCase(normalized);
+    final numericOnly = RegExp(r'^\d+$').hasMatch(normalized);
+    if (numericOnly) return 'Purok $normalized';
+    return _toTitleCase(normalized);
+  }
+
+  String _formatShortDate(DateTime date) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[date.month - 1]} ${date.day}';
+  }
+
+  List<TrendPoint> _buildUserGrowthTrend(
+    List<DateTime> acceptedDates,
+    _InsightDateWindow window,
+  ) {
+    if (acceptedDates.isEmpty) return const [];
+
+    final start = DateTime(window.start.year, window.start.month, window.start.day);
+    final end = DateTime(window.end.year, window.end.month, window.end.day);
+    final dayCount = end.difference(start).inDays + 1;
+    if (dayCount <= 0) return const [];
+
+    final dailyCounts = <DateTime, int>{};
+    for (var i = 0; i < dayCount; i++) {
+      final day = start.add(Duration(days: i));
+      dailyCounts[day] = 0;
+    }
+
+    for (final date in acceptedDates) {
+      final normalized = DateTime(date.year, date.month, date.day);
+      if (normalized.isBefore(start) || normalized.isAfter(end)) continue;
+      dailyCounts[normalized] = (dailyCounts[normalized] ?? 0) + 1;
+    }
+
+    final entries = dailyCounts.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+
+    if (entries.length <= 10) {
+      return entries
+          .map((e) => TrendPoint(label: _formatShortDate(e.key), value: e.value))
+          .toList(growable: false);
+    }
+
+    final targetBuckets = 10;
+    final bucketSize = (entries.length / targetBuckets).ceil();
+    final compressed = <TrendPoint>[];
+
+    for (var i = 0; i < entries.length; i += bucketSize) {
+      final chunk = entries.skip(i).take(bucketSize).toList(growable: false);
+      if (chunk.isEmpty) continue;
+
+      final startLabel = _formatShortDate(chunk.first.key);
+      final endLabel = _formatShortDate(chunk.last.key);
+      final label = startLabel == endLabel ? startLabel : '$startLabel-$endLabel';
+      final value = chunk.fold<int>(0, (sum, e) => sum + e.value);
+      compressed.add(TrendPoint(label: label, value: value));
+    }
+
+    return compressed;
+  }
+
+  int _countUsersWithinDays(List<DateTime> dates, int days) {
+    if (days <= 0) return 0;
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: days - 1));
+    return dates.where((d) {
+      final normalized = DateTime(d.year, d.month, d.day);
+      return !normalized.isBefore(start) && !normalized.isAfter(now);
+    }).length;
+  }
+
+  Widget _buildStatNumber({required String label, required int value}) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$value',
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1A1A1A),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.mediumGrey,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _onDatePresetSelected(_InsightDatePreset preset) async {
@@ -905,6 +1136,166 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       ],
                                     ),
                                   ),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 28),
+                            const Text(
+                              'Analytics Overview',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.darkGrey,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Lightweight view of resident mix, growth trend, and content reach.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.mediumGrey,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            if (_actionableInsight.isNotEmpty)
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 12,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEFF8F2),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.insights_outlined,
+                                      size: 18,
+                                      color: AppColors.primaryGreenAlt,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _actionableInsight,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.darkGrey,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            const SizedBox(height: 16),
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final twoColumns = constraints.maxWidth >= 1100;
+                                final cardWidth = twoColumns
+                                    ? (constraints.maxWidth - 16) / 2
+                                    : constraints.maxWidth;
+
+                                final demographicItems = _demographicsBreakdown.entries
+                                    .toList()
+                                  ..sort((a, b) => b.value.compareTo(a.value));
+
+                                return Wrap(
+                                  spacing: 16,
+                                  runSpacing: 16,
+                                  children: [
+                                    SizedBox(
+                                      width: cardWidth,
+                                      height: 270,
+                                      child: AnalyticsCard(
+                                        title: 'Demographics Breakdown',
+                                        subtitle: 'Resident distribution by purok / category',
+                                        child: HorizontalBarChart(
+                                          items: demographicItems
+                                              .take(6)
+                                              .map(
+                                                (entry) {
+                                                  final percent = _acceptedUsers <= 0
+                                                      ? 0
+                                                      : ((entry.value / _acceptedUsers) * 100)
+                                                            .round();
+                                                  return HorizontalBarDatum(
+                                                    label: entry.key,
+                                                    value: entry.value,
+                                                    trailingLabel:
+                                                        '${entry.value} ($percent%)',
+                                                  );
+                                                },
+                                              )
+                                              .toList(growable: false),
+                                          emptyLabel: 'No resident category data yet',
+                                          labelWidth: 124,
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: cardWidth,
+                                      height: 270,
+                                      child: AnalyticsCard(
+                                        title: 'User Growth Trend',
+                                        subtitle: _buildDateWindow().label,
+                                        child: LineTrendChart(
+                                          points: _userGrowthTrendPoints,
+                                          insightLabel:
+                                              '+$_usersThisWeek users in the last 7 days',
+                                          emptyLabel:
+                                              'No registrations found in selected period',
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: cardWidth,
+                                      height: 300,
+                                      child: AnalyticsCard(
+                                        title: 'Announcement Performance',
+                                        subtitle: 'Top viewed announcements and status totals',
+                                        child: Column(
+                                          children: [
+                                            Expanded(
+                                              child: HorizontalBarChart(
+                                                items: _topAnnouncementViews
+                                                    .map(
+                                                      (item) => HorizontalBarDatum(
+                                                        label: item.label,
+                                                        value: item.value,
+                                                        trailingLabel:
+                                                            '${item.value} views',
+                                                      ),
+                                                    )
+                                                    .toList(growable: false),
+                                                emptyLabel:
+                                                    'No viewed announcements available',
+                                                labelWidth: 170,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 12),
+                                            Row(
+                                              children: [
+                                                _buildStatNumber(
+                                                  label: 'Posted',
+                                                  value: _postedAnnouncements,
+                                                ),
+                                                _buildStatNumber(
+                                                  label: 'Pending',
+                                                  value: _pendingAnnouncements,
+                                                ),
+                                                _buildStatNumber(
+                                                  label: 'Total Views',
+                                                  value: _totalAnnouncementViews,
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 );
                               },
                             ),

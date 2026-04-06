@@ -23,6 +23,36 @@ import 'announcements_screen.dart';
 import 'approvals_screen.dart';
 import 'barangay_information_screen.dart';
 
+enum _UsersSortOption { nameAsc, nameDesc, dateNewest, dateOldest }
+
+enum _UsersDateFilter { allTime, today, last7Days, last30Days, custom }
+
+const List<String> _mainDemographicOptions = [
+  'Senior',
+  'Pregnant/Lactating Mother',
+  'Student',
+  'PWD',
+  'Youth',
+  'Farmer',
+  'Fisherman',
+  'Public Utility Drivers',
+  'Small Business Owner',
+  '4Ps',
+  'Tanod',
+  'Barangay Official',
+  'Barangay Health Worker(BHW)',
+  'Indigenous People(IP)',
+  'Parent',
+];
+
+const List<String> _mainPurokOptions = [
+  'Purok 1',
+  'Purok 2',
+  'Purok 3',
+  'Purok 4',
+  'Purok 5',
+];
+
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({
     super.key,
@@ -41,12 +71,20 @@ class UserManagementScreen extends StatefulWidget {
 
 class _UserManagementScreenState extends State<UserManagementScreen> {
   static const String _lastTabPrefsKey = 'user_management_last_tab';
+  static const String _usersFilterAll = '__all__';
+  static const String _usersFilterNoPurok = '__no_purok__';
 
   int _activeTabIndex = 0;
   final _searchController = TextEditingController();
   int _currentPage = 1;
   int _itemsPerPage = 20;
   final Set<int> _selectedIndices = {};
+
+  _UsersSortOption _usersSortOption = _UsersSortOption.nameAsc;
+  _UsersDateFilter _usersDateFilter = _UsersDateFilter.allTime;
+  DateTimeRange? _usersCustomDateRange;
+  String _usersPurokFilter = _usersFilterAll;
+  String _usersDemographicFilter = _usersFilterAll;
 
   bool _isLoading = false;
   String? _errorMessage;
@@ -128,6 +166,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final phoneValue = phone.trim();
     if (phoneValue.isNotEmpty) return phoneValue;
     return _stripLinkodEmailSuffix(email);
+  }
+
+  int? _extractEpochMillis(dynamic value) {
+    if (value is Timestamp) return value.millisecondsSinceEpoch;
+    if (value is DateTime) return value.millisecondsSinceEpoch;
+    return null;
   }
 
   Future<void> _loadPendingApprovalsCount() async {
@@ -271,11 +315,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 status == 'accepted';
             if (!isAccepted) continue;
           }
+          final demographics = _extractDemographics(data);
           loadedUsers.add({
             'id': doc.id,
             'name': fullName.isNotEmpty ? fullName : 'Unnamed user',
             'phone': residentContact,
             'purok': purok,
+            'createdAtEpoch':
+                (_extractEpochMillis(data['createdAt']) ?? '').toString(),
+            'demographics': demographics.join(', '),
             'category': demographicCategory.isNotEmpty
                 ? demographicCategory
                 : (role.isNotEmpty ? role : 'User'),
@@ -453,13 +501,247 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   String get _searchQuery => _searchController.text.trim().toLowerCase();
 
+  String _normalizePurok(String purok) => purok.trim().toLowerCase();
+
+  String _normalizePurokSelection(String purok) {
+    final normalized = purok.trim().toLowerCase();
+    final match = RegExp(r'\b(\d+)\b').firstMatch(normalized);
+    if (match != null) {
+      return match.group(1)!;
+    }
+    return normalized.replaceAll(RegExp(r'^purok\s+'), '').trim();
+  }
+
+  List<String> _extractDemographics(Map<String, dynamic> data) {
+    final categories = data['categories'];
+    if (categories is List) {
+      final normalized = categories
+          .whereType<String>()
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)
+          .toList();
+      if (normalized.isNotEmpty) return normalized;
+    }
+
+    final category = (data['category'] ?? data['demographicCategory'] ?? '')
+        .toString()
+        .trim();
+    if (category.isEmpty) return const [];
+
+    return category
+        .split(',')
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList();
+  }
+
+  bool _matchesDemographicFilter(Map<String, String> user) {
+    if (_usersDemographicFilter == _usersFilterAll) return true;
+
+    final target = _usersDemographicFilter.toLowerCase();
+    final demographicsRaw = (user['demographics'] ?? user['category'] ?? '')
+        .toString()
+        .trim();
+    if (demographicsRaw.isEmpty) return false;
+
+    final demographics = demographicsRaw
+        .split(',')
+        .map((value) => value.trim().toLowerCase())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+
+    return demographics.contains(target) || demographicsRaw.toLowerCase() == target;
+  }
+
+  int _createdAtEpochForUser(Map<String, String> user) {
+    return int.tryParse((user['createdAtEpoch'] ?? '').trim()) ?? -1;
+  }
+
+  String _usersSortLabel(_UsersSortOption option) {
+    switch (option) {
+      case _UsersSortOption.nameAsc:
+        return 'Name (A-Z)';
+      case _UsersSortOption.nameDesc:
+        return 'Name (Z-A)';
+      case _UsersSortOption.dateNewest:
+        return 'Date (Newest)';
+      case _UsersSortOption.dateOldest:
+        return 'Date (Oldest)';
+    }
+  }
+
+  String _usersDateFilterLabel(_UsersDateFilter option) {
+    switch (option) {
+      case _UsersDateFilter.allTime:
+        return 'All time';
+      case _UsersDateFilter.today:
+        return 'Today';
+      case _UsersDateFilter.last7Days:
+        return 'Last 7 days';
+      case _UsersDateFilter.last30Days:
+        return 'Last 30 days';
+      case _UsersDateFilter.custom:
+        return 'Custom range';
+    }
+  }
+
+  List<String> get _usersPurokOptions {
+    final values = _users
+        .map((u) => (u['purok'] ?? '').trim())
+        .where((v) => v.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return values;
+  }
+
+  bool _matchesPurokFilter(Map<String, String> user) {
+    if (_usersPurokFilter == _usersFilterAll) return true;
+    if (_usersPurokFilter == _usersFilterNoPurok) {
+      return (user['purok'] ?? '').trim().isEmpty;
+    }
+
+    final selected = _normalizePurokSelection(_usersPurokFilter);
+    final userPurok = _normalizePurokSelection(user['purok'] ?? '');
+    if (selected.isEmpty || userPurok.isEmpty) return false;
+    return userPurok == selected;
+  }
+
+  List<String> get _usersDemographicOptions {
+    return _mainDemographicOptions;
+  }
+
+  bool _matchesUsersDateFilter(Map<String, String> user) {
+    if (_usersDateFilter == _UsersDateFilter.allTime) return true;
+    final epoch = _createdAtEpochForUser(user);
+    if (epoch <= 0) return false;
+
+    final createdAt = DateTime.fromMillisecondsSinceEpoch(epoch);
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    switch (_usersDateFilter) {
+      case _UsersDateFilter.allTime:
+        return true;
+      case _UsersDateFilter.today:
+        return createdAt.isAfter(todayStart) || createdAt == todayStart;
+      case _UsersDateFilter.last7Days:
+        final start = todayStart.subtract(const Duration(days: 6));
+        return createdAt.isAfter(start) || createdAt == start;
+      case _UsersDateFilter.last30Days:
+        final start = todayStart.subtract(const Duration(days: 29));
+        return createdAt.isAfter(start) || createdAt == start;
+      case _UsersDateFilter.custom:
+        final range = _usersCustomDateRange;
+        if (range == null) return true;
+        final start = DateTime(
+          range.start.year,
+          range.start.month,
+          range.start.day,
+        );
+        final end = DateTime(
+          range.end.year,
+          range.end.month,
+          range.end.day,
+          23,
+          59,
+          59,
+          999,
+        );
+        return !createdAt.isBefore(start) && !createdAt.isAfter(end);
+    }
+  }
+
+  void _resetUsersFilters() {
+    setState(() {
+      _usersSortOption = _UsersSortOption.nameAsc;
+      _usersDateFilter = _UsersDateFilter.allTime;
+      _usersCustomDateRange = null;
+      _usersPurokFilter = _usersFilterAll;
+      _usersDemographicFilter = _usersFilterAll;
+      _currentPage = 1;
+      _selectedIndices.clear();
+    });
+  }
+
+  Future<void> _handleUsersDateFilterChanged(_UsersDateFilter? value) async {
+    if (value == null) return;
+    if (value == _UsersDateFilter.custom) {
+      final now = DateTime.now();
+      final pickedRange = await showDateRangePicker(
+        context: context,
+        firstDate: DateTime(2000),
+        lastDate: DateTime(now.year + 1),
+        initialDateRange: _usersCustomDateRange,
+      );
+      if (!mounted || pickedRange == null) return;
+      setState(() {
+        _usersDateFilter = _UsersDateFilter.custom;
+        _usersCustomDateRange = pickedRange;
+        _currentPage = 1;
+        _selectedIndices.clear();
+      });
+      return;
+    }
+
+    setState(() {
+      _usersDateFilter = value;
+      _currentPage = 1;
+      _selectedIndices.clear();
+    });
+  }
+
   List<Map<String, String>> get _filteredUsers {
-    if (_searchQuery.isEmpty) return _users;
-    return _users.where((u) {
+    final query = _searchQuery;
+    final filtered = _users.where((u) {
       final name = (u['name'] ?? '').toLowerCase();
       final phone = (u['phone'] ?? '').toLowerCase();
-      return name.contains(_searchQuery) || phone.contains(_searchQuery);
+      final purokRaw = (u['purok'] ?? '').trim();
+      final purokNormalized = _normalizePurok(purokRaw);
+      final category = (u['category'] ?? '').trim();
+
+      if (query.isNotEmpty &&
+          !(name.contains(query) ||
+              phone.contains(query) ||
+              purokRaw.toLowerCase().contains(query) ||
+              category.toLowerCase().contains(query))) {
+        return false;
+      }
+
+      if (_usersPurokFilter == _usersFilterNoPurok && purokRaw.isNotEmpty) {
+        return false;
+      }
+      if (!_matchesPurokFilter(u)) {
+        return false;
+      }
+
+      if (_usersDemographicFilter != _usersFilterAll &&
+          !_matchesDemographicFilter(u)) {
+        return false;
+      }
+
+      if (!_matchesUsersDateFilter(u)) return false;
+
+      return true;
     }).toList();
+
+    filtered.sort((a, b) {
+      final aName = (a['name'] ?? '').toLowerCase();
+      final bName = (b['name'] ?? '').toLowerCase();
+      final aDate = _createdAtEpochForUser(a);
+      final bDate = _createdAtEpochForUser(b);
+      switch (_usersSortOption) {
+        case _UsersSortOption.nameAsc:
+          return aName.compareTo(bName);
+        case _UsersSortOption.nameDesc:
+          return bName.compareTo(aName);
+        case _UsersSortOption.dateNewest:
+          return bDate.compareTo(aDate);
+        case _UsersSortOption.dateOldest:
+          return aDate.compareTo(bDate);
+      }
+    });
+
+    return filtered;
   }
 
   List<Map<String, String>> get _filteredAdmins {
@@ -773,47 +1055,58 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 else
                                   Padding(
                                     padding: const EdgeInsets.all(32),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Expanded(
-                                          child: CustomSearchBar(
-                                            placeholder: _activeTabIndex == 0
-                                                ? 'Search user'
-                                                : _activeTabIndex == 1
-                                                ? 'Search admin'
-                                                : 'Search inactive',
-                                            controller: _searchController,
-                                            onChanged: (_) => setState(() {
-                                              _currentPage = 1;
-                                              _selectedIndices.clear();
-                                            }),
-                                          ),
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Expanded(
+                                              child: CustomSearchBar(
+                                                placeholder: _activeTabIndex == 0
+                                                    ? 'Search user'
+                                                    : _activeTabIndex == 1
+                                                    ? 'Search admin'
+                                                    : 'Search inactive',
+                                                controller: _searchController,
+                                                onChanged: (_) => setState(() {
+                                                  _currentPage = 1;
+                                                  _selectedIndices.clear();
+                                                }),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 16),
+                                            // Users tab: "Add New User" button
+                                            if (_activeTabIndex == 0)
+                                              CustomButton(
+                                                text: 'Add New User',
+                                                onPressed: () =>
+                                                    _showAddAccountDialog(
+                                                      isAdmin: false,
+                                                    ),
+                                                isFullWidth: false,
+                                              )
+                                            // Admins tab: "Create Official Account" button (SUPER ADMIN only)
+                                            else if (_activeTabIndex == 1 &&
+                                                _currentUserRole ==
+                                                    'super_admin')
+                                              CustomButton(
+                                                text: 'Create Official Account',
+                                                onPressed: () =>
+                                                    _showCreateOfficialAccountDialog(),
+                                                isFullWidth: false,
+                                              )
+                                            // Inactive tab: no add button
+                                            else if (_activeTabIndex == 3)
+                                              const SizedBox.shrink(),
+                                          ],
                                         ),
-                                        const SizedBox(width: 16),
-                                        // Users tab: "Add New User" button
-                                        if (_activeTabIndex == 0)
-                                          CustomButton(
-                                            text: 'Add New User',
-                                            onPressed: () =>
-                                                _showAddAccountDialog(
-                                                  isAdmin: false,
-                                                ),
-                                            isFullWidth: false,
-                                          )
-                                        // Admins tab: "Create Official Account" button (SUPER ADMIN only)
-                                        else if (_activeTabIndex == 1 &&
-                                            _currentUserRole == 'super_admin')
-                                          CustomButton(
-                                            text: 'Create Official Account',
-                                            onPressed: () =>
-                                                _showCreateOfficialAccountDialog(),
-                                            isFullWidth: false,
-                                          )
-                                        // Inactive tab: no add button
-                                        else if (_activeTabIndex == 3)
-                                          const SizedBox.shrink(),
+                                        if (_activeTabIndex == 0) ...[
+                                          const SizedBox(height: 12),
+                                          _buildUsersFilterControls(),
+                                        ],
                                       ],
                                     ),
                                   ),
@@ -983,6 +1276,167 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     }
   }
 
+  Widget _buildUsersFilterControls() {
+    final purokItems = [
+      _usersFilterAll,
+      _usersFilterNoPurok,
+      ..._mainPurokOptions,
+    ];
+    final demographicItems = [_usersFilterAll, ..._mainDemographicOptions];
+    final selectedPurok = purokItems.contains(_usersPurokFilter)
+        ? _usersPurokFilter
+        : _usersFilterAll;
+    final selectedDemographic = demographicItems.contains(_usersDemographicFilter)
+        ? _usersDemographicFilter
+        : _usersFilterAll;
+
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _buildUsersFilterDropdown<_UsersSortOption>(
+          width: 180,
+          value: _usersSortOption,
+          labelText: 'Sort',
+          items: _UsersSortOption.values,
+          itemLabelBuilder: _usersSortLabel,
+          onChanged: (value) {
+            if (value == null) return;
+            setState(() {
+              _usersSortOption = value;
+              _currentPage = 1;
+              _selectedIndices.clear();
+            });
+          },
+        ),
+        _buildUsersFilterDropdown<_UsersDateFilter>(
+          width: 170,
+          value: _usersDateFilter,
+          labelText: 'Date',
+          items: _UsersDateFilter.values,
+          itemLabelBuilder: _usersDateFilterLabel,
+          onChanged: (value) {
+            _handleUsersDateFilterChanged(value);
+          },
+        ),
+        _buildUsersFilterDropdown<String>(
+          width: 180,
+          value: selectedPurok,
+          labelText: 'Purok',
+          items: purokItems,
+          itemLabelBuilder: (value) {
+            if (value == _usersFilterAll) return 'All Purok';
+            if (value == _usersFilterNoPurok) return 'No Purok';
+            return value;
+          },
+          onChanged: (value) {
+            if (value == null) return;
+            setState(() {
+              _usersPurokFilter = value;
+              _currentPage = 1;
+              _selectedIndices.clear();
+            });
+          },
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildUsersFilterDropdown<String>(
+              width: 220,
+              value: selectedDemographic,
+              labelText: 'Demographic',
+              items: demographicItems,
+              itemLabelBuilder: (value) {
+                if (value == _usersFilterAll) return 'All Demographics';
+                return value;
+              },
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() {
+                  _usersDemographicFilter = value;
+                  _currentPage = 1;
+                  _selectedIndices.clear();
+                });
+              },
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              height: 40,
+              child: OutlineButton(
+                text: 'Reset Filters',
+                onPressed: _resetUsersFilters,
+                isFullWidth: false,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUsersFilterDropdown<T>({
+    required double width,
+    required T value,
+    required String labelText,
+    required List<T> items,
+    required String Function(T value) itemLabelBuilder,
+    required void Function(T? value) onChanged,
+  }) {
+    return SizedBox(
+      width: width,
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: labelText,
+          labelStyle: const TextStyle(
+            fontSize: 12,
+            color: AppColors.mediumGrey,
+          ),
+          isDense: true,
+          filled: true,
+          fillColor: AppColors.inputBg,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 8,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: AppColors.loginGreen),
+          ),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<T>(
+            value: value,
+            isExpanded: true,
+            dropdownColor: AppColors.white,
+            borderRadius: BorderRadius.circular(12),
+            onChanged: onChanged,
+            items: items
+                .map(
+                  (item) => DropdownMenuItem<T>(
+                    value: item,
+                    child: Text(
+                      itemLabelBuilder(item),
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _showAddAccountDialog({required bool isAdmin}) async {
     final nameController = TextEditingController();
     final emailController = TextEditingController();
@@ -1033,348 +1487,321 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                        Text(
-                          isAdmin ? 'Add New Admin' : 'Add New User',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.loginGreen,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        _buildDialogTextField(
-                          label: 'Full Name',
-                          controller: nameController,
-                          validator: (value) =>
-                              value == null || value.trim().isEmpty
-                              ? 'Name is required'
-                              : null,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDialogTextField(
-                          label: 'Email',
-                          controller: emailController,
-                          validator: (value) {
-                            final email = value?.trim() ?? '';
-                            if (email.isEmpty) {
-                              return 'Email is required';
-                            }
-                            if (!_isValidEmail(email)) {
-                              return 'Enter a valid email address';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDialogPasswordField(
-                          label: 'Password (min 6 characters)',
-                          controller: passwordController,
-                          obscure: passwordObscure,
-                          onToggle: () => setState(
-                            () => passwordObscure = !passwordObscure,
-                          ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Password is required';
-                            }
-                            if (value.length < 6) {
-                              return 'Password must be at least 6 characters';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        if (isAdmin)
-                          _buildPositionSelector(
-                            selectedPosition: selectedPosition,
-                            onSelect: (value) {
-                              setState(() {
-                                selectedPosition = value;
-                              });
-                            },
-                          )
-                        else
-                          _buildDemographicSelector(
-                            selectedCategories: selectedCategories,
-                            onToggle: (value) {
-                              setState(() {
-                                if (selectedCategories.contains(value)) {
-                                  selectedCategories.remove(value);
-                                } else {
-                                  selectedCategories.add(value);
-                                }
-                              });
-                            },
-                          ),
-                        const SizedBox(height: 16),
-                        _buildDialogTextField(
-                          label: 'Role',
-                          controller: roleController,
-                          enabled: false,
-                        ),
-                        const SizedBox(height: 16),
-                        if (dialogError != null) ...[
-                          ErrorNotification(message: dialogError!),
-                          const SizedBox(height: 8),
-                        ],
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            OutlineButton(
-                              text: 'Cancel',
-                              onPressed: isSubmitting
-                                  ? null
-                                  : () => Navigator.of(context).pop(),
+                          Text(
+                            isAdmin ? 'Add New Admin' : 'Add New User',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.loginGreen,
                             ),
-                            const SizedBox(width: 8),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.loginGreen,
-                                foregroundColor: AppColors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
+                          ),
+                          const SizedBox(height: 24),
+                          _buildDialogTextField(
+                            label: 'Full Name',
+                            controller: nameController,
+                            validator: (value) =>
+                                value == null || value.trim().isEmpty
+                                ? 'Name is required'
+                                : null,
+                          ),
+                          const SizedBox(height: 16),
+                          _buildDialogTextField(
+                            label: 'Email',
+                            controller: emailController,
+                            validator: (value) {
+                              final email = value?.trim() ?? '';
+                              if (email.isEmpty) {
+                                return 'Email is required';
+                              }
+                              if (!_isValidEmail(email)) {
+                                return 'Enter a valid email address';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          _buildDialogPasswordField(
+                            label: 'Password (min 6 characters)',
+                            controller: passwordController,
+                            obscure: passwordObscure,
+                            onToggle: () => setState(
+                              () => passwordObscure = !passwordObscure,
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Password is required';
+                              }
+                              if (value.length < 6) {
+                                return 'Password must be at least 6 characters';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          if (isAdmin)
+                            _buildPositionSelector(
+                              selectedPosition: selectedPosition,
+                              onSelect: (value) {
+                                setState(() {
+                                  selectedPosition = value;
+                                });
+                              },
+                            )
+                          else
+                            _buildDemographicSelector(
+                              selectedCategories: selectedCategories,
+                              onToggle: (value) {
+                                setState(() {
+                                  if (selectedCategories.contains(value)) {
+                                    selectedCategories.remove(value);
+                                  } else {
+                                    selectedCategories.add(value);
+                                  }
+                                });
+                              },
+                            ),
+                          const SizedBox(height: 16),
+                          _buildDialogTextField(
+                            label: 'Role',
+                            controller: roleController,
+                            enabled: false,
+                          ),
+                          const SizedBox(height: 16),
+                          if (dialogError != null) ...[
+                            ErrorNotification(message: dialogError!),
+                            const SizedBox(height: 8),
+                          ],
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              OutlineButton(
+                                text: 'Cancel',
+                                onPressed: isSubmitting
+                                    ? null
+                                    : () => Navigator.of(context).pop(),
                               ),
-                              onPressed: isSubmitting
-                                  ? null
-                                  : () async {
-                                      if (!formKey.currentState!.validate())
-                                        return;
+                              const SizedBox(width: 8),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.loginGreen,
+                                  foregroundColor: AppColors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                onPressed: isSubmitting
+                                    ? null
+                                    : () async {
+                                        if (!formKey.currentState!.validate()) {
+                                          return;
+                                        }
 
-                                      if (isAdmin &&
-                                          (selectedPosition == null)) {
-                                        setState(() {
-                                          dialogError =
-                                              'Please select a position';
-                                        });
-                                        return;
-                                      }
-                                      if (!isAdmin &&
-                                          selectedCategories.isEmpty) {
-                                        setState(() {
-                                          dialogError =
-                                              'Please select at least one demographic category';
-                                        });
-                                        return;
-                                      }
-
-                                      setState(() {
-                                        isSubmitting = true;
-                                        dialogError = null;
-                                      });
-
-                                      try {
-                                        final name = nameController.text.trim();
-                                        final email = emailController.text
-                                            .trim()
-                                            .toLowerCase();
-                                        final password =
-                                            passwordController.text;
-                                        if (!_isValidEmail(email)) {
+                                        if (isAdmin && (selectedPosition == null)) {
                                           setState(() {
-                                            dialogError =
-                                                'Valid email is required';
-                                            isSubmitting = false;
+                                            dialogError = 'Please select a position';
                                           });
                                           return;
                                         }
-                                        if (password.isEmpty ||
-                                            password.length < 6) {
+                                        if (!isAdmin && selectedCategories.isEmpty) {
                                           setState(() {
                                             dialogError =
-                                                'Password must be at least 6 characters';
-                                            isSubmitting = false;
+                                                'Please select at least one demographic category';
                                           });
                                           return;
                                         }
 
-                                        final now =
-                                            FieldValue.serverTimestamp();
-                                        final firestoreRole = isAdmin
-                                            ? 'admin'
-                                            : 'resident';
+                                        setState(() {
+                                          isSubmitting = true;
+                                          dialogError = null;
+                                        });
 
-                                        // Create Firebase Auth user (so they can log in) using secondary app so admin stays signed in
-                                        FirebaseApp secondaryApp;
                                         try {
-                                          secondaryApp = Firebase.app(
-                                            'AuthHelper',
-                                          );
-                                        } catch (_) {
-                                          secondaryApp =
-                                              await Firebase.initializeApp(
-                                                name: 'AuthHelper',
-                                                options: Firebase.app().options,
-                                              );
-                                        }
-                                        final authHelper =
-                                            FirebaseAuth.instanceFor(
-                                              app: secondaryApp,
+                                          final name = nameController.text.trim();
+                                          final email = emailController.text
+                                              .trim()
+                                              .toLowerCase();
+                                          final password = passwordController.text;
+                                          if (!_isValidEmail(email)) {
+                                            setState(() {
+                                              dialogError = 'Valid email is required';
+                                              isSubmitting = false;
+                                            });
+                                            return;
+                                          }
+                                          if (password.isEmpty || password.length < 6) {
+                                            setState(() {
+                                              dialogError =
+                                                  'Password must be at least 6 characters';
+                                              isSubmitting = false;
+                                            });
+                                            return;
+                                          }
+
+                                          final now = FieldValue.serverTimestamp();
+                                          final firestoreRole = isAdmin
+                                              ? 'admin'
+                                              : 'resident';
+
+                                          FirebaseApp secondaryApp;
+                                          try {
+                                            secondaryApp = Firebase.app('AuthHelper');
+                                          } catch (_) {
+                                            secondaryApp = await Firebase.initializeApp(
+                                              name: 'AuthHelper',
+                                              options: Firebase.app().options,
                                             );
-                                        UserCredential? userCredential;
-                                        try {
-                                          userCredential = await authHelper
-                                              .createUserWithEmailAndPassword(
-                                                email: email,
-                                                password: password,
-                                              );
-                                        } on FirebaseAuthException catch (e) {
-                                          if (e.code ==
-                                              'email-already-in-use') {
+                                          }
+                                          final authHelper = FirebaseAuth.instanceFor(
+                                            app: secondaryApp,
+                                          );
+                                          UserCredential? userCredential;
+                                          try {
                                             userCredential = await authHelper
-                                                .signInWithEmailAndPassword(
+                                                .createUserWithEmailAndPassword(
                                                   email: email,
                                                   password: password,
                                                 );
-                                          } else {
-                                            rethrow;
+                                          } on FirebaseAuthException catch (e) {
+                                            if (e.code == 'email-already-in-use') {
+                                              userCredential = await authHelper
+                                                  .signInWithEmailAndPassword(
+                                                    email: email,
+                                                    password: password,
+                                                  );
+                                            } else {
+                                              rethrow;
+                                            }
                                           }
-                                        }
-                                        final newUser = userCredential?.user;
-                                        if (newUser == null) {
-                                          setState(() {
-                                            dialogError =
-                                                'Failed to create account.';
-                                            isSubmitting = false;
-                                          });
-                                          return;
-                                        }
-                                        final uid = newUser.uid;
-
-                                        final data = <String, dynamic>{
-                                          'userId': uid,
-                                          'fullName': name,
-                                          'phoneNumber': '',
-                                          'email': email,
-                                          'role': firestoreRole,
-                                          'userType': isAdmin
-                                              ? 'admin'
-                                              : 'resident',
-                                          'createdAt': now,
-                                          'updatedAt': now,
-                                          'isActive': true,
-                                          'isApproved': true,
-                                        };
-                                        if (isAdmin) {
-                                          data['position'] =
-                                              selectedPosition ?? 'Admin';
-                                        } else {
-                                          data['category'] =
-                                              selectedCategories.isEmpty
-                                              ? 'User'
-                                              : selectedCategories.join(', ');
-                                          data['categories'] =
-                                              selectedCategories.toList();
-                                        }
-
-                                        // Create Firestore document - use set() without merge to ensure all fields are written
-                                        await FirebaseFirestore.instance
-                                            .collection('users')
-                                            .doc(uid)
-                                            .set(data);
-
-                                        // Verify document was created successfully
-                                        final verifyDoc =
-                                            await FirebaseFirestore.instance
-                                                .collection('users')
-                                                .doc(uid)
-                                                .get();
-                                        if (!verifyDoc.exists) {
-                                          setState(() {
-                                            dialogError =
-                                                'Failed to create user document. Please try again.';
-                                            isSubmitting = false;
-                                          });
-                                          return;
-                                        }
-
-                                        await authHelper.signOut();
-
-                                        String adminName = 'Barangay Official';
-                                        final adminUid = FirebaseAuth
-                                            .instance
-                                            .currentUser
-                                            ?.uid;
-                                        if (adminUid != null) {
-                                          final adminDoc =
-                                              await FirebaseFirestore.instance
-                                                  .collection('users')
-                                                  .doc(adminUid)
-                                                  .get();
-                                          if (adminDoc.exists) {
-                                            adminName =
-                                                (adminDoc.data()?['fullName']
-                                                    as String?) ??
-                                                adminName;
-                                          }
-                                        }
-                                        await FirebaseFirestore.instance
-                                            .collection('adminActivities')
-                                            .add({
-                                              'type': 'user_created',
-                                              'description':
-                                                  '$adminName added user $name',
-                                              'fullName': name,
-                                              'createdAt':
-                                                  FieldValue.serverTimestamp(),
+                                          final newUser = userCredential?.user;
+                                          if (newUser == null) {
+                                            setState(() {
+                                              dialogError = 'Failed to create account.';
+                                              isSubmitting = false;
                                             });
+                                            return;
+                                          }
+                                          final uid = newUser.uid;
 
-                                        if (mounted) {
-                                          await _loadAccounts();
-                                          Navigator.of(context).pop();
+                                          final data = <String, dynamic>{
+                                            'userId': uid,
+                                            'fullName': name,
+                                            'phoneNumber': '',
+                                            'email': email,
+                                            'role': firestoreRole,
+                                            'userType': isAdmin
+                                                ? 'admin'
+                                                : 'resident',
+                                            'createdAt': now,
+                                            'updatedAt': now,
+                                            'isActive': true,
+                                            'isApproved': true,
+                                          };
+                                          if (isAdmin) {
+                                            data['position'] = selectedPosition ?? 'Admin';
+                                          } else {
+                                            data['category'] = selectedCategories.isEmpty
+                                                ? 'User'
+                                                : selectedCategories.join(', ');
+                                            data['categories'] = selectedCategories.toList();
+                                          }
+
+                                          await FirebaseFirestore.instance
+                                              .collection('users')
+                                              .doc(uid)
+                                              .set(data);
+
+                                          final verifyDoc = await FirebaseFirestore.instance
+                                              .collection('users')
+                                              .doc(uid)
+                                              .get();
+                                          if (!verifyDoc.exists) {
+                                            setState(() {
+                                              dialogError =
+                                                  'Failed to create user document. Please try again.';
+                                              isSubmitting = false;
+                                            });
+                                            return;
+                                          }
+
+                                          await authHelper.signOut();
+
+                                          String adminName = 'Barangay Official';
+                                          final adminUid =
+                                              FirebaseAuth.instance.currentUser?.uid;
+                                          if (adminUid != null) {
+                                            final adminDoc = await FirebaseFirestore.instance
+                                                .collection('users')
+                                                .doc(adminUid)
+                                                .get();
+                                            if (adminDoc.exists) {
+                                              adminName =
+                                                  (adminDoc.data()?['fullName'] as String?) ??
+                                                  adminName;
+                                            }
+                                          }
+                                          await FirebaseFirestore.instance
+                                              .collection('adminActivities')
+                                              .add({
+                                                'type': 'user_created',
+                                                'description':
+                                                    '$adminName added user $name',
+                                                'fullName': name,
+                                                'createdAt':
+                                                    FieldValue.serverTimestamp(),
+                                              });
+
+                                          if (mounted) {
+                                            await _loadAccounts();
+                                            Navigator.of(context).pop();
+                                          }
+                                        } on FirebaseAuthException catch (e) {
+                                          String msg;
+                                          switch (e.code) {
+                                            case 'email-already-in-use':
+                                              msg =
+                                                  'An account already exists for this email. Please use a different email or reset the password.';
+                                              break;
+                                            case 'invalid-email':
+                                              msg = 'The provided email is invalid.';
+                                              break;
+                                            case 'operation-not-allowed':
+                                              msg =
+                                                  'Email/password sign-in is disabled in Firebase Auth settings.';
+                                              break;
+                                            case 'weak-password':
+                                              msg =
+                                                  'The password is too weak. Please use at least 6 characters.';
+                                              break;
+                                            default:
+                                              msg = e.message ?? 'Auth error: ${e.code}';
+                                          }
+                                          setState(() {
+                                            dialogError = msg;
+                                            isSubmitting = false;
+                                          });
+                                        } catch (e) {
+                                          setState(() {
+                                            dialogError = 'Unexpected error: $e';
+                                            isSubmitting = false;
+                                          });
                                         }
-                                      } on FirebaseAuthException catch (e) {
-                                        // More helpful error messages for admin when creating users
-                                        String msg;
-                                        switch (e.code) {
-                                          case 'email-already-in-use':
-                                            msg =
-                                                'An account already exists for this email. Please use a different email or reset the password.';
-                                            break;
-                                          case 'invalid-email':
-                                            msg =
-                                                'The provided email is invalid.';
-                                            break;
-                                          case 'operation-not-allowed':
-                                            msg =
-                                                'Email/password sign-in is disabled in Firebase Auth settings.';
-                                            break;
-                                          case 'weak-password':
-                                            msg =
-                                                'The password is too weak. Please use at least 6 characters.';
-                                            break;
-                                          default:
-                                            msg =
-                                                e.message ??
-                                                'Auth error: ${e.code}';
-                                        }
-                                        setState(() {
-                                          dialogError = msg;
-                                          isSubmitting = false;
-                                        });
-                                      } catch (e) {
-                                        setState(() {
-                                          dialogError = 'Unexpected error: $e';
-                                          isSubmitting = false;
-                                        });
-                                      }
-                                    },
-                              child: isSubmitting
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                              AppColors.white,
-                                            ),
-                                      ),
-                                    )
-                                  : const Text('Create'),
-                            ),
-                          ],
-                        ),
+                                      },
+                                child: isSubmitting
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                AppColors.white,
+                                              ),
+                                        ),
+                                      )
+                                    : const Text('Create'),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
@@ -1844,24 +2271,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     required Set<String> selectedCategories,
     required ValueChanged<String> onToggle,
   }) {
-    const audienceOptions = [
-      'Senior',
-      'Pregnant/Lactating Mother',
-      'Student',
-      'PWD',
-      'Youth',
-      'Farmer',
-      'Fisherman',
-      'Public Utility Drivers',
-      'Small Business Owner',
-      '4Ps',
-      'Tanod',
-      'Barangay Official',
-      'Barangay Health Worker(BHW)',
-      'Indigenous People(IP)',
-      'Parent',
-    ];
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1877,7 +2286,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: audienceOptions.map((audience) {
+          children: _mainDemographicOptions.map((audience) {
             final isSelected = selectedCategories.contains(audience);
             return AudienceTag(
               label: audience,
@@ -1970,6 +2379,59 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           child: Text(
             value.isEmpty ? '—' : value,
             style: const TextStyle(fontSize: 14, color: AppColors.darkGrey),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDialogDropdownField<T>({
+    required String label,
+    required T value,
+    required List<T> items,
+    required String Function(T value) itemLabelBuilder,
+    required ValueChanged<T?>? onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.normal,
+            color: AppColors.darkGrey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 48,
+          decoration: BoxDecoration(
+            color: AppColors.inputBg,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButtonFormField<T>(
+              value: value,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 15,
+                  vertical: 12,
+                ),
+              ),
+              isExpanded: true,
+              icon: const Icon(Icons.keyboard_arrow_down),
+              items: items
+                  .map(
+                    (item) => DropdownMenuItem<T>(
+                      value: item,
+                      child: Text(itemLabelBuilder(item)),
+                    ),
+                  )
+                  .toList(),
+              onChanged: onChanged,
+            ),
           ),
         ),
       ],
@@ -2074,6 +2536,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 const Expanded(
                   flex: 3,
                   child: Text(
+                    'Purok',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.darkGrey,
+                    ),
+                  ),
+                ),
+                const Expanded(
+                  flex: 3,
+                  child: Text(
                     'Demographic category',
                     style: TextStyle(
                       fontSize: 14,
@@ -2142,7 +2615,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 Expanded(
                   flex: 2,
                   child: Text(
-                    'Posistion',
+                    'Position',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -2519,6 +2992,19 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 fontSize: 14,
                 fontWeight: FontWeight.normal,
                 color: AppColors.darkGrey,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              (user['purok'] ?? '').trim().isNotEmpty ? user['purok']! : 'No Purok',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.normal,
+                color: (user['purok'] ?? '').trim().isNotEmpty
+                    ? AppColors.darkGrey
+                    : AppColors.mediumGrey,
               ),
             ),
           ),
@@ -4015,10 +4501,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final currentNote = (doc.data()?['adminNote'] as String?) ?? '';
     final currentPurok =
       ((doc.data()?['purok'] ?? user['purok'] ?? '').toString()).trim();
+    final normalizedCurrentPurok = _normalizePurokSelection(currentPurok);
+    final resolvedCurrentPurok = _mainPurokOptions.firstWhere(
+      (option) => _normalizePurokSelection(option) == normalizedCurrentPurok,
+      orElse: () => currentPurok.isNotEmpty ? currentPurok : _mainPurokOptions.first,
+    );
 
     final nameController = TextEditingController(text: user['name'] ?? '');
     final phoneController = TextEditingController(text: user['phone'] ?? '');
     final adminNoteController = TextEditingController(text: currentNote);
+    String selectedPurok = resolvedCurrentPurok;
     final existingCategory = user['category'] ?? '';
     final Set<String> selectedCategories = existingCategory.isEmpty
         ? <String>{}
@@ -4106,9 +4598,19 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               : null,
                         ),
                         const SizedBox(height: 16),
-                        _buildDialogReadOnlyField(
+                        _buildDialogDropdownField<String>(
                           label: 'Purok',
-                          value: currentPurok,
+                          value: selectedPurok,
+                          items: _mainPurokOptions,
+                          itemLabelBuilder: (value) => value,
+                          onChanged: isSubmitting
+                              ? null
+                              : (value) {
+                                  if (value == null) return;
+                                  setState(() {
+                                    selectedPurok = value;
+                                  });
+                                },
                         ),
                         const SizedBox(height: 16),
                         const Text(
@@ -4262,6 +4764,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                             .trim(),
                                           'phoneNumber': phoneController.text
                                             .trim(),
+                                          'purok': selectedPurok,
                                           'category': selectedCategories
                                               .isEmpty
                                             ? 'User'
