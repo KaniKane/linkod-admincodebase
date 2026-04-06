@@ -50,5 +50,10 @@ class AppColors {
   ); // Light red for error notifications (draft-style)
 
   // Shadow
-  static Color shadowColor = Colors.black.withOpacity(0.1);
+  static final Color shadowColor = const Color.fromARGB(
+    255,
+    166,
+    166,
+    166,
+  ).withValues(alpha: 0.5);
 }

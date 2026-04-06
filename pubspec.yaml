@@ -78,13 +78,13 @@ flutter:
     - assets/img/logo/linkod_logo.png
     - assets/img/logo/linkod_logo_2.png
     - assets/img/logo/linkod_logo_3.png
-
     - assets/img/icon/boxes.png
     - assets/img/icon/sound_mute.png
     - assets/img/icon/user-profile-group.png
     - assets/img/icon/gray_group_icon.png
     - assets/img/icon/gray_add_person_icon.png
     - assets/img/icon/gray_speaker_icon.png
+    - shorebird.yaml
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -29,8 +29,8 @@ class AnalyticsCard extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: AppColors.shadowColor.withOpacity(0.75),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+            blurRadius: 5,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
