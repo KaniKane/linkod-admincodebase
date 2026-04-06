@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import '../services/admin_notification_service.dart';
 import '../widgets/app_sidebar.dart';
 import '../widgets/activity_item.dart';
-import '../widgets/dashboard_analytics_widgets.dart';
 import '../widgets/draft_saved_notification.dart';
 import '../widgets/fast_fade_in.dart';
 import '../utils/app_colors.dart';
@@ -36,6 +35,7 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  static const int _recentActivitiesPageSize = 5;
   int _acceptedUsers = 0;
   int _pendingUsers = 0;
   int _postedAnnouncements = 0;
@@ -50,19 +50,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   _InsightDatePreset _selectedDatePreset = _InsightDatePreset.last30Days;
   DateTimeRange? _customDateRange;
   final List<Map<String, dynamic>> _recentActivities = [];
+  int _recentActivitiesVisibleCount = _recentActivitiesPageSize;
 
   // Pending counts for sidebar badges
   int _pendingApprovalsCount = 0;
   int _pendingUsersCount = 0;
-  int _pendingProductsCount = 0;
-  int _pendingTasksCount = 0;
-  int _totalAnnouncementViews = 0;
-  int _usersThisWeek = 0;
-  String _actionableInsight = '';
-
-  Map<String, int> _demographicsBreakdown = const {};
-  List<TrendPoint> _userGrowthTrendPoints = const [];
-  List<VerticalBarDatum> _topAnnouncementViews = const [];
 
   @override
   void initState() {
@@ -117,13 +109,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     int pendingUsersGrowth = 0;
     int postedAnnouncementsGrowth = 0;
     int pendingAnnouncementsGrowth = 0;
-    int pendingProductsCount = 0;
-    int pendingTasksCount = 0;
-    int totalAnnouncementViews = 0;
-
-    final demographicsBreakdown = <String, int>{};
-    final acceptedUserCreatedDates = <DateTime>[];
-    final topAnnouncementViews = <Map<String, dynamic>>[];
 
     final dateWindow = _buildDateWindow();
     final rangeStart = Timestamp.fromDate(dateWindow.start);
@@ -139,19 +124,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final data = doc.data();
         if (_isAcceptedUser(data)) {
           acceptedUsers++;
-          final createdAtDate = _extractDate(data['createdAt']);
-          if (createdAtDate != null) {
-            acceptedUserCreatedDates.add(createdAtDate);
-          }
-
-          final purok = (data['purok'] ?? '').toString().trim();
-          final userType = (data['userType'] ?? '').toString().trim();
-          final demographicLabel = purok.isNotEmpty
-              ? _formatPurokLabel(purok)
-              : (userType.isNotEmpty ? _toTitleCase(userType) : 'Unspecified');
-          demographicsBreakdown[demographicLabel] =
-              (demographicsBreakdown[demographicLabel] ?? 0) + 1;
-
           if (_isInDateWindow(data['createdAt'], dateWindow)) {
             acceptedUsersGrowth++;
           }
@@ -210,13 +182,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         if (normalizedStatus == 'approved') {
           postedAnnouncements++;
-          final viewCount = _asInt(data['viewCount']);
-          totalAnnouncementViews += viewCount;
-          topAnnouncementViews.add({
-            'title': (data['title'] as String? ?? 'Announcement').trim(),
-            'views': viewCount,
-          });
-
           if (_isInDateWindow(data['createdAt'], dateWindow)) {
             postedAnnouncementsGrowth++;
           }
@@ -256,7 +221,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             .count()
             .get();
         pendingProducts = pendingProductsSnap.count ?? 0;
-        pendingProductsCount = pendingProducts;
       } catch (_) {}
       try {
         final pendingTasksSnap = await FirebaseFirestore.instance
@@ -265,7 +229,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             .count()
             .get();
         pendingTasks = pendingTasksSnap.count ?? 0;
-        pendingTasksCount = pendingTasks;
       } catch (_) {}
 
       final activities = <Map<String, dynamic>>[];
@@ -344,43 +307,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       });
 
       if (!mounted) return;
-      topAnnouncementViews.sort(
-        (a, b) => ((b['views'] as int?) ?? 0).compareTo((a['views'] as int?) ?? 0),
-      );
-
-      final userGrowthTrendPoints = _buildUserGrowthTrend(
-        acceptedUserCreatedDates,
-        dateWindow,
-      );
-
-      final topAnnouncementBars = topAnnouncementViews
-          .take(3)
-          .map(
-            (entry) => VerticalBarDatum(
-              label: _shortenLabel((entry['title'] as String?) ?? 'Announcement'),
-              value: (entry['views'] as int?) ?? 0,
-            ),
-          )
-          .toList(growable: false);
-
-      final usersThisWeek = _countUsersWithinDays(acceptedUserCreatedDates, 7);
-
-      final topDemographic = demographicsBreakdown.entries.isEmpty
-          ? null
-          : (demographicsBreakdown.entries.toList()
-                ..sort((a, b) => b.value.compareTo(a.value)))
-              .first;
-      final topPercent = acceptedUsers <= 0 || topDemographic == null
-          ? 0
-          : ((topDemographic.value / acceptedUsers) * 100).round();
-
-      final queueTotal = pendingUsers + pendingAnnouncements + pendingProducts + pendingTasks;
-      final actionableInsight = topDemographic != null
-          ? 'Most active resident segment: ${topDemographic.key} ($topPercent%).'
-          : (queueTotal > 0
-                ? 'You have $queueTotal items waiting in the approval queue.'
-                : 'No pending queue items right now. Operations are up to date.');
-
       setState(() {
         _acceptedUsers = acceptedUsers;
         _pendingUsers = pendingUsers;
@@ -393,17 +319,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _pendingApprovalsCount =
             pendingAnnouncements + pendingProducts + pendingTasks;
         _pendingUsersCount = pendingUsers;
-        _pendingProductsCount = pendingProductsCount;
-        _pendingTasksCount = pendingTasksCount;
-        _totalAnnouncementViews = totalAnnouncementViews;
-        _usersThisWeek = usersThisWeek;
-        _actionableInsight = actionableInsight;
-        _demographicsBreakdown = demographicsBreakdown;
-        _userGrowthTrendPoints = userGrowthTrendPoints;
-        _topAnnouncementViews = topAnnouncementBars;
         _recentActivities
           ..clear()
           ..addAll(activities);
+        _recentActivitiesVisibleCount =
+            activities.length < _recentActivitiesPageSize
+            ? activities.length
+            : _recentActivitiesPageSize;
         _isLoading = false;
       });
     } catch (e) {
@@ -530,153 +452,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ? createdAt.toDate()
         : createdAt as DateTime;
     return !date.isBefore(window.start) && !date.isAfter(window.end);
-  }
-
-  int _asInt(dynamic value) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    if (value is String) return int.tryParse(value) ?? 0;
-    return 0;
-  }
-
-  DateTime? _extractDate(dynamic value) {
-    if (value is Timestamp) return value.toDate();
-    if (value is DateTime) return value;
-    return null;
-  }
-
-  String _toTitleCase(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return trimmed;
-    return trimmed
-        .split(RegExp(r'\s+'))
-        .map(
-          (word) => word.isEmpty
-              ? word
-              : '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}',
-        )
-        .join(' ');
-  }
-
-  String _shortenLabel(String label) {
-    if (label.length <= 22) return label;
-    return '${label.substring(0, 21)}...';
-  }
-
-  String _formatPurokLabel(String raw) {
-    final normalized = raw.trim();
-    if (normalized.isEmpty) return 'Unspecified';
-    final lower = normalized.toLowerCase();
-    if (lower.startsWith('purok')) return _toTitleCase(normalized);
-    final numericOnly = RegExp(r'^\d+$').hasMatch(normalized);
-    if (numericOnly) return 'Purok $normalized';
-    return _toTitleCase(normalized);
-  }
-
-  String _formatShortDate(DateTime date) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${months[date.month - 1]} ${date.day}';
-  }
-
-  List<TrendPoint> _buildUserGrowthTrend(
-    List<DateTime> acceptedDates,
-    _InsightDateWindow window,
-  ) {
-    if (acceptedDates.isEmpty) return const [];
-
-    final start = DateTime(window.start.year, window.start.month, window.start.day);
-    final end = DateTime(window.end.year, window.end.month, window.end.day);
-    final dayCount = end.difference(start).inDays + 1;
-    if (dayCount <= 0) return const [];
-
-    final dailyCounts = <DateTime, int>{};
-    for (var i = 0; i < dayCount; i++) {
-      final day = start.add(Duration(days: i));
-      dailyCounts[day] = 0;
-    }
-
-    for (final date in acceptedDates) {
-      final normalized = DateTime(date.year, date.month, date.day);
-      if (normalized.isBefore(start) || normalized.isAfter(end)) continue;
-      dailyCounts[normalized] = (dailyCounts[normalized] ?? 0) + 1;
-    }
-
-    final entries = dailyCounts.entries.toList()
-      ..sort((a, b) => a.key.compareTo(b.key));
-
-    if (entries.length <= 10) {
-      return entries
-          .map((e) => TrendPoint(label: _formatShortDate(e.key), value: e.value))
-          .toList(growable: false);
-    }
-
-    final targetBuckets = 10;
-    final bucketSize = (entries.length / targetBuckets).ceil();
-    final compressed = <TrendPoint>[];
-
-    for (var i = 0; i < entries.length; i += bucketSize) {
-      final chunk = entries.skip(i).take(bucketSize).toList(growable: false);
-      if (chunk.isEmpty) continue;
-
-      final startLabel = _formatShortDate(chunk.first.key);
-      final endLabel = _formatShortDate(chunk.last.key);
-      final label = startLabel == endLabel ? startLabel : '$startLabel-$endLabel';
-      final value = chunk.fold<int>(0, (sum, e) => sum + e.value);
-      compressed.add(TrendPoint(label: label, value: value));
-    }
-
-    return compressed;
-  }
-
-  int _countUsersWithinDays(List<DateTime> dates, int days) {
-    if (days <= 0) return 0;
-    final now = DateTime.now();
-    final start = DateTime(now.year, now.month, now.day)
-        .subtract(Duration(days: days - 1));
-    return dates.where((d) {
-      final normalized = DateTime(d.year, d.month, d.day);
-      return !normalized.isBefore(start) && !normalized.isAfter(now);
-    }).length;
-  }
-
-  Widget _buildStatNumber({required String label, required int value}) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '$value',
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF1A1A1A),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.mediumGrey,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _onDatePresetSelected(_InsightDatePreset preset) async {
@@ -959,413 +734,281 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Container(
                 color: AppColors.white,
                 child: Column(
-                children: [
-                  // Top header
-                  Container(
-                    color: AppColors.white,
-                    padding: const EdgeInsets.all(24),
-                    child: const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Dashboard',
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.darkGrey,
+                  children: [
+                    // Top header
+                    Container(
+                      color: AppColors.white,
+                      padding: const EdgeInsets.all(24),
+                      child: const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Dashboard',
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.darkGrey,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  // Content area with inner background panel
-                  Expanded(
-                    child: Container(
-                      margin: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: AppColors.dashboardInnerBg,
-                        borderRadius: BorderRadius.circular(32),
-                      ),
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(32),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Insights section
-                            Row(
-                              children: [
-                                const Text(
-                                  'Insights',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.darkGrey,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                PopupMenuButton<_InsightDatePreset>(
-                                  tooltip: 'Select date range',
-                                  onSelected: _onDatePresetSelected,
-                                  itemBuilder: (context) => [
-                                    const PopupMenuItem(
-                                      value: _InsightDatePreset.today,
-                                      child: Text('Today'),
-                                    ),
-                                    const PopupMenuItem(
-                                      value: _InsightDatePreset.last7Days,
-                                      child: Text('Last 7 Days'),
-                                    ),
-                                    const PopupMenuItem(
-                                      value: _InsightDatePreset.last30Days,
-                                      child: Text('Last 30 Days'),
-                                    ),
-                                    const PopupMenuItem(
-                                      value: _InsightDatePreset.custom,
-                                      child: Text('Custom Range'),
-                                    ),
-                                  ],
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: const Color(0xFFE0E0E0),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Text(
-                                          _buildDateWindow().label,
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w500,
-                                            color: AppColors.mediumGrey,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        const Icon(
-                                          Icons.keyboard_arrow_down,
-                                          color: AppColors.mediumGrey,
-                                          size: 18,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 20),
-                            // Insight cards (grouped to match reference)
-                            LayoutBuilder(
-                              builder: (context, constraints) {
-                                const minRowWidth = 980.0;
-                                final rowWidth =
-                                    constraints.maxWidth < minRowWidth
-                                    ? minRowWidth
-                                    : constraints.maxWidth;
-                                final cardWidth = (rowWidth - 16) / 2;
-
-                                return SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: SizedBox(
-                                    width: rowWidth,
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        SizedBox(
-                                          width: cardWidth,
-                                          child: _buildInsightGroupCard(
-                                            icon: Icons.groups_2_outlined,
-                                            title: 'Users',
-                                            leftMetric: _buildMetricTile(
-                                              title: 'Total Users',
-                                              value: _acceptedUsers,
-                                              growth: _acceptedUsersGrowth,
-                                              onTap: () =>
-                                                  _navigateToMetricDestination(
-                                                    route: '/user-management',
-                                                    initialTabIndex: 0,
-                                                    showAcceptedUsersOnly: true,
-                                                  ),
-                                            ),
-                                            rightMetric: _buildMetricTile(
-                                              title: 'Awaiting Approval',
-                                              value: _pendingUsers,
-                                              growth: _pendingUsersGrowth,
-                                              onTap: () =>
-                                                  _navigateToMetricDestination(
-                                                    route: '/user-management',
-                                                    initialTabIndex: 2,
-                                                  ),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 16),
-                                        SizedBox(
-                                          width: cardWidth,
-                                          child: _buildInsightGroupCard(
-                                            icon: Icons.campaign_outlined,
-                                            title: 'Announcements',
-                                            leftMetric: _buildMetricTile(
-                                              title: 'Posted',
-                                              value: _postedAnnouncements,
-                                              growth:
-                                                  _postedAnnouncementsGrowth,
-                                              onTap: () =>
-                                                  _navigateToMetricDestination(
-                                                    route: '/announcements',
-                                                    initialTabIndex: 2,
-                                                  ),
-                                            ),
-                                            rightMetric: _buildMetricTile(
-                                              title: 'Awaiting Approval',
-                                              value: _pendingAnnouncements,
-                                              growth:
-                                                  _pendingAnnouncementsGrowth,
-                                              onTap: () =>
-                                                  _navigateToMetricDestination(
-                                                    route: '/approvals',
-                                                    initialTabIndex: 0,
-                                                  ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 28),
-                            const Text(
-                              'Analytics Overview',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.darkGrey,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            const Text(
-                              'Lightweight view of resident mix, growth trend, and content reach.',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: AppColors.mediumGrey,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            if (_actionableInsight.isNotEmpty)
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 12,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFEFF8F2),
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.insights_outlined,
-                                      size: 18,
-                                      color: AppColors.primaryGreenAlt,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        _actionableInsight,
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.darkGrey,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            const SizedBox(height: 16),
-                            LayoutBuilder(
-                              builder: (context, constraints) {
-                                final twoColumns = constraints.maxWidth >= 1100;
-                                final cardWidth = twoColumns
-                                    ? (constraints.maxWidth - 16) / 2
-                                    : constraints.maxWidth;
-
-                                final demographicItems = _demographicsBreakdown.entries
-                                    .toList()
-                                  ..sort((a, b) => b.value.compareTo(a.value));
-
-                                return Wrap(
-                                  spacing: 16,
-                                  runSpacing: 16,
-                                  children: [
-                                    SizedBox(
-                                      width: cardWidth,
-                                      height: 270,
-                                      child: AnalyticsCard(
-                                        title: 'Demographics Breakdown',
-                                        subtitle: 'Resident distribution by purok / category',
-                                        child: HorizontalBarChart(
-                                          items: demographicItems
-                                              .take(6)
-                                              .map(
-                                                (entry) {
-                                                  final percent = _acceptedUsers <= 0
-                                                      ? 0
-                                                      : ((entry.value / _acceptedUsers) * 100)
-                                                            .round();
-                                                  return HorizontalBarDatum(
-                                                    label: entry.key,
-                                                    value: entry.value,
-                                                    trailingLabel:
-                                                        '${entry.value} ($percent%)',
-                                                  );
-                                                },
-                                              )
-                                              .toList(growable: false),
-                                          emptyLabel: 'No resident category data yet',
-                                          labelWidth: 124,
-                                        ),
-                                      ),
-                                    ),
-                                    SizedBox(
-                                      width: cardWidth,
-                                      height: 270,
-                                      child: AnalyticsCard(
-                                        title: 'User Growth Trend',
-                                        subtitle: _buildDateWindow().label,
-                                        child: LineTrendChart(
-                                          points: _userGrowthTrendPoints,
-                                          insightLabel:
-                                              '+$_usersThisWeek users in the last 7 days',
-                                          emptyLabel:
-                                              'No registrations found in selected period',
-                                        ),
-                                      ),
-                                    ),
-                                    SizedBox(
-                                      width: cardWidth,
-                                      height: 300,
-                                      child: AnalyticsCard(
-                                        title: 'Announcement Performance',
-                                        subtitle: 'Top viewed announcements and status totals',
-                                        child: Column(
-                                          children: [
-                                            Expanded(
-                                              child: HorizontalBarChart(
-                                                items: _topAnnouncementViews
-                                                    .map(
-                                                      (item) => HorizontalBarDatum(
-                                                        label: item.label,
-                                                        value: item.value,
-                                                        trailingLabel:
-                                                            '${item.value} views',
-                                                      ),
-                                                    )
-                                                    .toList(growable: false),
-                                                emptyLabel:
-                                                    'No viewed announcements available',
-                                                labelWidth: 170,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 12),
-                                            Row(
-                                              children: [
-                                                _buildStatNumber(
-                                                  label: 'Posted',
-                                                  value: _postedAnnouncements,
-                                                ),
-                                                _buildStatNumber(
-                                                  label: 'Pending',
-                                                  value: _pendingAnnouncements,
-                                                ),
-                                                _buildStatNumber(
-                                                  label: 'Total Views',
-                                                  value: _totalAnnouncementViews,
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 8),
-                            if (_errorMessage != null) ...[
-                              Text(
-                                _errorMessage!,
-                                style: const TextStyle(
-                                  color: Colors.red,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                            ],
-                            if (_isLoading) ...[
-                              const SizedBox(height: 8),
-                              const Center(child: CircularProgressIndicator()),
-                              const SizedBox(height: 32),
-                            ] else
-                              const SizedBox(height: 40),
-                            // Recent Activities section
-                            Container(
-                              padding: const EdgeInsets.all(24),
-                              decoration: BoxDecoration(
-                                color: AppColors.white,
-                                borderRadius: BorderRadius.circular(32),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                    // Content area with inner background panel
+                    Expanded(
+                      child: Container(
+                        margin: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: AppColors.dashboardInnerBg,
+                          borderRadius: BorderRadius.circular(32),
+                        ),
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Insights section
+                              Row(
                                 children: [
                                   const Text(
-                                    'Recent Activities',
+                                    'Insights',
                                     style: TextStyle(
                                       fontSize: 20,
                                       fontWeight: FontWeight.bold,
                                       color: AppColors.darkGrey,
                                     ),
                                   ),
-                                  const SizedBox(height: 20),
-                                  if (_recentActivities.isEmpty)
-                                    const Padding(
-                                      padding: EdgeInsets.all(16),
-                                      child: Text(
-                                        'No recent activities.',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: AppColors.mediumGrey,
+                                  const SizedBox(width: 8),
+                                  PopupMenuButton<_InsightDatePreset>(
+                                    tooltip: 'Select date range',
+                                    onSelected: _onDatePresetSelected,
+                                    itemBuilder: (context) => [
+                                      const PopupMenuItem(
+                                        value: _InsightDatePreset.today,
+                                        child: Text('Today'),
+                                      ),
+                                      const PopupMenuItem(
+                                        value: _InsightDatePreset.last7Days,
+                                        child: Text('Last 7 Days'),
+                                      ),
+                                      const PopupMenuItem(
+                                        value: _InsightDatePreset.last30Days,
+                                        child: Text('Last 30 Days'),
+                                      ),
+                                      const PopupMenuItem(
+                                        value: _InsightDatePreset.custom,
+                                        child: Text('Custom Range'),
+                                      ),
+                                    ],
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: const Color(0xFFE0E0E0),
                                         ),
                                       ),
-                                    )
-                                  else
-                                    ..._recentActivities.map(
-                                      (a) => ActivityItem(
-                                        description: a['description'] as String,
-                                        timestamp: a['timestamp'] as String,
-                                        boldText: a['boldText'] as String?,
+                                      child: Row(
+                                        children: [
+                                          Text(
+                                            _buildDateWindow().label,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                              color: AppColors.mediumGrey,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          const Icon(
+                                            Icons.keyboard_arrow_down,
+                                            color: AppColors.mediumGrey,
+                                            size: 18,
+                                          ),
+                                        ],
                                       ),
                                     ),
+                                  ),
                                 ],
                               ),
-                            ),
-                            const SizedBox(height: 24),
-                          ],
+                              const SizedBox(height: 20),
+                              // Insight cards (grouped to match reference)
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  const minRowWidth = 980.0;
+                                  final rowWidth =
+                                      constraints.maxWidth < minRowWidth
+                                      ? minRowWidth
+                                      : constraints.maxWidth;
+                                  final cardWidth = (rowWidth - 16) / 2;
+
+                                  return SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: SizedBox(
+                                      width: rowWidth,
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          SizedBox(
+                                            width: cardWidth,
+                                            child: _buildInsightGroupCard(
+                                              icon: Icons.groups_2_outlined,
+                                              title: 'Users',
+                                              leftMetric: _buildMetricTile(
+                                                title: 'Total Users',
+                                                value: _acceptedUsers,
+                                                growth: _acceptedUsersGrowth,
+                                                onTap: () =>
+                                                    _navigateToMetricDestination(
+                                                      route: '/user-management',
+                                                      initialTabIndex: 0,
+                                                      showAcceptedUsersOnly:
+                                                          true,
+                                                    ),
+                                              ),
+                                              rightMetric: _buildMetricTile(
+                                                title: 'Awaiting Approval',
+                                                value: _pendingUsers,
+                                                growth: _pendingUsersGrowth,
+                                                onTap: () =>
+                                                    _navigateToMetricDestination(
+                                                      route: '/user-management',
+                                                      initialTabIndex: 2,
+                                                    ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 16),
+                                          SizedBox(
+                                            width: cardWidth,
+                                            child: _buildInsightGroupCard(
+                                              icon: Icons.campaign_outlined,
+                                              title: 'Announcements',
+                                              leftMetric: _buildMetricTile(
+                                                title: 'Posted',
+                                                value: _postedAnnouncements,
+                                                growth:
+                                                    _postedAnnouncementsGrowth,
+                                                onTap: () =>
+                                                    _navigateToMetricDestination(
+                                                      route: '/announcements',
+                                                      initialTabIndex: 2,
+                                                    ),
+                                              ),
+                                              rightMetric: _buildMetricTile(
+                                                title: 'Awaiting Approval',
+                                                value: _pendingAnnouncements,
+                                                growth:
+                                                    _pendingAnnouncementsGrowth,
+                                                onTap: () =>
+                                                    _navigateToMetricDestination(
+                                                      route: '/approvals',
+                                                      initialTabIndex: 0,
+                                                    ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                              if (_errorMessage != null) ...[
+                                Text(
+                                  _errorMessage!,
+                                  style: const TextStyle(
+                                    color: Colors.red,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                              ],
+                              if (_isLoading) ...[
+                                const SizedBox(height: 8),
+                                const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                                const SizedBox(height: 32),
+                              ] else
+                                const SizedBox(height: 40),
+                              // Recent Activities section
+                              Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: AppColors.white,
+                                  borderRadius: BorderRadius.circular(32),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Recent Activities',
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.darkGrey,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 20),
+                                    if (_recentActivities.isEmpty)
+                                      const Padding(
+                                        padding: EdgeInsets.all(16),
+                                        child: Text(
+                                          'No recent activities.',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: AppColors.mediumGrey,
+                                          ),
+                                        ),
+                                      )
+                                    else
+                                      ..._recentActivities
+                                          .take(_recentActivitiesVisibleCount)
+                                          .map(
+                                            (a) => ActivityItem(
+                                              description:
+                                                  a['description'] as String,
+                                              timestamp:
+                                                  a['timestamp'] as String,
+                                              boldText:
+                                                  a['boldText'] as String?,
+                                            ),
+                                          ),
+                                    if (_recentActivities.length >
+                                        _recentActivitiesVisibleCount)
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: TextButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              final nextCount =
+                                                  _recentActivitiesVisibleCount +
+                                                  _recentActivitiesPageSize;
+                                              _recentActivitiesVisibleCount =
+                                                  nextCount >
+                                                      _recentActivities.length
+                                                  ? _recentActivities.length
+                                                  : nextCount;
+                                            });
+                                          },
+                                          child: const Text('See more'),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
             ),
           ),
         ],

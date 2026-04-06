@@ -1318,88 +1318,88 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
               child: Container(
                 color: AppColors.white,
                 child: Column(
-                children: [
-                  Container(
-                    color: AppColors.white,
-                    padding: const EdgeInsets.all(24),
-                    child: const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Post Approvals',
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.darkGrey,
+                  children: [
+                    Container(
+                      color: AppColors.white,
+                      padding: const EdgeInsets.all(24),
+                      child: const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Post Approvals',
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.darkGrey,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  Expanded(
-                    child: Container(
-                      margin: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: AppColors.dashboardInnerBg,
-                        borderRadius: BorderRadius.circular(32),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(32, 24, 32, 0),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: CustomTabs(
-                                    tabs: const [
-                                      'Announcement Request Post',
-                                      'Marketplace Listing',
-                                      'Job/Errand Posting',
-                                    ],
-                                    activeIndex: _activeTabIndex,
-                                    onTabChanged: _setActiveTab,
-                                  ),
-                                ),
-                                if (_currentUserRole == 'super_admin')
-                                  _buildAutoApproveDropdown(),
-                              ],
-                            ),
-                          ),
-                          if (_errorMessage != null)
+                    Expanded(
+                      child: Container(
+                        margin: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: AppColors.dashboardInnerBg,
+                          borderRadius: BorderRadius.circular(32),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Padding(
-                              padding: const EdgeInsets.all(32),
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: AppColors.errorBannerBg,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  _errorMessage!,
-                                  style: const TextStyle(
-                                    color: AppColors.deleteRed,
+                              padding: const EdgeInsets.fromLTRB(32, 24, 32, 0),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: CustomTabs(
+                                      tabs: const [
+                                        'Announcement Request Post',
+                                        'Marketplace Listing',
+                                        'Job/Errand Posting',
+                                      ],
+                                      activeIndex: _activeTabIndex,
+                                      onTabChanged: _setActiveTab,
+                                    ),
+                                  ),
+                                  if (_currentUserRole == 'super_admin')
+                                    _buildAutoApproveDropdown(),
+                                ],
+                              ),
+                            ),
+                            if (_errorMessage != null)
+                              Padding(
+                                padding: const EdgeInsets.all(32),
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.errorBannerBg,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    _errorMessage!,
+                                    style: const TextStyle(
+                                      color: AppColors.deleteRed,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          Expanded(
-                            child: _isLoading
-                                ? const Center(
-                                    child: CircularProgressIndicator(
-                                      color: AppColors.primaryGreen,
+                            Expanded(
+                              child: _isLoading
+                                  ? const Center(
+                                      child: CircularProgressIndicator(
+                                        color: AppColors.primaryGreen,
+                                      ),
+                                    )
+                                  : SingleChildScrollView(
+                                      padding: const EdgeInsets.all(32),
+                                      child: _buildTabContent(),
                                     ),
-                                  )
-                                : SingleChildScrollView(
-                                    padding: const EdgeInsets.all(32),
-                                    child: _buildTabContent(),
-                                  ),
-                          ),
-                        ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
             ),
           ),
         ],
