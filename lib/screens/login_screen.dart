@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 import '../widgets/custom_link.dart';
 import '../widgets/error_notification.dart';
+import 'admin_shell_screen.dart';
 import 'create_account_screen.dart';
-import 'dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -153,7 +153,9 @@ class _LoginScreenState extends State<LoginScreen> {
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const DashboardScreen()),
+          MaterialPageRoute(
+            builder: (context) => const AdminShellScreen(initialRoute: '/dashboard'),
+          ),
         );
       });
     } on FirebaseAuthException catch (e) {

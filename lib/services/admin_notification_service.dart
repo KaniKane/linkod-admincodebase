@@ -5,6 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:local_notifier/local_notifier.dart';
 
+import '../utils/admin_navigation.dart';
+
 /// Service for notifying admins of new account registrations/resubmissions.
 /// Uses Firestore real-time listener to detect new documents in awaitingApproval.
 /// Only shows notifications for NEWLY ADDED documents (not existing ones on app start).
@@ -17,8 +19,10 @@ class AdminNotificationService {
   StreamSubscription<QuerySnapshot>? _subscription;
   StreamSubscription<User?>? _authSubscription;
   bool _isInitialized = false;
+  bool _localNotifierReady = false;
   bool _hasSeenInitialSnapshot = false;
   DateTime? _listenerStartedAt;
+  DateTime? _lastUserRefreshSignalAt;
 
   /// Initialize the notification service and start listening
   Future<void> initialize() async {
@@ -31,12 +35,14 @@ class AdminNotificationService {
         appName: 'LINKod Admin',
         shortcutPolicy: ShortcutPolicy.requireCreate,
       );
+      _localNotifierReady = true;
     } catch (e) {
+      _localNotifierReady = false;
       if (kDebugMode) {
         debugPrint('AdminNotificationService setup failed: $e');
       }
       // Keep app functional even when desktop notifications are unavailable.
-      return;
+      // The Firestore listener must still run so UI badges can auto-refresh.
     }
 
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen(
@@ -55,6 +61,7 @@ class AdminNotificationService {
     _authSubscription?.cancel();
     _authSubscription = null;
     _isInitialized = false;
+    _localNotifierReady = false;
   }
 
   Future<void> _handleAuthStateChanged(User? user) async {
@@ -117,6 +124,9 @@ class AdminNotificationService {
   }
 
   void _handleSnapshot(QuerySnapshot snapshot) {
+    // Keep the global pending-users badge in sync across screens.
+    AdminRefreshBus.publishPendingUsersCount(snapshot.docs.length);
+
     // Skip the first snapshot to avoid replaying existing pending docs.
     if (!_hasSeenInitialSnapshot) {
       _hasSeenInitialSnapshot = true;
@@ -126,7 +136,7 @@ class AdminNotificationService {
       for (final change in snapshot.docChanges) {
         if (change.type == DocumentChangeType.added &&
             _isRecentRequest(change.doc)) {
-          _showNotification(change.doc);
+          _handleNewRegistration(change.doc);
         }
       }
       return;
@@ -135,9 +145,25 @@ class AdminNotificationService {
     // Process only newly added docs after initialization.
     for (final change in snapshot.docChanges) {
       if (change.type == DocumentChangeType.added) {
-        _showNotification(change.doc);
+        _handleNewRegistration(change.doc);
       }
     }
+  }
+
+  void _handleNewRegistration(DocumentSnapshot doc) {
+    _signalUserManagementRefresh();
+    _showNotification(doc);
+  }
+
+  void _signalUserManagementRefresh() {
+    final now = DateTime.now();
+    final last = _lastUserRefreshSignalAt;
+    if (last != null && now.difference(last) < const Duration(seconds: 2)) {
+      return;
+    }
+
+    _lastUserRefreshSignalAt = now;
+    AdminRefreshBus.requestUserManagementRefresh();
   }
 
   bool _isRecentRequest(DocumentSnapshot doc) {
@@ -154,6 +180,10 @@ class AdminNotificationService {
   }
 
   void _showNotification(DocumentSnapshot doc) {
+    if (!_localNotifierReady) {
+      return;
+    }
+
     final data = doc.data() as Map<String, dynamic>?;
     if (data == null) return;
 

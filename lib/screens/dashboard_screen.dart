@@ -56,6 +56,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // Pending counts for sidebar badges
   int _pendingApprovalsCount = 0;
   int _pendingUsersCount = 0;
+  int _pendingProductsCount = 0;
+  int _pendingTasksCount = 0;
   int _totalAnnouncementViews = 0;
   int _usersThisWeek = 0;
   String _actionableInsight = '';
@@ -72,7 +74,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _bootstrap() async {
     await _loadCurrentUserRole();
+    if (!mounted) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _startDeferredDashboardBoot();
+    });
+  }
+
+  Future<void> _startDeferredDashboardBoot() async {
     await _loadDashboardData();
+    await _initializeNotificationsDeferred();
+  }
+
+  Future<void> _initializeNotificationsDeferred() async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
 
     // Never let notification setup crash the dashboard on startup.
     try {
@@ -128,12 +145,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final rangeEnd = Timestamp.fromDate(dateWindow.end);
     final canReadAwaitingApproval =
         (_currentUserRole ?? '').toLowerCase() == 'super_admin';
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> usersDocs = const [];
+    bool hasUsersSnapshot = false;
 
     try {
       final usersSnapshot = await FirebaseFirestore.instance
           .collection('users')
           .get();
-      for (final doc in usersSnapshot.docs) {
+      usersDocs = usersSnapshot.docs;
+      hasUsersSnapshot = true;
+      for (final doc in usersDocs) {
         final data = doc.data();
         if (_isAcceptedUser(data)) {
           acceptedUsers++;
@@ -177,16 +198,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         // Include re-applications stored in users/{uid} with pending status.
         try {
-          final usersSnapshot = await FirebaseFirestore.instance
-              .collection('users')
-              .get();
-          for (final doc in usersSnapshot.docs) {
-            if (!_isPendingUser(doc.data()) || awaitingIds.contains(doc.id)) {
-              continue;
+          if (hasUsersSnapshot) {
+            for (final doc in usersDocs) {
+              if (!_isPendingUser(doc.data()) || awaitingIds.contains(doc.id)) {
+                continue;
+              }
+              pendingUsers++;
+              if (_isInDateWindow(doc.data()['createdAt'], dateWindow)) {
+                pendingUsersGrowth++;
+              }
             }
-            pendingUsers++;
-            if (_isInDateWindow(doc.data()['createdAt'], dateWindow)) {
-              pendingUsersGrowth++;
+          } else {
+            final usersSnapshot = await FirebaseFirestore.instance
+                .collection('users')
+                .get();
+            for (final doc in usersSnapshot.docs) {
+              if (!_isPendingUser(doc.data()) || awaitingIds.contains(doc.id)) {
+                continue;
+              }
+              pendingUsers++;
+              if (_isInDateWindow(doc.data()['createdAt'], dateWindow)) {
+                pendingUsersGrowth++;
+              }
             }
           }
         } catch (_) {}
@@ -386,6 +419,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _pendingApprovalsCount =
             pendingAnnouncements + pendingProducts + pendingTasks;
         _pendingUsersCount = pendingUsers;
+        _pendingProductsCount = pendingProducts;
+        _pendingTasksCount = pendingTasks;
         _totalAnnouncementViews = totalAnnouncementViews;
         _usersThisWeek = usersThisWeek;
         _actionableInsight = actionableInsight;
@@ -627,7 +662,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final startLabel = _formatShortDate(chunk.first.key);
       final endLabel = _formatShortDate(chunk.last.key);
       final label = startLabel == endLabel ? startLabel : '$startLabel-$endLabel';
-      final value = chunk.fold<int>(0, (sum, e) => sum + e.value);
+      final value = chunk.fold<int>(0, (runningTotal, entry) => runningTotal + entry.value);
       compressed.add(TrendPoint(label: label, value: value));
     }
     return compressed;
@@ -698,6 +733,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _selectedDatePreset = preset;
     });
     await _loadDashboardData();
+  }
+
+  Future<void> _handleManualRefresh() async {
+    await _loadDashboardData();
+    AdminRefreshBus.requestUserManagementRefresh();
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const DraftSavedNotification(
+          message: 'Dashboard data refreshed.',
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   void _navigateToMetricDestination({
@@ -956,16 +1008,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Container(
                       color: AppColors.white,
                       padding: const EdgeInsets.all(24),
-                      child: const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Dashboard',
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.darkGrey,
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                'Dashboard',
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.darkGrey,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
+                          Tooltip(
+                            message: 'Refresh dashboard data',
+                            child: OutlinedButton.icon(
+                              onPressed: _isLoading ? null : _handleManualRefresh,
+                              icon: _isLoading
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.refresh),
+                              label: Text(_isLoading ? 'Refreshing...' : 'Refresh'),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     // Content area with inner background panel
@@ -1285,6 +1359,73 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                                     value: _totalAnnouncementViews,
                                                   ),
                                                 ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      SizedBox(
+                                        width: cardWidth,
+                                        height: 300,
+                                        child: AnalyticsCard(
+                                          title: 'Approval Queue',
+                                          subtitle:
+                                              'Current pending items requiring review',
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Wrap(
+                                                spacing: 10,
+                                                runSpacing: 10,
+                                                children: [
+                                                  MiniStatPill(
+                                                    label: 'Users',
+                                                    value: _pendingUsersCount,
+                                                  ),
+                                                  MiniStatPill(
+                                                    label: 'Announcements',
+                                                    value: _pendingAnnouncements,
+                                                  ),
+                                                  MiniStatPill(
+                                                    label: 'Products',
+                                                    value: _pendingProductsCount,
+                                                  ),
+                                                  MiniStatPill(
+                                                    label: 'Tasks',
+                                                    value: _pendingTasksCount,
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 18),
+                                              Container(
+                                                width: double.infinity,
+                                                padding: const EdgeInsets.all(14),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFF1F8F4),
+                                                  borderRadius:
+                                                      BorderRadius.circular(14),
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    const Icon(
+                                                      Icons.fact_check_outlined,
+                                                      size: 18,
+                                                      color:
+                                                          AppColors.primaryGreenAlt,
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                      'Total in queue: ${_pendingApprovalsCount + _pendingUsersCount}',
+                                                      style: const TextStyle(
+                                                        fontSize: 13,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: AppColors.darkGrey,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
                                             ],
                                           ),

@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../utils/app_colors.dart';
-import 'dashboard_screen.dart';
+import 'admin_shell_screen.dart';
 import 'login_screen.dart';
 
 class AuthGateScreen extends StatefulWidget {
@@ -89,7 +89,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
               return const LoginScreen();
             }
 
-            return const DashboardScreen();
+            return const AdminShellScreen(initialRoute: '/dashboard');
           },
         );
       },

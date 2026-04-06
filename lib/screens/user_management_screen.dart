@@ -106,6 +106,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   // Pending counts for sidebar badges
   int _pendingApprovalsCount = 0;
+  int _lastHandledRefreshTick = 0;
 
   @override
   void initState() {
@@ -119,6 +120,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     _loadAccounts();
     _loadCurrentUserRole();
     _loadPendingApprovalsCount();
+    _lastHandledRefreshTick = AdminRefreshBus.userManagementRefreshTick.value;
+    AdminRefreshBus.userManagementRefreshTick.addListener(
+      _handleExternalRefreshRequest,
+    );
   }
 
   Future<void> _restoreLastTabIndex() async {
@@ -438,6 +443,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         _selectedIndices.clear();
         _isLoading = false;
       });
+      AdminRefreshBus.publishPendingUsersCount(loadedAwaiting.length);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -449,8 +455,19 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   @override
   void dispose() {
+    AdminRefreshBus.userManagementRefreshTick.removeListener(
+      _handleExternalRefreshRequest,
+    );
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleExternalRefreshRequest() async {
+    final nextTick = AdminRefreshBus.userManagementRefreshTick.value;
+    if (nextTick == _lastHandledRefreshTick) return;
+    _lastHandledRefreshTick = nextTick;
+    await _loadAccounts();
+    await _loadPendingApprovalsCount();
   }
 
   void _navigateTo(String route) {

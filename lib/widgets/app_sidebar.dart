@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/app_colors.dart';
+import '../utils/admin_navigation.dart';
 import 'user_header.dart';
 
 class AppSidebar extends StatefulWidget {
@@ -36,6 +37,7 @@ class _AppSidebarState extends State<AppSidebar> {
 
   int _seenApprovals = 0;
   int _seenUsers = 0;
+  int? _livePendingUsersCount;
 
   /// Gray out Approvals and User Management for everyone except Super Admin.
   bool get _isAdminRestricted =>
@@ -44,12 +46,15 @@ class _AppSidebarState extends State<AppSidebar> {
   @override
   void initState() {
     super.initState();
+    _livePendingUsersCount = AdminRefreshBus.pendingUsersCount.value;
+    AdminRefreshBus.pendingUsersCount.addListener(_handleLivePendingUsersChanged);
+
     // Immediately set seen counts for current route to pending counts
     // This ensures badges disappear immediately on initial page load
     if (widget.currentRoute == '/approvals') {
       _seenApprovals = widget.pendingApprovalsCount;
     } else if (widget.currentRoute == '/user-management') {
-      _seenUsers = widget.pendingUsersCount;
+      _seenUsers = _effectivePendingUsersCount;
     }
     _initSeenState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -57,6 +62,28 @@ class _AppSidebarState extends State<AppSidebar> {
       precacheImage(_sidebarLogoImage, context);
     });
   }
+
+  @override
+  void dispose() {
+    AdminRefreshBus.pendingUsersCount.removeListener(
+      _handleLivePendingUsersChanged,
+    );
+    super.dispose();
+  }
+
+  void _handleLivePendingUsersChanged() {
+    final next = AdminRefreshBus.pendingUsersCount.value;
+    if (_livePendingUsersCount == next) return;
+    if (!mounted) return;
+
+    setState(() {
+      _livePendingUsersCount = next;
+    });
+    _normalizeSeenBaselines();
+  }
+
+  int get _effectivePendingUsersCount =>
+      _livePendingUsersCount ?? widget.pendingUsersCount;
 
   @override
   void didUpdateWidget(covariant AppSidebar oldWidget) {
@@ -88,7 +115,7 @@ class _AppSidebarState extends State<AppSidebar> {
       nextApprovals = widget.pendingApprovalsCount;
     }
     if (widget.currentRoute == '/user-management') {
-      nextUsers = widget.pendingUsersCount;
+      nextUsers = _effectivePendingUsersCount;
     }
 
     if (nextApprovals == null && nextUsers == null) {
@@ -112,11 +139,12 @@ class _AppSidebarState extends State<AppSidebar> {
   }
 
   Future<void> _normalizeSeenBaselines() async {
+    final pendingUsersCount = _effectivePendingUsersCount;
     final normalizedApprovals = _seenApprovals > widget.pendingApprovalsCount
         ? widget.pendingApprovalsCount
         : _seenApprovals;
-    final normalizedUsers = _seenUsers > widget.pendingUsersCount
-        ? widget.pendingUsersCount
+    final normalizedUsers = _seenUsers > pendingUsersCount
+      ? pendingUsersCount
         : _seenUsers;
 
     if (normalizedApprovals == _seenApprovals &&
@@ -152,7 +180,7 @@ class _AppSidebarState extends State<AppSidebar> {
       seen: _seenApprovals,
     );
     final unseenUsers = _buildUnseenCount(
-      total: widget.pendingUsersCount,
+      total: _effectivePendingUsersCount,
       seen: _seenUsers,
     );
 
