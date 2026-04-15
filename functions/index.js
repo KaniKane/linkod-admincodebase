@@ -245,7 +245,7 @@ async function sendAnnouncementReminderForId(announcementId, sourceTaskName) {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
       { merge: true },
-    ).catch(() => {});
+    ).catch(() => { });
 
     if (notificationDispatched) {
       return {
@@ -257,7 +257,7 @@ async function sendAnnouncementReminderForId(announcementId, sourceTaskName) {
       };
     }
 
-    await lockRef.delete().catch(() => {});
+    await lockRef.delete().catch(() => { });
     throw e;
   }
 }
@@ -660,9 +660,21 @@ async function queryTargetUsers(audiences) {
   });
 }
 
-async function sendMulticast(tokens, title, body, data) {
+function normalizeMessagingErrorCode(err) {
+  if (!err) return 'UnknownError';
+
+  const code = String(err.code || '').trim();
+  if (code) {
+    return code.replace(/^messaging\//, '');
+  }
+
+  return String(err.constructor?.name || 'UnknownError');
+}
+
+async function sendMulticast(tokens, title, body, data, dryRun = false) {
   let success = 0;
   let failure = 0;
+  const errorCounts = {};
   const dataStr = {};
   Object.keys(data || {}).forEach((k) => {
     dataStr[k] = String(data[k]);
@@ -673,11 +685,17 @@ async function sendMulticast(tokens, title, body, data) {
       tokens: batch,
       notification: { title, body },
       data: dataStr,
-    });
+    }, dryRun);
     success += result.successCount;
     failure += result.failureCount;
+
+    for (const response of result.responses || []) {
+      if (response.success) continue;
+      const errorCode = normalizeMessagingErrorCode(response.error);
+      errorCounts[errorCode] = (errorCounts[errorCode] || 0) + 1;
+    }
   }
-  return { successCount: success, failureCount: failure };
+  return { successCount: success, failureCount: failure, errorCounts };
 }
 
 // --- HTTP API (FCM endpoints for admin app; Option A) ---
@@ -690,10 +708,17 @@ app.use(bodyParser.json());
 
 app.post('/send-user-push', async (req, res) => {
   try {
-    const { user_id: userId, title, body, data } = req.body || {};
+    const {
+      user_id: userId,
+      title,
+      body,
+      data,
+      dry_run: dryRunRaw,
+    } = req.body || {};
     if (!userId || !title || !body) {
       return res.status(400).json({ error: 'user_id, title, body required' });
     }
+    const dryRun = Boolean(dryRunRaw);
     const tokens = await getTokensForUser(userId);
     if (tokens.length === 0) {
       return res.status(200).json({
@@ -701,15 +726,23 @@ app.post('/send-user-push', async (req, res) => {
         success_count: 0,
         failure_count: 0,
         error_counts: {},
+        dry_run: dryRun,
       });
     }
     const payload = { type: (data && data.type) || 'notification', userId, ...(data || {}) };
-    const { successCount, failureCount } = await sendMulticast(tokens, title, body, payload);
+    const { successCount, failureCount, errorCounts } = await sendMulticast(
+      tokens,
+      title,
+      body,
+      payload,
+      dryRun,
+    );
     return res.status(200).json({
       token_count: tokens.length,
       success_count: successCount,
       failure_count: failureCount,
-      error_counts: {},
+      error_counts: errorCounts,
+      dry_run: dryRun,
     });
   } catch (e) {
     console.error('send-user-push error:', e);
@@ -816,10 +849,17 @@ app.post('/promote-user-super-admin', async (req, res) => {
 
 app.post('/send-account-approval', async (req, res) => {
   try {
-    const { request_id: requestId, user_id: userId, title, body } = req.body || {};
+    const {
+      request_id: requestId,
+      user_id: userId,
+      title,
+      body,
+      dry_run: dryRunRaw,
+    } = req.body || {};
     if (!requestId || !userId || !title || !body) {
       return res.status(400).json({ error: 'request_id, user_id, title, body required' });
     }
+    const dryRun = Boolean(dryRunRaw);
     const tokens = await getApprovalTokens(requestId, userId);
     if (tokens.length === 0) {
       return res.status(200).json({
@@ -827,17 +867,19 @@ app.post('/send-account-approval', async (req, res) => {
         success_count: 0,
         failure_count: 0,
         error_counts: {},
+        dry_run: dryRun,
       });
     }
-    const { successCount, failureCount } = await sendMulticast(tokens, title, body, {
+    const { successCount, failureCount, errorCounts } = await sendMulticast(tokens, title, body, {
       type: 'account_approved',
       userId,
-    });
+    }, dryRun);
     return res.status(200).json({
       token_count: tokens.length,
       success_count: successCount,
       failure_count: failureCount,
-      error_counts: {},
+      error_counts: errorCounts,
+      dry_run: dryRun,
     });
   } catch (e) {
     console.error('send-account-approval error:', e);
@@ -847,10 +889,18 @@ app.post('/send-account-approval', async (req, res) => {
 
 app.post('/send-announcement-push', async (req, res) => {
   try {
-    const { announcement_id: announcementId, title, body, audiences = [], requested_by_user_id: requestedBy } = req.body || {};
+    const {
+      announcement_id: announcementId,
+      title,
+      body,
+      audiences = [],
+      requested_by_user_id: requestedBy,
+      dry_run: dryRunRaw,
+    } = req.body || {};
     if (!announcementId || !title || !body) {
       return res.status(400).json({ error: 'announcement_id, title, body required' });
     }
+    const dryRun = Boolean(dryRunRaw);
     const userDocs = await queryTargetUsers(audiences);
     const tokens = await collectTokensFromUserDocs(userDocs);
     if (tokens.length === 0) {
@@ -860,17 +910,25 @@ app.post('/send-announcement-push', async (req, res) => {
         success_count: 0,
         failure_count: 0,
         error_counts: {},
+        dry_run: dryRun,
       });
     }
     const data = { type: 'announcement', announcementId };
     if (requestedBy) data.requestedByUserId = requestedBy;
-    const { successCount, failureCount } = await sendMulticast(tokens, title, body, data);
+    const { successCount, failureCount, errorCounts } = await sendMulticast(
+      tokens,
+      title,
+      body,
+      data,
+      dryRun,
+    );
     return res.status(200).json({
       user_count: userDocs.length,
       token_count: tokens.length,
       success_count: successCount,
       failure_count: failureCount,
-      error_counts: {},
+      error_counts: errorCounts,
+      dry_run: dryRun,
     });
   } catch (e) {
     console.error('send-announcement-push error:', e);
@@ -1320,32 +1378,32 @@ async function getAdminTokens() {
       }
       seenUserIds.add(doc.id);
 
-    const data = doc.data() || {};
-    const isActiveByFlag = data.isActive === true;
-    const accountStatus = String(data.accountStatus || '').toLowerCase();
-    const isApproved = data.isApproved === true;
+      const data = doc.data() || {};
+      const isActiveByFlag = data.isActive === true;
+      const accountStatus = String(data.accountStatus || '').toLowerCase();
+      const isApproved = data.isApproved === true;
 
-    // Support both old and new account-state conventions.
-    const isActiveAccount = isActiveByFlag || accountStatus === 'active' || isApproved;
-    if (!isActiveAccount) {
-      continue;
-    }
+      // Support both old and new account-state conventions.
+      const isActiveAccount = isActiveByFlag || accountStatus === 'active' || isApproved;
+      if (!isActiveAccount) {
+        continue;
+      }
 
-    const uid = doc.id;
-    normalizeTokenList(data.fcmTokens || []).forEach((t) => {
-      if (!seen.has(t)) {
-        seen.add(t);
-        tokens.push(t);
-      }
-    });
-    const devicesSnap = await db.collection('users').doc(uid).collection('devices').get();
-    devicesSnap.docs.forEach((d) => {
-      const token = d.data().fcmToken;
-      if (typeof token === 'string' && token.trim() && !seen.has(token.trim())) {
-        seen.add(token.trim());
-        tokens.push(token.trim());
-      }
-    });
+      const uid = doc.id;
+      normalizeTokenList(data.fcmTokens || []).forEach((t) => {
+        if (!seen.has(t)) {
+          seen.add(t);
+          tokens.push(t);
+        }
+      });
+      const devicesSnap = await db.collection('users').doc(uid).collection('devices').get();
+      devicesSnap.docs.forEach((d) => {
+        const token = d.data().fcmToken;
+        if (typeof token === 'string' && token.trim() && !seen.has(token.trim())) {
+          seen.add(token.trim());
+          tokens.push(token.trim());
+        }
+      });
     }
   }
   return tokens;

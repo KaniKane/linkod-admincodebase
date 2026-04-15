@@ -320,7 +320,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 status == 'accepted';
             if (!isAccepted) continue;
           }
-          final demographics = _extractDemographics(data);
+          final mainDemographics = _extractMainDemographics(data);
+          final subDemographies = _extractSubDemographies(data);
           loadedUsers.add({
             'id': doc.id,
             'name': fullName.isNotEmpty ? fullName : 'Unnamed user',
@@ -328,7 +329,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             'purok': purok,
             'createdAtEpoch': (_extractEpochMillis(data['createdAt']) ?? '')
                 .toString(),
-            'demographics': demographics.join(', '),
+            'demographics': mainDemographics.join(', '),
+            'mainCategory': mainDemographics.join(', '),
+            'subDemographies': subDemographies.join(', '),
             'category': demographicCategory.isNotEmpty
                 ? demographicCategory
                 : (role.isNotEmpty ? role : 'User'),
@@ -363,17 +366,18 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 .where((e) => e.isNotEmpty)
                 .toList();
 
+        final mainCategory = role == 'admin' || role == 'super_admin'
+            ? (position.isNotEmpty ? position : 'Admin')
+            : (category.isNotEmpty ? category : 'User');
+
         loadedAwaiting.add({
           'id': doc.id,
           'name': fullName.isNotEmpty ? fullName : 'Unnamed user',
           'phone': awaitingContact,
           'email': email,
           'purok': purok,
-          'category': category.isNotEmpty
-              ? category
-              : (role == 'admin'
-                    ? (position.isNotEmpty ? position : 'Admin')
-                    : (role.isNotEmpty ? role : 'User')),
+          'category': mainCategory,
+          'mainCategory': mainCategory,
           'role': role,
           'userType': inferredUserType,
           'position': position,
@@ -415,15 +419,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 .map((e) => e.trim())
                 .where((e) => e.isNotEmpty)
                 .toList();
+        final mainCategory = category.isNotEmpty ? category : 'User';
         loadedAwaiting.add({
           'id': doc.id,
           'name': fullName.isNotEmpty ? fullName : 'Unnamed user',
           'phone': awaitingContact,
           'email': email,
           'purok': purok,
-          'category': category.isNotEmpty
-              ? category
-              : (role.isNotEmpty ? role : 'User'),
+          'category': mainCategory,
+          'mainCategory': mainCategory,
           'role': role,
           'userType': inferredUserType,
           'position': position,
@@ -552,23 +556,71 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         .toList();
   }
 
+  List<String> _extractSubDemographies(Map<String, dynamic> data) {
+    final raw = data['subDemographies'];
+    if (raw is List) {
+      return raw
+          .whereType<String>()
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)
+          .toList();
+    }
+
+    if (raw is String) {
+      return raw
+          .split(',')
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)
+          .toList();
+    }
+
+    return const [];
+  }
+
+  List<String> _extractMainDemographics(Map<String, dynamic> data) {
+    final demographics = _extractDemographics(data);
+    final subDemographies = _extractSubDemographies(data);
+    if (subDemographies.isEmpty) return demographics;
+
+    final subLookup = subDemographies
+        .map((value) => value.toLowerCase())
+        .toSet();
+    final mainOnly = demographics
+        .where((value) => !subLookup.contains(value.toLowerCase()))
+        .toList();
+
+    if (mainOnly.isNotEmpty) return mainOnly;
+
+    final fallbackMain = (data['demographicCategory'] ?? '')
+        .toString()
+        .split(',')
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .where((value) => !subLookup.contains(value.toLowerCase()))
+        .toList();
+    return fallbackMain;
+  }
+
   bool _matchesDemographicFilter(Map<String, String> user) {
     if (_usersDemographicFilter == _usersFilterAll) return true;
 
     final target = _usersDemographicFilter.toLowerCase();
-    final demographicsRaw = (user['demographics'] ?? user['category'] ?? '')
-        .toString()
-        .trim();
-    if (demographicsRaw.isEmpty) return false;
+    final values = <String>{
+      ...(user['demographics'] ?? '')
+          .split(',')
+          .map((value) => value.trim().toLowerCase())
+          .where((value) => value.isNotEmpty),
+      ...(user['subDemographies'] ?? '')
+          .split(',')
+          .map((value) => value.trim().toLowerCase())
+          .where((value) => value.isNotEmpty),
+      ...(user['category'] ?? '')
+          .split(',')
+          .map((value) => value.trim().toLowerCase())
+          .where((value) => value.isNotEmpty),
+    };
 
-    final demographics = demographicsRaw
-        .split(',')
-        .map((value) => value.trim().toLowerCase())
-        .where((value) => value.isNotEmpty)
-        .toSet();
-
-    return demographics.contains(target) ||
-        demographicsRaw.toLowerCase() == target;
+    return values.contains(target);
   }
 
   int _createdAtEpochForUser(Map<String, String> user) {
@@ -627,7 +679,26 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   List<String> get _usersDemographicOptions {
-    return _mainDemographicOptions;
+    final subDemographyOptions =
+        _users
+            .map((user) => (user['subDemographies'] ?? '').trim())
+            .where((value) => value.isNotEmpty)
+            .expand((value) => value.split(','))
+            .map((value) => value.trim())
+            .where((value) => value.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    final seen = <String>{};
+    final merged = <String>[];
+    for (final value in [..._mainDemographicOptions, ...subDemographyOptions]) {
+      final key = value.toLowerCase();
+      if (seen.add(key)) {
+        merged.add(value);
+      }
+    }
+    return merged;
   }
 
   bool _matchesUsersDateFilter(Map<String, String> user) {
@@ -1307,7 +1378,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       _usersFilterNoPurok,
       ..._mainPurokOptions,
     ];
-    final demographicItems = [_usersFilterAll, ..._mainDemographicOptions];
+    final demographicItems = [_usersFilterAll, ..._usersDemographicOptions];
     final selectedPurok = purokItems.contains(_usersPurokFilter)
         ? _usersPurokFilter
         : _usersFilterAll;
@@ -2613,6 +2684,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     ),
                   ),
                 ),
+                const Expanded(
+                  flex: 3,
+                  child: Text(
+                    'Sub-demography',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.darkGrey,
+                    ),
+                  ),
+                ),
                 const SizedBox(width: 60),
               ],
             ),
@@ -2750,7 +2832,18 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 const Expanded(
                   flex: 3,
                   child: Text(
-                    'Position / Demographic category',
+                    'Demographic category',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.darkGrey,
+                    ),
+                  ),
+                ),
+                const Expanded(
+                  flex: 3,
+                  child: Text(
+                    'Sub-demography',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -3071,11 +3164,28 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           Expanded(
             flex: 3,
             child: Text(
-              user['category']!,
+              (user['mainCategory'] ?? user['category'] ?? '').trim().isNotEmpty
+                  ? (user['mainCategory'] ?? user['category'])!
+                  : '—',
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.normal,
                 color: AppColors.darkGrey,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              (user['subDemographies'] ?? '').trim().isNotEmpty
+                  ? user['subDemographies']!
+                  : '—',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.normal,
+                color: (user['subDemographies'] ?? '').trim().isNotEmpty
+                    ? AppColors.darkGrey
+                    : AppColors.mediumGrey,
               ),
             ),
           ),
@@ -3273,11 +3383,28 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           Expanded(
             flex: 3,
             child: Text(
-              user['category']!,
+              (user['mainCategory'] ?? user['category'] ?? '').trim().isNotEmpty
+                  ? (user['mainCategory'] ?? user['category'])!
+                  : '—',
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.normal,
                 color: AppColors.darkGrey,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              (user['subDemographies'] ?? '').trim().isNotEmpty
+                  ? user['subDemographies']!
+                  : '—',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.normal,
+                color: (user['subDemographies'] ?? '').trim().isNotEmpty
+                    ? AppColors.darkGrey
+                    : AppColors.mediumGrey,
               ),
             ),
           ),
@@ -3780,7 +3907,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       final requestUserType =
           ((data['userType'] ?? user['userType'] ?? '') as String)
               .toLowerCase();
-        var purok = (data['purok'] ?? user['purok'] ?? '').toString().trim();
+      var purok = (data['purok'] ?? user['purok'] ?? '').toString().trim();
       final userType = requestUserType.isNotEmpty
           ? requestUserType
           : ((role == 'admin' || role == 'super_admin') ? 'admin' : 'resident');
@@ -4600,14 +4727,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final phoneController = TextEditingController(text: user['phone'] ?? '');
     final adminNoteController = TextEditingController(text: currentNote);
     String selectedPurok = resolvedCurrentPurok;
-    final existingCategory = user['category'] ?? '';
-    final Set<String> selectedCategories = existingCategory.isEmpty
-        ? <String>{}
-        : existingCategory
-              .split(',')
-              .map((e) => e.trim())
-              .where((e) => e.isNotEmpty)
-              .toSet();
+
+    final firestoreSubDemographies =
+        (doc.data()?['subDemographies'] as List<dynamic>? ?? const [])
+            .whereType<String>()
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
+    final mainOnlyDemographics = _extractMainDemographics(doc.data() ?? {});
+    final Set<String> selectedCategories = mainOnlyDemographics.toSet();
+    final Set<String> selectedSubCategories = firestoreSubDemographies.toSet();
+
     String selectedStatus = currentStatus;
     if (selectedStatus != 'active' &&
         selectedStatus != 'declined' &&
@@ -4796,6 +4926,53 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             },
                           ),
                           const SizedBox(height: 16),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Sub-demography',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.normal,
+                                  color: AppColors.darkGrey,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: _usersDemographicOptions.map((
+                                  audience,
+                                ) {
+                                  final isSelected = selectedSubCategories
+                                      .contains(audience);
+                                  return AudienceTag(
+                                    label: audience,
+                                    isSelected: isSelected,
+                                    onTap: () => setState(() {
+                                      if (selectedSubCategories.contains(
+                                        audience,
+                                      )) {
+                                        selectedSubCategories.remove(audience);
+                                      } else {
+                                        selectedSubCategories.add(audience);
+                                      }
+                                    }),
+                                  );
+                                }).toList(),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${selectedSubCategories.length} sub-demography(ies) selected',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.normal,
+                                  color: AppColors.lightGrey,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
                           if (dialogError != null) ...[
                             ErrorNotification(message: dialogError!),
                             const SizedBox(height: 8),
@@ -4864,6 +5041,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                                     ),
                                               'categories': selectedCategories
                                                   .toList(),
+                                              'subDemographies':
+                                                  selectedSubCategories
+                                                      .toList(),
+                                              'subDemographyEnabled':
+                                                  selectedSubCategories
+                                                      .isNotEmpty,
                                               'accountStatus': selectedStatus,
                                               'adminNote':
                                                   selectedStatus == 'declined'

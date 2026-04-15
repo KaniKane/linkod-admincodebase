@@ -1340,7 +1340,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                         width: cardWidth,
                                         height: 270,
                                         child: AnalyticsCard(
-                                          title: 'Demographics Breakdown',
+                                          title: 'User Breakdown',
                                           subtitle:
                                               'Resident distribution by purok / category',
                                           child: HorizontalBarChart(

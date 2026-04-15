@@ -6,10 +6,10 @@ This guide documents the current production flow used in the admin codebase to b
 2. Packaged Python backend (PyInstaller)
 3. Final Windows installer (.exe) using Inno Setup
 
-It is based on the existing project files:
+It is based on the current production project files:
 
-- `installer/LINKod_Admin_Setup.iss` (main installer script)
-- `backend/linkod_admin_backend.spec` (PyInstaller spec)
+- `installer/LINKod_Admin_Setup_Production.iss` (main installer script)
+- `backend/linkod_admin_backend.installer.spec` (PyInstaller spec)
 - `scripts/build_release.ps1` (automation script)
 
 ## 1. Scope and Output
@@ -43,7 +43,7 @@ pyinstaller --version
 
 ### Installer script
 
-`installer/LINKod_Admin_Setup.iss` currently does the following:
+`installer/LINKod_Admin_Setup_Production.iss` currently does the following:
 
 - installs app to Program Files (`{autopf}`)
 - copies Flutter release files from `build/windows/x64/runner/Release`
@@ -53,7 +53,7 @@ pyinstaller --version
 
 ### Backend build spec
 
-`backend/linkod_admin_backend.spec` currently:
+`backend/linkod_admin_backend.installer.spec` currently:
 
 - uses `launcher.py` as PyInstaller entrypoint
 - builds in `onedir` mode for stable startup
@@ -74,7 +74,7 @@ pyinstaller --version
 Run from `linkod-admincodebase` root:
 
 ```powershell
-cd d:\GitHub\linkod_admin\linkod-admincodebase
+cd d:\Desktop1\linkod-admincodebase
 flutter pub get
 flutter build windows --release
 ```
@@ -90,10 +90,10 @@ Test-Path .\build\windows\x64\runner\Release\linkod_admin.exe
 Run from project root:
 
 ```powershell
-cd d:\GitHub\linkod_admin\linkod-admincodebase\backend
+cd d:\Desktop1\linkod-admincodebase\backend
 pip install -r requirements.txt
 pip install pyinstaller
-pyinstaller --clean linkod_admin_backend.spec
+pyinstaller --clean linkod_admin_backend.installer.spec
 ```
 
 Verify:
@@ -107,14 +107,14 @@ Test-Path .\dist\linkod_admin_backend\linkod_admin_backend.exe
 Run from project root (`linkod-admincodebase`):
 
 ```powershell
-cd d:\GitHub\linkod_admin\linkod-admincodebase
-"${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" .\installer\LINKod_Admin_Setup.iss
+cd d:\Desktop1\linkod-admincodebase
+"${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" .\installer\LINKod_Admin_Setup_Production.iss
 ```
 
 If Inno Setup is installed in Program Files instead of Program Files (x86), use:
 
 ```powershell
-"${env:ProgramFiles}\Inno Setup 6\ISCC.exe" .\installer\LINKod_Admin_Setup.iss
+"${env:ProgramFiles}\Inno Setup 6\ISCC.exe" .\installer\LINKod_Admin_Setup_Production.iss
 ```
 
 Output should appear in:
@@ -126,7 +126,7 @@ Output should appear in:
 Use the existing automation script:
 
 ```powershell
-cd d:\GitHub\linkod_admin\linkod-admincodebase
+cd d:\Desktop1\linkod-admincodebase
 .\scripts\build_release.ps1
 ```
 
@@ -143,7 +143,7 @@ Useful options:
 
 Before final release build:
 
-1. Update installer version in `installer/LINKod_Admin_Setup.iss`:
+1. Update installer version in `installer/LINKod_Admin_Setup_Production.iss`:
    - `#define MyAppVersion "x.y.z"`
 2. Confirm expected output filename pattern:
    - `OutputBaseFilename=LINKod_Admin_Setup_{#MyAppVersion}`
@@ -182,7 +182,7 @@ Install Inno Setup 6 and retry with the full path to `ISCC.exe`.
 ### Backend EXE missing
 
 - run build from `backend` directory
-- ensure spec file name is exact: `linkod_admin_backend.spec`
+- ensure spec file name is exact: `linkod_admin_backend.installer.spec`
 
 ### Installer compile fails due to missing source files
 
@@ -197,8 +197,8 @@ Build frontend and backend first, then compile Inno Setup.
 
 The `installer` folder also contains older `.iss` files (for example `desktop_inno_script.iss` and `linkod_admin_setup_2.iss`).
 
-For current packaging flow, use only:
+For current packaging flow, use:
 
-- `installer/LINKod_Admin_Setup.iss`
+- `installer/LINKod_Admin_Setup_Production.iss`
 
 This avoids path/version drift across multiple installer scripts.

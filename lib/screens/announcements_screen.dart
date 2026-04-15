@@ -1164,7 +1164,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
 
             if (!mounted) return;
             final String msg;
+            final bool isHardPushError;
             if (result.tokenCount == 0) {
+              isHardPushError = false;
               if (result.userCount == 0) {
                 msg =
                     'No residents matched the selected audiences. Check User Management: role=resident, approved, active, and Demographic category (categories array) matches the chosen audiences.';
@@ -1172,13 +1174,31 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                 msg =
                     'No valid tokens. ${result.userCount} resident(s) matched but none have FCM tokens. Ensure the mobile app has been opened after login on the target device(s).';
               }
+            } else if (result.successCount > 0 && result.failureCount > 0) {
+              isHardPushError = false;
+              final invalidTokenCount =
+                  result.errorCounts['registration-token-not-registered'] ?? 0;
+              if (invalidTokenCount > 0) {
+                msg =
+                    'Push sent to ${result.successCount}/${result.tokenCount} device(s). $invalidTokenCount invalid token(s) were skipped.';
+              } else {
+                msg =
+                    'Push partially sent: ${result.successCount}/${result.tokenCount} succeeded, ${result.failureCount} failed.';
+              }
+            } else if (result.successCount == 0 && result.failureCount > 0) {
+              isHardPushError = true;
+              msg =
+                  'Push failed for all ${result.tokenCount} token(s). Please try again and check backend logs.';
             } else {
+              isHardPushError = false;
               msg =
                   'Push sent: ${result.successCount}/${result.tokenCount} token(s).';
             }
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: DraftSavedNotification(message: msg),
+                content: isHardPushError
+                    ? ErrorNotification(message: msg)
+                    : DraftSavedNotification(message: msg),
                 backgroundColor: Colors.transparent,
                 elevation: 0,
                 behavior: SnackBarBehavior.floating,
@@ -2808,6 +2828,19 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                   child: GestureDetector(
                     onTap: () async {
                       try {
+                        // Best-effort: remove any scheduled reminder task before soft delete.
+                        // Deletion should still proceed even if reminder cancel fails.
+                        final requesterUid =
+                            FirebaseAuth.instance.currentUser?.uid;
+                        if (requesterUid != null && requesterUid.isNotEmpty) {
+                          try {
+                            await cancelAnnouncementReminder(
+                              announcementId: announcementId,
+                              requestedByUserId: requesterUid,
+                            );
+                          } catch (_) {}
+                        }
+
                         await FirebaseFirestore.instance
                             .collection('announcements')
                             .doc(announcementId)

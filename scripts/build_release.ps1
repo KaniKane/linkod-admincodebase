@@ -28,7 +28,14 @@ $FlutterBuildDir = "build\windows\x64\runner\Release"
 $BackendDistDir = "backend\dist\linkod_admin_backend"
 $InstallerDir = "installer"
 $OutputDir = "installer\output"
-$InnoSetupPath = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+$InnoSetupPath = $null
+$InnoSetupCandidatePaths = @(
+    "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+    "${env:ProgramFiles}\Inno Setup 6\ISCC.exe",
+    "D:\Inno Setup 6\ISCC.exe"
+)
+$BackendSpecFile = "linkod_admin_backend.installer.spec"
+$InstallerScriptFile = "LINKod_Admin_Setup_Production.iss"
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  LINKod Admin - Release Build Script" -ForegroundColor Cyan
@@ -64,15 +71,17 @@ function Test-Prerequisites {
     }
 
     # Check Inno Setup
-    if (Test-Path $InnoSetupPath) {
+    foreach ($candidate in $InnoSetupCandidatePaths) {
+        if (Test-Path $candidate) {
+            $script:InnoSetupPath = $candidate
+            break
+        }
+    }
+
+    if ($InnoSetupPath) {
         Write-Host "  Inno Setup: Found at $InnoSetupPath" -ForegroundColor Green
     } else {
-        $InnoSetupPath = "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
-        if (Test-Path $InnoSetupPath) {
-            Write-Host "  Inno Setup: Found at $InnoSetupPath" -ForegroundColor Green
-        } else {
-            Write-Error "Inno Setup not found. Please install Inno Setup 6 from https://jrsoftware.org/isinfo.php"
-        }
+        Write-Error "Inno Setup not found. Please install Inno Setup 6 from https://jrsoftware.org/isinfo.php"
     }
 
     Write-Host ""
@@ -151,7 +160,7 @@ function Invoke-BackendBuild {
 
         # Build the EXE
         Write-Host "  Running PyInstaller (this may take 2-5 minutes)..." -ForegroundColor Gray
-        pyinstaller --clean linkod_admin_backend.spec
+        pyinstaller --clean $BackendSpecFile
 
         if ($LASTEXITCODE -ne 0) {
             Write-Error "PyInstaller build failed"
@@ -197,7 +206,7 @@ function Invoke-InstallerBuild {
     }
 
     # Run Inno Setup compiler
-    $issPath = "$InstallerDir\LINKod_Admin_Setup.iss"
+    $issPath = "$InstallerDir\$InstallerScriptFile"
     if (-not (Test-Path $issPath)) {
         Write-Error "Inno Setup script not found: $issPath"
     }
