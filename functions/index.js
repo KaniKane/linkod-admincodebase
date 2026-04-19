@@ -38,6 +38,18 @@ function isReminderSchedulingEnabled() {
   return boolFromEnv(functions.config()?.features?.enable_announcement_reminder_scheduling, false);
 }
 
+function isAnnouncementPushDataOnlyEnabled() {
+  const envFlag = process.env.ENABLE_ANNOUNCEMENT_PUSH_DATA_ONLY;
+  if (envFlag != null) {
+    return boolFromEnv(envFlag, true);
+  }
+  const configFlag = functions.config()?.features?.announcement_push_data_only;
+  if (configFlag != null) {
+    return boolFromEnv(configFlag, true);
+  }
+  return true;
+}
+
 function getProjectId() {
   return process.env.GCLOUD_PROJECT || process.env.PROJECT_ID || process.env.GCP_PROJECT || null;
 }
@@ -214,6 +226,11 @@ async function sendAnnouncementReminderForId(announcementId, sourceTaskName) {
         type: 'announcement',
         notificationKind: 'announcement_reminder',
         announcementId,
+        priority: 'high',
+        alertStyle: 'announcement_priority',
+        attemptFullScreen: 'true',
+        title,
+        body,
       });
       notificationDispatched = true;
     }
@@ -245,7 +262,7 @@ async function sendAnnouncementReminderForId(announcementId, sourceTaskName) {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
       { merge: true },
-    ).catch(() => { });
+    ).catch(() => {});
 
     if (notificationDispatched) {
       return {
@@ -257,7 +274,7 @@ async function sendAnnouncementReminderForId(announcementId, sourceTaskName) {
       };
     }
 
-    await lockRef.delete().catch(() => { });
+    await lockRef.delete().catch(() => {});
     throw e;
   }
 }
@@ -543,6 +560,157 @@ async function performCreatePendingSignup(payload) {
   };
 }
 
+/**
+ * performLookupUserByPhone(data)
+ * Looks up a user by phone number for forgot password flow.
+ * Returns {uid, email} if found, throws error if not found.
+ */
+async function performLookupUserByPhone(data) {
+  const phone = String(data?.phone || '').trim();
+  if (!phone) {
+    throw new functions.https.HttpsError('invalid-argument', 'Phone number is required');
+  }
+
+  const normalizedPhone = phone.replace(/\D+/g, '');
+  const localPhone = normalizedPhone.length === 10 && normalizedPhone.startsWith('9')
+    ? `0${normalizedPhone}`
+    : normalizedPhone;
+
+  // Search awaitingApproval collection
+  const awaitingSnap = await db
+    .collection('awaitingApproval')
+    .where('phoneNumber', '==', localPhone)
+    .where('status', '==', 'pending')
+    .limit(1)
+    .get();
+
+  if (!awaitingSnap.empty) {
+    return {
+      exists: true,
+    };
+  }
+
+  // Search users collection
+  const usersSnap = await db
+    .collection('users')
+    .where('phoneNumber', '==', localPhone)
+    .limit(1)
+    .get();
+
+  if (!usersSnap.empty) {
+    return {
+      exists: true,
+    };
+  }
+
+  throw new functions.https.HttpsError(
+    'not-found',
+    'No account found with this phone number. Please check and try again.',
+  );
+}
+
+/**
+ * performResetPassword(data, context)
+ * Resets a user's password after OTP verification.
+ * Requires: uid, newPassword
+ * Logs activity to adminActivities collection.
+ */
+async function performResetPassword(data, context) {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Phone verification is required');
+  }
+
+  const phone = String(data?.phone || '').trim();
+  const newPassword = String(data?.newPassword || '').trim();
+
+  if (!phone) {
+    throw new functions.https.HttpsError('invalid-argument', 'Phone number is required');
+  }
+  if (!newPassword || newPassword.length < 8) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'Password must be at least 8 characters',
+    );
+  }
+
+  const normalizedPhone = phone.replace(/\D+/g, '');
+  const localPhone = normalizedPhone.length === 10 && normalizedPhone.startsWith('9')
+    ? `0${normalizedPhone}`
+    : normalizedPhone;
+  const e164Phone = localPhone.length === 11 && localPhone.startsWith('0')
+    ? `+63${localPhone.substring(1)}`
+    : (phone.startsWith('+') ? phone : '');
+  const authPhone = String(context.auth.token?.phone_number || '').trim();
+
+  if (!authPhone || !e164Phone || authPhone !== e164Phone) {
+    throw new functions.https.HttpsError('permission-denied', 'Phone verification does not match request');
+  }
+
+  try {
+    let targetUid = null;
+
+    const usersSnap = await db
+      .collection('users')
+      .where('phoneNumber', '==', localPhone)
+      .limit(1)
+      .get();
+    if (!usersSnap.empty) {
+      targetUid = usersSnap.docs[0].id;
+    }
+
+    if (!targetUid) {
+      const awaitingSnap = await db
+        .collection('awaitingApproval')
+        .where('phoneNumber', '==', localPhone)
+        .where('status', '==', 'pending')
+        .limit(1)
+        .get();
+      if (!awaitingSnap.empty) {
+        const pending = awaitingSnap.docs[0].data() || {};
+        targetUid = String(pending.uid || awaitingSnap.docs[0].id).trim();
+      }
+    }
+
+    if (!targetUid) {
+      throw new functions.https.HttpsError('not-found', 'No account found with this phone number.');
+    }
+
+    // Update password using Firebase Admin SDK
+    await admin.auth().updateUser(targetUid, {
+      password: newPassword,
+    });
+
+    // Log the password reset activity
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const userRef = db.collection('users').doc(targetUid);
+    const userDoc = await userRef.get();
+    const fullName = userDoc.exists ? (userDoc.data()?.fullName || '') : '';
+
+    await db.collection('passwordResetLogs').add({
+      uid: targetUid,
+      phone: localPhone,
+      verifiedPhone: authPhone,
+      fullName,
+      resetAt: now,
+      resetByUser: true,
+    });
+
+    return {
+      success: true,
+      message: 'Password has been reset successfully. Please log in with your new password.',
+    };
+  } catch (e) {
+    console.error('Password reset error:', e);
+    if (e.code === 'auth/user-not-found') {
+      throw new functions.https.HttpsError(
+        'not-found',
+        'User account not found. Please try again.',
+      );
+    }
+    throw new functions.https.HttpsError('internal', 'Failed to reset password. Please try again later.');
+  }
+}
+
 // --- FCM helpers (match backend logic) ---
 
 function normalizeTokenList(arr) {
@@ -660,42 +828,37 @@ async function queryTargetUsers(audiences) {
   });
 }
 
-function normalizeMessagingErrorCode(err) {
-  if (!err) return 'UnknownError';
-
-  const code = String(err.code || '').trim();
-  if (code) {
-    return code.replace(/^messaging\//, '');
-  }
-
-  return String(err.constructor?.name || 'UnknownError');
-}
-
-async function sendMulticast(tokens, title, body, data, dryRun = false) {
+async function sendMulticast(tokens, title, body, data, options = {}) {
   let success = 0;
   let failure = 0;
-  const errorCounts = {};
+  const includeNotification = options.includeNotification !== false;
   const dataStr = {};
   Object.keys(data || {}).forEach((k) => {
     dataStr[k] = String(data[k]);
   });
   for (let i = 0; i < tokens.length; i += MAX_TOKENS_PER_BATCH) {
     const batch = tokens.slice(i, i + MAX_TOKENS_PER_BATCH);
-    const result = await messaging.sendEachForMulticast({
+    const message = {
       tokens: batch,
-      notification: { title, body },
+      android: {
+        priority: 'high',
+      },
       data: dataStr,
-    }, dryRun);
+    };
+    if (includeNotification) {
+      message.notification = { title, body };
+      message.android.notification = {
+        channelId:
+          dataStr.alertStyle === 'announcement_priority'
+            ? 'linkod_announcements_priority'
+            : 'linkod_announcements',
+      };
+    }
+    const result = await messaging.sendEachForMulticast(message);
     success += result.successCount;
     failure += result.failureCount;
-
-    for (const response of result.responses || []) {
-      if (response.success) continue;
-      const errorCode = normalizeMessagingErrorCode(response.error);
-      errorCounts[errorCode] = (errorCounts[errorCode] || 0) + 1;
-    }
   }
-  return { successCount: success, failureCount: failure, errorCounts };
+  return { successCount: success, failureCount: failure };
 }
 
 // --- HTTP API (FCM endpoints for admin app; Option A) ---
@@ -708,17 +871,10 @@ app.use(bodyParser.json());
 
 app.post('/send-user-push', async (req, res) => {
   try {
-    const {
-      user_id: userId,
-      title,
-      body,
-      data,
-      dry_run: dryRunRaw,
-    } = req.body || {};
+    const { user_id: userId, title, body, data } = req.body || {};
     if (!userId || !title || !body) {
       return res.status(400).json({ error: 'user_id, title, body required' });
     }
-    const dryRun = Boolean(dryRunRaw);
     const tokens = await getTokensForUser(userId);
     if (tokens.length === 0) {
       return res.status(200).json({
@@ -726,23 +882,15 @@ app.post('/send-user-push', async (req, res) => {
         success_count: 0,
         failure_count: 0,
         error_counts: {},
-        dry_run: dryRun,
       });
     }
     const payload = { type: (data && data.type) || 'notification', userId, ...(data || {}) };
-    const { successCount, failureCount, errorCounts } = await sendMulticast(
-      tokens,
-      title,
-      body,
-      payload,
-      dryRun,
-    );
+    const { successCount, failureCount } = await sendMulticast(tokens, title, body, payload);
     return res.status(200).json({
       token_count: tokens.length,
       success_count: successCount,
       failure_count: failureCount,
-      error_counts: errorCounts,
-      dry_run: dryRun,
+      error_counts: {},
     });
   } catch (e) {
     console.error('send-user-push error:', e);
@@ -849,17 +997,10 @@ app.post('/promote-user-super-admin', async (req, res) => {
 
 app.post('/send-account-approval', async (req, res) => {
   try {
-    const {
-      request_id: requestId,
-      user_id: userId,
-      title,
-      body,
-      dry_run: dryRunRaw,
-    } = req.body || {};
+    const { request_id: requestId, user_id: userId, title, body } = req.body || {};
     if (!requestId || !userId || !title || !body) {
       return res.status(400).json({ error: 'request_id, user_id, title, body required' });
     }
-    const dryRun = Boolean(dryRunRaw);
     const tokens = await getApprovalTokens(requestId, userId);
     if (tokens.length === 0) {
       return res.status(200).json({
@@ -867,19 +1008,17 @@ app.post('/send-account-approval', async (req, res) => {
         success_count: 0,
         failure_count: 0,
         error_counts: {},
-        dry_run: dryRun,
       });
     }
-    const { successCount, failureCount, errorCounts } = await sendMulticast(tokens, title, body, {
+    const { successCount, failureCount } = await sendMulticast(tokens, title, body, {
       type: 'account_approved',
       userId,
-    }, dryRun);
+    });
     return res.status(200).json({
       token_count: tokens.length,
       success_count: successCount,
       failure_count: failureCount,
-      error_counts: errorCounts,
-      dry_run: dryRun,
+      error_counts: {},
     });
   } catch (e) {
     console.error('send-account-approval error:', e);
@@ -895,40 +1034,58 @@ app.post('/send-announcement-push', async (req, res) => {
       body,
       audiences = [],
       requested_by_user_id: requestedBy,
-      dry_run: dryRunRaw,
+      data: incomingData,
     } = req.body || {};
     if (!announcementId || !title || !body) {
       return res.status(400).json({ error: 'announcement_id, title, body required' });
     }
-    const dryRun = Boolean(dryRunRaw);
     const userDocs = await queryTargetUsers(audiences);
     const tokens = await collectTokensFromUserDocs(userDocs);
+    const data = {
+      ...(incomingData && typeof incomingData === 'object' ? incomingData : {}),
+      type: 'announcement',
+      announcementId,
+      title,
+      body,
+      priority: 'high',
+      alertStyle: 'announcement_priority',
+      attemptFullScreen: 'true',
+    };
+    if (requestedBy) data.requestedByUserId = requestedBy;
     if (tokens.length === 0) {
+      console.log('send-announcement-push', {
+        announcementId,
+        userCount: userDocs.length,
+        tokenCount: 0,
+        payloadKeys: Object.keys(data),
+        dispatched: false,
+      });
       return res.status(200).json({
         user_count: userDocs.length,
         token_count: 0,
         success_count: 0,
         failure_count: 0,
         error_counts: {},
-        dry_run: dryRun,
       });
     }
-    const data = { type: 'announcement', announcementId };
-    if (requestedBy) data.requestedByUserId = requestedBy;
-    const { successCount, failureCount, errorCounts } = await sendMulticast(
-      tokens,
-      title,
-      body,
-      data,
-      dryRun,
-    );
+    const { successCount, failureCount } = await sendMulticast(tokens, title, body, data, {
+      includeNotification: !isAnnouncementPushDataOnlyEnabled(),
+    });
+    console.log('send-announcement-push', {
+      announcementId,
+      userCount: userDocs.length,
+      tokenCount: tokens.length,
+      successCount,
+      failureCount,
+      payloadKeys: Object.keys(data),
+      dispatched: true,
+    });
     return res.status(200).json({
       user_count: userDocs.length,
       token_count: tokens.length,
       success_count: successCount,
       failure_count: failureCount,
-      error_counts: errorCounts,
-      dry_run: dryRun,
+      error_counts: {},
     });
   } catch (e) {
     console.error('send-announcement-push error:', e);
@@ -1193,6 +1350,10 @@ exports.verifyEmailOtp = functions.https.onCall(async (data) => performVerifyEma
 
 exports.createPendingSignup = functions.https.onCall(async (payload) => performCreatePendingSignup(payload));
 
+exports.lookupUserByPhone = functions.https.onCall(async (data) => performLookupUserByPhone(data));
+
+exports.resetPassword = functions.https.onCall(async (data, context) => performResetPassword(data, context));
+
 // --- Firestore triggers: send push on like, comment, task chat, product message (red indicators stay in app) ---
 
 async function sendPushToUser(userId, title, body, data) {
@@ -1378,32 +1539,32 @@ async function getAdminTokens() {
       }
       seenUserIds.add(doc.id);
 
-      const data = doc.data() || {};
-      const isActiveByFlag = data.isActive === true;
-      const accountStatus = String(data.accountStatus || '').toLowerCase();
-      const isApproved = data.isApproved === true;
+    const data = doc.data() || {};
+    const isActiveByFlag = data.isActive === true;
+    const accountStatus = String(data.accountStatus || '').toLowerCase();
+    const isApproved = data.isApproved === true;
 
-      // Support both old and new account-state conventions.
-      const isActiveAccount = isActiveByFlag || accountStatus === 'active' || isApproved;
-      if (!isActiveAccount) {
-        continue;
+    // Support both old and new account-state conventions.
+    const isActiveAccount = isActiveByFlag || accountStatus === 'active' || isApproved;
+    if (!isActiveAccount) {
+      continue;
+    }
+
+    const uid = doc.id;
+    normalizeTokenList(data.fcmTokens || []).forEach((t) => {
+      if (!seen.has(t)) {
+        seen.add(t);
+        tokens.push(t);
       }
-
-      const uid = doc.id;
-      normalizeTokenList(data.fcmTokens || []).forEach((t) => {
-        if (!seen.has(t)) {
-          seen.add(t);
-          tokens.push(t);
-        }
-      });
-      const devicesSnap = await db.collection('users').doc(uid).collection('devices').get();
-      devicesSnap.docs.forEach((d) => {
-        const token = d.data().fcmToken;
-        if (typeof token === 'string' && token.trim() && !seen.has(token.trim())) {
-          seen.add(token.trim());
-          tokens.push(token.trim());
-        }
-      });
+    });
+    const devicesSnap = await db.collection('users').doc(uid).collection('devices').get();
+    devicesSnap.docs.forEach((d) => {
+      const token = d.data().fcmToken;
+      if (typeof token === 'string' && token.trim() && !seen.has(token.trim())) {
+        seen.add(token.trim());
+        tokens.push(token.trim());
+      }
+    });
     }
   }
   return tokens;

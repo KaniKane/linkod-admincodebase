@@ -2399,6 +2399,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   Widget _buildDemographicSelector({
     required Set<String> selectedCategories,
     required ValueChanged<String> onToggle,
+    Set<String> blockedCategories = const <String>{},
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2417,10 +2418,18 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           runSpacing: 8,
           children: _mainDemographicOptions.map((audience) {
             final isSelected = selectedCategories.contains(audience);
-            return AudienceTag(
-              label: audience,
-              isSelected: isSelected,
-              onTap: () => onToggle(audience),
+            final isBlocked = blockedCategories.contains(audience) &&
+                !isSelected;
+            return Opacity(
+              opacity: isBlocked ? 0.45 : 1,
+              child: IgnorePointer(
+                ignoring: isBlocked,
+                child: AudienceTag(
+                  label: audience,
+                  isSelected: isSelected,
+                  onTap: () => onToggle(audience),
+                ),
+              ),
             );
           }).toList(),
         ),
@@ -4429,6 +4438,32 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               .map((e) => e.trim())
               .where((e) => e.isNotEmpty)
               .toSet();
+    final awaitingDoc = docId.isNotEmpty
+      ? await FirebaseFirestore.instance
+          .collection('awaitingApproval')
+          .doc(docId)
+          .get()
+      : null;
+    final awaitingData = awaitingDoc?.data() ?? const <String, dynamic>{};
+    final firestoreSubDemographies =
+      (awaitingData['subDemographies'] as List<dynamic>? ?? const [])
+        .whereType<String>()
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    final fallbackSubDemographies = (user['subDemographies'] ?? '')
+      .split(',')
+      .map((e) => e.trim())
+      .where((e) => e.isNotEmpty)
+      .toList();
+    Set<String> selectedSubCategories =
+      (firestoreSubDemographies.isNotEmpty
+          ? firestoreSubDemographies
+          : fallbackSubDemographies)
+        .toSet();
+    selectedSubCategories.removeWhere(
+      (value) => selectedCategories.contains(value),
+    );
 
     await showDialog(
       context: context,
@@ -4553,17 +4588,89 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                   setState(() => selectedPosition = value),
                             ),
                           ] else
-                            _buildDemographicSelector(
-                              selectedCategories: selectedCategories,
-                              onToggle: (value) {
-                                setState(() {
-                                  if (selectedCategories.contains(value)) {
-                                    selectedCategories.remove(value);
-                                  } else {
-                                    selectedCategories.add(value);
-                                  }
-                                });
-                              },
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildDemographicSelector(
+                                  selectedCategories: selectedCategories,
+                                  blockedCategories: selectedSubCategories,
+                                  onToggle: (value) {
+                                    setState(() {
+                                      if (selectedCategories.contains(value)) {
+                                        selectedCategories.remove(value);
+                                      } else if (selectedSubCategories
+                                          .contains(value)) {
+                                        return;
+                                      } else {
+                                        selectedCategories.add(value);
+                                      }
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Sub-demography',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.normal,
+                                        color: AppColors.darkGrey,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: _usersDemographicOptions.map((
+                                        audience,
+                                      ) {
+                                        final isSelected = selectedSubCategories
+                                            .contains(audience);
+                                        final isBlocked =
+                                            selectedCategories
+                                                .contains(audience) &&
+                                            !isSelected;
+                                        return Opacity(
+                                          opacity: isBlocked ? 0.45 : 1,
+                                          child: IgnorePointer(
+                                            ignoring: isBlocked,
+                                            child: AudienceTag(
+                                              label: audience,
+                                              isSelected: isSelected,
+                                              onTap: () => setState(() {
+                                                if (selectedSubCategories
+                                                    .contains(audience)) {
+                                                  selectedSubCategories.remove(
+                                                    audience,
+                                                  );
+                                                } else if (selectedCategories
+                                                    .contains(audience)) {
+                                                  return;
+                                                } else {
+                                                  selectedSubCategories.add(
+                                                    audience,
+                                                  );
+                                                }
+                                              }),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${selectedSubCategories.length} sub-demography(ies) selected',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.normal,
+                                        color: AppColors.lightGrey,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           const SizedBox(height: 16),
                           if (dialogError != null) ...[
@@ -4651,6 +4758,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                                   : selectedCategories.join(
                                                       ', ',
                                                     );
+                                              updates['categories'] =
+                                                selectedCategories.toList();
+                                              updates['subDemographies'] =
+                                                selectedSubCategories
+                                                  .toList();
+                                              updates['subDemographyEnabled'] =
+                                                selectedSubCategories
+                                                  .isNotEmpty;
                                             }
                                             await FirebaseFirestore.instance
                                                 .collection('awaitingApproval')
@@ -4737,6 +4852,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final mainOnlyDemographics = _extractMainDemographics(doc.data() ?? {});
     final Set<String> selectedCategories = mainOnlyDemographics.toSet();
     final Set<String> selectedSubCategories = firestoreSubDemographies.toSet();
+    selectedSubCategories.removeWhere(
+      (value) => selectedCategories.contains(value),
+    );
 
     String selectedStatus = currentStatus;
     if (selectedStatus != 'active' &&
@@ -4915,10 +5033,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           const SizedBox(height: 16),
                           _buildDemographicSelector(
                             selectedCategories: selectedCategories,
+                            blockedCategories: selectedSubCategories,
                             onToggle: (value) {
                               setState(() {
                                 if (selectedCategories.contains(value)) {
                                   selectedCategories.remove(value);
+                                } else if (selectedSubCategories.contains(
+                                  value,
+                                )) {
+                                  return;
                                 } else {
                                   selectedCategories.add(value);
                                 }
@@ -4946,18 +5069,32 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 ) {
                                   final isSelected = selectedSubCategories
                                       .contains(audience);
-                                  return AudienceTag(
-                                    label: audience,
-                                    isSelected: isSelected,
-                                    onTap: () => setState(() {
-                                      if (selectedSubCategories.contains(
-                                        audience,
-                                      )) {
-                                        selectedSubCategories.remove(audience);
-                                      } else {
-                                        selectedSubCategories.add(audience);
-                                      }
-                                    }),
+                                  final isBlocked =
+                                      selectedCategories.contains(audience) &&
+                                      !isSelected;
+                                  return Opacity(
+                                    opacity: isBlocked ? 0.45 : 1,
+                                    child: IgnorePointer(
+                                      ignoring: isBlocked,
+                                      child: AudienceTag(
+                                        label: audience,
+                                        isSelected: isSelected,
+                                        onTap: () => setState(() {
+                                          if (selectedSubCategories.contains(
+                                            audience,
+                                          )) {
+                                            selectedSubCategories.remove(
+                                              audience,
+                                            );
+                                          } else if (selectedCategories
+                                              .contains(audience)) {
+                                            return;
+                                          } else {
+                                            selectedSubCategories.add(audience);
+                                          }
+                                        }),
+                                      ),
+                                    ),
                                   );
                                 }).toList(),
                               ),

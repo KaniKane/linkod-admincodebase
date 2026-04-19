@@ -365,6 +365,9 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
   }
 
   Future<void> _markAsApproved(String collection, String id) async {
+    if (mounted) {
+      setState(() => _isLoading = true);
+    }
     try {
       final updates = <String, dynamic>{
         'updatedAt': FieldValue.serverTimestamp(),
@@ -527,10 +530,17 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
           ),
         );
       }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
   Future<void> _markAsDeclined(String collection, String id) async {
+    if (mounted) {
+      setState(() => _isLoading = true);
+    }
     try {
       final updates = <String, dynamic>{
         'updatedAt': FieldValue.serverTimestamp(),
@@ -565,6 +575,10 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
             behavior: SnackBarBehavior.floating,
           ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
   }

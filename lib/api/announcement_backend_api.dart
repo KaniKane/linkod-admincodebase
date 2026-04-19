@@ -157,7 +157,6 @@ class SendAnnouncementPushResponse {
     required this.successCount,
     required this.failureCount,
     required this.errorCounts,
-    required this.dryRun,
   });
 
   factory SendAnnouncementPushResponse.fromJson(Map<String, dynamic> json) {
@@ -171,7 +170,6 @@ class SendAnnouncementPushResponse {
             (k, v) => MapEntry(k, (v as num?)?.toInt() ?? 0),
           ) ??
           const {},
-      dryRun: json['dry_run'] as bool? ?? false,
     );
   }
 
@@ -180,7 +178,6 @@ class SendAnnouncementPushResponse {
   final int successCount;
   final int failureCount;
   final Map<String, int> errorCounts;
-  final bool dryRun;
 }
 
 /// Result of POST /send-account-approval: counts for single-user approval push.
@@ -190,7 +187,6 @@ class SendAccountApprovalResponse {
     required this.successCount,
     required this.failureCount,
     required this.errorCounts,
-    required this.dryRun,
   });
 
   factory SendAccountApprovalResponse.fromJson(Map<String, dynamic> json) {
@@ -203,7 +199,6 @@ class SendAccountApprovalResponse {
             (k, v) => MapEntry(k, (v as num?)?.toInt() ?? 0),
           ) ??
           const {},
-      dryRun: json['dry_run'] as bool? ?? false,
     );
   }
 
@@ -211,7 +206,6 @@ class SendAccountApprovalResponse {
   final int successCount;
   final int failureCount;
   final Map<String, int> errorCounts;
-  final bool dryRun;
 }
 
 /// Result of POST /send-user-push (single-user push, e.g. product/task approved).
@@ -221,7 +215,6 @@ class SendUserPushResponse {
     required this.successCount,
     required this.failureCount,
     required this.errorCounts,
-    required this.dryRun,
   });
 
   factory SendUserPushResponse.fromJson(Map<String, dynamic> json) {
@@ -234,7 +227,6 @@ class SendUserPushResponse {
             (k, v) => MapEntry(k, (v as num?)?.toInt() ?? 0),
           ) ??
           const {},
-      dryRun: json['dry_run'] as bool? ?? false,
     );
   }
 
@@ -242,7 +234,6 @@ class SendUserPushResponse {
   final int successCount;
   final int failureCount;
   final Map<String, int> errorCounts;
-  final bool dryRun;
 }
 
 /// Result of POST /schedule-announcement-reminder.
@@ -304,7 +295,6 @@ Future<SendAccountApprovalResponse> sendAccountApprovalPush({
   required String userId,
   required String title,
   required String body,
-  bool dryRun = false,
 }) async {
   final uri = Uri.parse('$_pushBaseUrl/send-account-approval');
   final response = await http
@@ -316,10 +306,9 @@ Future<SendAccountApprovalResponse> sendAccountApprovalPush({
           'user_id': userId,
           'title': title,
           'body': body,
-          'dry_run': dryRun,
         }),
       )
-      .timeout(const Duration(seconds: 45));
+      .timeout(const Duration(seconds: 15));
 
   if (response.statusCode != 200) {
     final responseBody = response.body;
@@ -346,7 +335,6 @@ Future<SendUserPushResponse> sendUserPush({
   required String title,
   required String body,
   Map<String, String>? data,
-  bool dryRun = false,
 }) async {
   final uri = Uri.parse('$_pushBaseUrl/send-user-push');
   final response = await http
@@ -358,10 +346,9 @@ Future<SendUserPushResponse> sendUserPush({
           'title': title,
           'body': body,
           if (data != null && data.isNotEmpty) 'data': data,
-          'dry_run': dryRun,
         }),
       )
-      .timeout(const Duration(seconds: 45));
+      .timeout(const Duration(seconds: 15));
 
   if (response.statusCode != 200) {
     final responseBody = response.body;
@@ -522,8 +509,17 @@ Future<SendAnnouncementPushResponse> sendAnnouncementPush({
   required List<String> audiences,
   String? requestedByUserId,
   Map<String, String>? data,
-  bool dryRun = false,
 }) async {
+  final payloadData = <String, String>{
+    if (data != null) ...data,
+    'type': 'announcement',
+    'announcementId': announcementId,
+    'title': title,
+    'body': body,
+    'priority': 'high',
+    'alertStyle': 'announcement_priority',
+    'attemptFullScreen': 'true',
+  };
   final uri = Uri.parse('$_pushBaseUrl/send-announcement-push');
   final response = await http
       .post(
@@ -536,11 +532,10 @@ Future<SendAnnouncementPushResponse> sendAnnouncementPush({
           'audiences': audiences,
           if (requestedByUserId != null)
             'requested_by_user_id': requestedByUserId,
-          if (data != null) 'data': data,
-          'dry_run': dryRun,
+          'data': payloadData,
         }),
       )
-      .timeout(const Duration(seconds: 90));
+      .timeout(const Duration(seconds: 30));
 
   if (response.statusCode != 200) {
     final responseBody = response.body;

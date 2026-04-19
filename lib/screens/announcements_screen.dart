@@ -369,6 +369,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         final imageUrlsRaw = d['imageUrls'] as List<dynamic>?;
         final imageUrls =
             imageUrlsRaw?.whereType<String>().toList() ?? <String>[];
+        final audiencesRaw = d['audiences'] as List<dynamic>?;
+        final audiences =
+            audiencesRaw?.whereType<String>().toList() ?? <String>[];
         final postedByUserId =
             (d['postedByUserId'] ??
                     d['createdByUserId'] ??
@@ -383,6 +386,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           'postedByUserId': postedByUserId,
           'createdAt': _parseTimestamp(d['createdAt']),
           'imageUrls': imageUrls,
+          'audiences': audiences,
+          'viewCount': (d['viewCount'] as num?)?.toInt() ?? 0,
         };
       }).toList();
       String role = (_currentUserRole ?? 'admin').toLowerCase();
@@ -605,71 +610,99 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Delete Draft'),
-          content: const Text('Are you sure you want to delete this draft?'),
-          actions: [
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: GestureDetector(
-                    onTap: () async {
-                      try {
-                        await FirebaseFirestore.instance
-                            .collection('announcementDrafts')
-                            .doc(draftId)
-                            .delete();
-                      } catch (_) {
-                        // Ignore delete error for now; UI will refresh anyway.
-                      }
-                      if (mounted) {
-                        setState(() {
-                          _drafts.removeWhere((draft) => draft.id == draftId);
-                          if (_currentDraftId == draftId) {
-                            _currentDraftId = null;
-                          }
-                        });
-                        Navigator.of(context).pop();
-                      }
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Center(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            'Delete',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
+        bool isDeleting = false;
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              title: const Text('Delete Draft'),
+              content: const Text('Are you sure you want to delete this draft?'),
+              actions: [
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    MouseRegion(
+                      cursor: isDeleting
+                          ? SystemMouseCursors.basic
+                          : SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: isDeleting
+                            ? null
+                            : () async {
+                                setDialogState(() => isDeleting = true);
+                                try {
+                                  await FirebaseFirestore.instance
+                                      .collection('announcementDrafts')
+                                      .doc(draftId)
+                                      .delete();
+                                } catch (_) {
+                                  // Ignore delete error for now; UI will refresh anyway.
+                                }
+                                if (mounted) {
+                                  setState(() {
+                                    _drafts.removeWhere(
+                                      (draft) => draft.id == draftId,
+                                    );
+                                    if (_currentDraftId == draftId) {
+                                      _currentDraftId = null;
+                                    }
+                                  });
+                                  Navigator.of(dialogContext).pop();
+                                }
+                              },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isDeleting
+                                ? Colors.red.withOpacity(0.85)
+                                : Colors.red,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Center(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: isDeleting
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              Colors.white,
+                                            ),
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Delete',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                OutlineButton(
-                  text: 'Cancel',
-                  isFullWidth: true,
-                  onPressed: () => Navigator.of(context).pop(),
+                    const SizedBox(height: 12),
+                    OutlineButton(
+                      text: 'Cancel',
+                      isFullWidth: true,
+                      onPressed: isDeleting
+                          ? null
+                          : () => Navigator.of(dialogContext).pop(),
+                    ),
+                  ],
                 ),
               ],
-            ),
-          ],
+            );
+          },
         );
       },
     );
@@ -2813,94 +2846,123 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Delete Announcement'),
-          content: const Text(
-            'Are you sure you want to delete this announcement? This action cannot be undone.',
-          ),
-          actions: [
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: GestureDetector(
-                    onTap: () async {
-                      try {
-                        // Best-effort: remove any scheduled reminder task before soft delete.
-                        // Deletion should still proceed even if reminder cancel fails.
-                        final requesterUid =
-                            FirebaseAuth.instance.currentUser?.uid;
-                        if (requesterUid != null && requesterUid.isNotEmpty) {
-                          try {
-                            await cancelAnnouncementReminder(
-                              announcementId: announcementId,
-                              requestedByUserId: requesterUid,
-                            );
-                          } catch (_) {}
-                        }
+        bool isDeleting = false;
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              title: const Text('Delete Announcement'),
+              content: const Text(
+                'Are you sure you want to delete this announcement? This action cannot be undone.',
+              ),
+              actions: [
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    MouseRegion(
+                      cursor: isDeleting
+                          ? SystemMouseCursors.basic
+                          : SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: isDeleting
+                            ? null
+                            : () async {
+                                setDialogState(() => isDeleting = true);
+                                try {
+                                  // Best-effort: remove any scheduled reminder task before soft delete.
+                                  // Deletion should still proceed even if reminder cancel fails.
+                                  final requesterUid =
+                                      FirebaseAuth.instance.currentUser?.uid;
+                                  if (requesterUid != null &&
+                                      requesterUid.isNotEmpty) {
+                                    try {
+                                      await cancelAnnouncementReminder(
+                                        announcementId: announcementId,
+                                        requestedByUserId: requesterUid,
+                                      );
+                                    } catch (_) {}
+                                  }
 
-                        await FirebaseFirestore.instance
-                            .collection('announcements')
-                            .doc(announcementId)
-                            .update({'isActive': false, 'status': 'Deleted'});
-                      } catch (e) {
-                        if (mounted) {
-                          Navigator.of(context).pop();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: ErrorNotification(
-                                message: 'Failed to delete: $e',
-                              ),
-                            ),
-                          );
-                          return;
-                        }
-                      }
-                      if (mounted) {
-                        Navigator.of(context).pop();
-                        _loadPublishedAnnouncements();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Announcement deleted'),
-                            backgroundColor: AppColors.darkGrey,
+                                  await FirebaseFirestore.instance
+                                      .collection('announcements')
+                                      .doc(announcementId)
+                                      .update({
+                                        'isActive': false,
+                                        'status': 'Deleted',
+                                      });
+                                } catch (e) {
+                                  if (mounted) {
+                                    Navigator.of(dialogContext).pop();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: ErrorNotification(
+                                          message: 'Failed to delete: $e',
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                }
+                                if (mounted) {
+                                  Navigator.of(dialogContext).pop();
+                                  _loadPublishedAnnouncements();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Announcement deleted'),
+                                      backgroundColor: AppColors.darkGrey,
+                                    ),
+                                  );
+                                }
+                              },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
                           ),
-                        );
-                      }
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'Delete',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                          decoration: BoxDecoration(
+                            color: isDeleting
+                                ? Colors.red.withOpacity(0.85)
+                                : Colors.red,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Center(
+                            child: isDeleting
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
+                                    ),
+                                  )
+                                : const Text(
+                                    'Delete',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                OutlineButton(
-                  text: 'Cancel',
-                  isFullWidth: true,
-                  onPressed: () => Navigator.of(context).pop(),
+                    const SizedBox(height: 12),
+                    OutlineButton(
+                      text: 'Cancel',
+                      isFullWidth: true,
+                      onPressed: isDeleting
+                          ? null
+                          : () => Navigator.of(dialogContext).pop(),
+                    ),
+                  ],
                 ),
               ],
-            ),
-          ],
+            );
+          },
         );
       },
     );
@@ -3228,6 +3290,12 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
     final content = widget.announcement['content'] as String? ?? '';
     final createdAt = widget.announcement['createdAt'] as DateTime?;
     final status = widget.announcement['status'] as String? ?? 'Published';
+    final audiences =
+      (widget.announcement['audiences'] as List?)
+        ?.whereType<String>()
+        .toList() ??
+      <String>[];
+    final viewCount = (widget.announcement['viewCount'] as num?)?.toInt() ?? 0;
 
     final dateStr = createdAt != null ? _formatDate(createdAt) : '—';
 
@@ -3374,6 +3442,36 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
+                if (audiences.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: audiences.map((audience) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3F8F5),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: const Color(0xFFD4E7DA),
+                          ),
+                        ),
+                        child: Text(
+                          audience,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF2F6E47),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 // Actions row
                 Row(
@@ -3421,7 +3519,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                               Text(
                                 _isViewingReaders
                                     ? 'Loading...'
-                                    : 'View Readers',
+                                    : 'View Readers ($viewCount)',
                                 style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500,
