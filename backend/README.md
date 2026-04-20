@@ -1,6 +1,6 @@
 # LINKod Admin Backend (FastAPI)
 
-Local REST API for the LINKod Admin system with **AI text refinement** via LLM Gateway (hosted LLM with local fallback), **rule-based audience recommendation**, and **admin-triggered push notifications (FCM)**.
+Local REST API for the LINKod Admin system with **AI text refinement** via the hosted LLM pipeline, **rule-based audience recommendation**, and **admin-triggered push notifications (FCM)**.
 
 ## Quick Start
 
@@ -19,20 +19,12 @@ Copy the example and fill in your values:
 cp env_example.txt .env
 ```
 
-**For hosted mode (recommended for production):**
+**Hosted LLM configuration (recommended for production):**
 ```env
-AI_PROVIDER_MODE=auto
 LLM_BASE_URL=https://api.groq.com/openai/v1
 LLM_API_KEY=your_groq_api_key_here
 LLM_MODEL_PRIMARY=llama-3.1-8b-instant
 LLM_MODEL_FALLBACK=llama-3.3-70b-versatile
-```
-
-**For local-only mode (no internet required):**
-```env
-AI_PROVIDER_MODE=ollama
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2:3b
 ```
 
 ### 3. Run the Server
@@ -53,73 +45,14 @@ Test it's running:
 Invoke-RestMethod -Uri http://localhost:8000/health -Method GET
 ```
 
-## Provider Modes
-
-Set `AI_PROVIDER_MODE` in your `.env`:
-
-| Mode | Behavior | Use When |
-|------|----------|----------|
-| `auto` | Try hosted primary → hosted fallback → local Ollama | Default, production |
-| `hosted` | Hosted only (no Ollama fallback) | Fast responses, no local GPU |
-| `ollama` | Local Ollama only | No internet, testing, privacy |
-
-## Switching to Local (Ollama) Fallback
-
-If Groq API fails or you want to run completely offline:
-
-### 1. Install Ollama
-
-```powershell
-winget install Ollama.Ollama
-```
-
-Or download from [ollama.ai](https://ollama.ai)
-
-### 2. Pull the Model
-
-```bash
-ollama pull llama3.2:3b
-```
-
-### 3. Switch Mode
-
-Edit `.env`:
-```env
-AI_PROVIDER_MODE=ollama
-```
-
-Or for automatic fallback (keeps trying hosted first):
-```env
-AI_PROVIDER_MODE=auto
-```
-
-### 4. Restart Backend
-
-```bash
-# Stop current server (Ctrl+C), then:
-python main.py
-```
-
-### Verify Ollama is Working
-
-```bash
-# Check Ollama is running
-ollama list
-
-# Test model directly
-ollama run llama3.2:3b "test"
-```
-
-## Fallback Chain (Auto Mode)
+## Hosted Model Chain
 
 ```
 User Request
     ↓
-Groq Primary (llama-3.1-8b-instant)
+Hosted Primary (LLM_MODEL_PRIMARY)
     ↓ (fails after timeout or error)
-Groq Fallback (llama-3.3-70b-versatile)
-    ↓ (fails)
-Local Ollama (llama3.2:3b)
+Hosted Fallback (LLM_MODEL_FALLBACK)
     ↓ (fails)
 Return error to Flutter app
 ```
@@ -129,10 +62,10 @@ Return error to Flutter app
 ```
 services/ai_refinement.py (API layer)
     ↓
-llm/gateway.py (orchestrator - picks provider)
+llm/pipeline.py (orchestrator)
     ↓
-├─ llm/client.py (hosted: Groq/OpenAI)
-└─ llm/fallback.py (local: Ollama)
+├─ llm/client.py (hosted)
+└─ llm/validators.py and llm/prompt_builder.py
 ```
 
 **New modular structure:**
@@ -144,23 +77,20 @@ llm/gateway.py (orchestrator - picks provider)
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `AI_PROVIDER_MODE` | No | `auto` | `auto`, `hosted`, or `ollama` |
 | `LLM_BASE_URL` | For hosted | - | API endpoint (Groq: `https://api.groq.com/openai/v1`) |
 | `LLM_API_KEY` | For hosted | - | Your Groq/OpenAI API key |
 | `LLM_MODEL_PRIMARY` | For hosted | - | Primary model (e.g., `llama-3.1-8b-instant`) |
 | `LLM_MODEL_FALLBACK` | No | - | Fallback model (e.g., `llama-3.3-70b-versatile`) |
 | `AI_TIMEOUT_SECONDS` | No | `60` | Request timeout |
-| `OLLAMA_BASE_URL` | No | `http://localhost:11434` | Ollama endpoint |
-| `OLLAMA_MODEL` | No | `llama3.2:3b` | Local model name |
 | `GOOGLE_APPLICATION_CREDENTIALS` | For push | - | Firebase service account JSON path |
 
 ### POST /refine
 
-Refines raw announcement text using local LLaMA 3.2 3B.
+Refines raw announcement text using the backend AI provider.
 
 - **Request:** `{ "raw_text": "Adonday libre check up sa sabado..." }`
 - **Response:** `{ "original_text": "...", "refined_text": "..." }`
-- **Validation:** Empty `raw_text` → 400. Ollama unreachable or empty response → 503.
+- **Validation:** Empty `raw_text` → 400. Provider unreachable or empty response → 503.
 
 ### POST /recommend-audiences
 
@@ -256,18 +186,6 @@ LLM_MODEL_PRIMARY=llama-3.1-8b-instant
 LLM_MODEL_FALLBACK=llama-3.3-70b-versatile
 ```
 
-### Ollama not responding
-```powershell
-# Check if Ollama is running
-ollama list
-
-# If empty, start Ollama
-ollama serve
-
-# Pull model if missing
-ollama pull llama3.2:3b
-```
-
 ### Timeout errors
 Increase timeout in `.env`:
 ```env
@@ -275,16 +193,15 @@ AI_TIMEOUT_SECONDS=120
 ```
 
 ### AI refinement returns 503
-This means all providers failed:
-1. Check Groq API key is valid
-2. Check Ollama is running (if using `auto` or `ollama` mode)
-3. Check model is pulled: `ollama list`
+This means the hosted provider failed:
+1. Check `LLM_API_KEY` is valid
+2. Check `LLM_BASE_URL` is correct
+3. Check `LLM_MODEL_PRIMARY` and `LLM_MODEL_FALLBACK` are supported by the provider
 
 ### Refine text times out (POST /refine)
 
-- **Ollama not running:** Start Ollama (e.g. `ollama serve`) and ensure the model is pulled: `ollama pull llama3.2:3b`.
-- **First run or slow hardware:** The first request or a busy machine can take 60–90+ seconds. The Admin app uses a 120s timeout; the backend allows 90s for Ollama. If it still times out, try shorter text or a faster machine.
-- **Wrong URL:** Refine calls `http://localhost:11434` by default. If Ollama runs elsewhere, set `OLLAMA_BASE_URL` or change `OLLAMA_BASE_URL` in `services/ai_refinement.py`.
+- **First run or slow upstream:** The first request or a busy provider can take 60–90+ seconds. The Admin app uses a 120s timeout. If it still times out, try shorter text or confirm the provider is responsive.
+- **Wrong URL:** Refine calls the backend AI provider configured in `LLM_BASE_URL`. If it runs elsewhere, update `LLM_BASE_URL` in `.env`.
 
 ### No push after approving an account (POST /send-account-approval)
 
@@ -324,9 +241,8 @@ No AI is used for audience recommendation; logic is transparent and explainable 
 | `main.py` | FastAPI app entry point |
 | `services/ai_refinement.py` | Public API (thin wrapper) |
 | `services/audience_rules.py` | Rule-based audience recommendation |
-| `llm/gateway.py` | Provider routing & fallback chain |
-| `llm/client.py` | Hosted LLM (Groq/OpenAI) client |
-| `llm/fallback.py` | Local Ollama client |
+| `llm/pipeline.py` | Hosted LLM orchestration |
+| `llm/client.py` | Hosted LLM client |
 | `llm/prompt_builder.py` | Prompt templates with anti-hallucination rules |
 | `llm/validators.py` | Output validation |
 | `config/ai_settings.py` | Environment configuration |

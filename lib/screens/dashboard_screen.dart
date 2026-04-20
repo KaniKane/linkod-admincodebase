@@ -456,12 +456,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
 
       final topAnnouncementBars = topAnnouncementViews
-          .take(3)
           .map(
             (entry) => VerticalBarDatum(
-              label: _shortenLabel(
-                (entry['title'] as String?) ?? 'Announcement',
-              ),
+              label: _shortenLabel((entry['title'] as String?) ?? 'Announcement'),
               value: (entry['views'] as int?) ?? 0,
             ),
           )
@@ -472,8 +469,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final topDemographic = demographicsBreakdown.entries.isEmpty
           ? null
           : (demographicsBreakdown.entries.toList()
-                  ..sort((a, b) => b.value.compareTo(a.value)))
-                .first;
+                ..sort((a, b) => b.value.compareTo(a.value)))
+              .first;
       final topPercent = acceptedUsers <= 0 || topDemographic == null
           ? 0
           : ((topDemographic.value / acceptedUsers) * 100).round();
@@ -701,11 +698,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   ) {
     if (acceptedDates.isEmpty) return const [];
 
-    final start = DateTime(
-      window.start.year,
-      window.start.month,
-      window.start.day,
-    );
+    final start = DateTime(window.start.year, window.start.month, window.start.day);
     final end = DateTime(window.end.year, window.end.month, window.end.day);
     final dayCount = end.difference(start).inDays + 1;
     if (dayCount <= 0) return const [];
@@ -727,9 +720,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     if (entries.length <= 10) {
       return entries
-          .map(
-            (e) => TrendPoint(label: _formatShortDate(e.key), value: e.value),
-          )
+          .map((e) => TrendPoint(label: _formatShortDate(e.key), value: e.value))
           .toList(growable: false);
     }
 
@@ -741,13 +732,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (chunk.isEmpty) continue;
       final startLabel = _formatShortDate(chunk.first.key);
       final endLabel = _formatShortDate(chunk.last.key);
-      final label = startLabel == endLabel
-          ? startLabel
-          : '$startLabel-$endLabel';
-      final value = chunk.fold<int>(
-        0,
-        (runningTotal, entry) => runningTotal + entry.value,
-      );
+      final label = startLabel == endLabel ? startLabel : '$startLabel-$endLabel';
+      final value = chunk.fold<int>(0, (runningTotal, entry) => runningTotal + entry.value);
       compressed.add(TrendPoint(label: label, value: value));
     }
     return compressed;
@@ -756,11 +742,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _countUsersWithinDays(List<DateTime> dates, int days) {
     if (days <= 0) return 0;
     final now = DateTime.now();
-    final start = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    ).subtract(Duration(days: days - 1));
+    final start = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: days - 1));
     return dates.where((d) {
       final normalized = DateTime(d.year, d.month, d.day);
       return !normalized.isBefore(start) && !normalized.isAfter(now);
@@ -967,7 +950,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           BoxShadow(
             color: AppColors.shadowColor,
             blurRadius: 12,
-            offset: const Offset(0, 2),
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -1320,17 +1303,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               const SizedBox(height: 16),
                               LayoutBuilder(
                                 builder: (context, constraints) {
-                                  final twoColumns =
-                                      constraints.maxWidth >= 1100;
+                                  final twoColumns = constraints.maxWidth >= 1100;
                                   final cardWidth = twoColumns
                                       ? (constraints.maxWidth - 16) / 2
                                       : constraints.maxWidth;
 
-                                  final demographicItems =
-                                      _demographicsBreakdown.entries.toList()
-                                        ..sort(
-                                          (a, b) => b.value.compareTo(a.value),
-                                        );
+                                  final demographicItems = _demographicsBreakdown.entries
+                                      .toList()
+                                    ..sort((a, b) => b.value.compareTo(a.value));
 
                                   return Wrap(
                                     spacing: 16,
@@ -1340,27 +1320,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                         width: cardWidth,
                                         height: 270,
                                         child: AnalyticsCard(
-                                          title: 'User Breakdown',
-                                          subtitle:
-                                              'Resident distribution by purok / category',
+                                          title: 'Demographics Breakdown',
+                                          subtitle: 'Resident distribution by purok / category',
                                           child: HorizontalBarChart(
                                             items: demographicItems
                                                 .take(6)
-                                                .map((entry) {
-                                                  final percent =
-                                                      _acceptedUsers <= 0
-                                                      ? 0
-                                                      : ((entry.value /
-                                                                    _acceptedUsers) *
-                                                                100)
-                                                            .round();
-                                                  return HorizontalBarDatum(
-                                                    label: entry.key,
-                                                    value: entry.value,
-                                                    trailingLabel:
-                                                        '${entry.value} ($percent%)',
-                                                  );
-                                                })
+                                                .map(
+                                                  (entry) {
+                                                    final percent = _acceptedUsers <= 0
+                                                        ? 0
+                                                        : ((entry.value / _acceptedUsers) * 100)
+                                                              .round();
+                                                    return HorizontalBarDatum(
+                                                      label: entry.key,
+                                                      value: entry.value,
+                                                      trailingLabel:
+                                                          '${entry.value} ($percent%)',
+                                                    );
+                                                  },
+                                                )
                                                 .toList(growable: false),
                                             emptyLabel:
                                                 'No resident category data yet',
@@ -1396,9 +1374,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                                 child: HorizontalBarChart(
                                                   items: _topAnnouncementViews
                                                       .map(
-                                                        (
-                                                          item,
-                                                        ) => HorizontalBarDatum(
+                                                        (item) => HorizontalBarDatum(
                                                           label: item.label,
                                                           value: item.value,
                                                           trailingLabel:
@@ -1420,13 +1396,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                                   ),
                                                   _buildStatNumber(
                                                     label: 'Pending',
-                                                    value:
-                                                        _pendingAnnouncements,
+                                                    value: _pendingAnnouncements,
                                                   ),
                                                   _buildStatNumber(
                                                     label: 'Total Views',
-                                                    value:
-                                                        _totalAnnouncementViews,
+                                                    value: _totalAnnouncementViews,
                                                   ),
                                                 ],
                                               ),
@@ -1455,13 +1429,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                                   ),
                                                   MiniStatPill(
                                                     label: 'Announcements',
-                                                    value:
-                                                        _pendingAnnouncements,
+                                                    value: _pendingAnnouncements,
                                                   ),
                                                   MiniStatPill(
                                                     label: 'Products',
-                                                    value:
-                                                        _pendingProductsCount,
+                                                    value: _pendingProductsCount,
                                                   ),
                                                   MiniStatPill(
                                                     label: 'Tasks',
@@ -1472,13 +1444,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                               const SizedBox(height: 18),
                                               Container(
                                                 width: double.infinity,
-                                                padding: const EdgeInsets.all(
-                                                  14,
-                                                ),
+                                                padding: const EdgeInsets.all(14),
                                                 decoration: BoxDecoration(
-                                                  color: const Color(
-                                                    0xFFF1F8F4,
-                                                  ),
+                                                  color: const Color(0xFFF1F8F4),
                                                   borderRadius:
                                                       BorderRadius.circular(14),
                                                 ),
@@ -1487,8 +1455,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                                     const Icon(
                                                       Icons.fact_check_outlined,
                                                       size: 18,
-                                                      color: AppColors
-                                                          .primaryGreenAlt,
+                                                      color:
+                                                          AppColors.primaryGreenAlt,
                                                     ),
                                                     const SizedBox(width: 8),
                                                     Text(
@@ -1497,8 +1465,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                                         fontSize: 13,
                                                         fontWeight:
                                                             FontWeight.w600,
-                                                        color:
-                                                            AppColors.darkGrey,
+                                                        color: AppColors.darkGrey,
                                                       ),
                                                     ),
                                                   ],
@@ -1575,50 +1542,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                             ),
                                           ),
                                     if (_recentActivities.length >
-                                            _recentActivitiesVisibleCount ||
-                                        _recentActivitiesVisibleCount >
-                                            _recentActivitiesPageSize)
+                                        _recentActivitiesVisibleCount)
                                       Align(
                                         alignment: Alignment.centerLeft,
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            if (_recentActivities.length >
-                                                _recentActivitiesVisibleCount)
-                                              TextButton(
-                                                onPressed: () {
-                                                  setState(() {
-                                                    final nextCount =
-                                                        _recentActivitiesVisibleCount +
-                                                        _recentActivitiesPageSize;
-                                                    _recentActivitiesVisibleCount =
-                                                        nextCount >
-                                                            _recentActivities
-                                                                .length
-                                                        ? _recentActivities
-                                                              .length
-                                                        : nextCount;
-                                                  });
-                                                },
-                                                child: const Text('See more'),
-                                              ),
-                                            if (_recentActivitiesVisibleCount >
-                                                _recentActivitiesPageSize)
-                                              TextButton(
-                                                onPressed: () {
-                                                  setState(() {
-                                                    _recentActivitiesVisibleCount =
-                                                        _recentActivities
-                                                                .length <
-                                                            _recentActivitiesPageSize
-                                                        ? _recentActivities
-                                                              .length
-                                                        : _recentActivitiesPageSize;
-                                                  });
-                                                },
-                                                child: const Text('See less'),
-                                              ),
-                                          ],
+                                        child: TextButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              final nextCount =
+                                                  _recentActivitiesVisibleCount +
+                                                  _recentActivitiesPageSize;
+                                              _recentActivitiesVisibleCount =
+                                                  nextCount >
+                                                      _recentActivities.length
+                                                  ? _recentActivities.length
+                                                  : nextCount;
+                                            });
+                                          },
+                                          child: const Text('See more'),
                                         ),
                                       ),
                                   ],

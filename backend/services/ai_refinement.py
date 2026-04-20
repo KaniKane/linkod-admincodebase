@@ -5,17 +5,13 @@ This module provides the public API for text refinement. It delegates to the
 internal LLM pipeline which contains classification, validation, and retries.
 
 Public API:
-    refine_text(raw_text: str, ollama_base_url: str = OLLAMA_BASE_URL) -> Optional[str]
+    refine_text(raw_text: str) -> Optional[str]
 
 For internal use, import directly from llm.pipeline:
     from llm.pipeline import generate_announcement
 """
 
 from typing import Optional
-
-# Keep OLLAMA_BASE_URL constant for backward compatibility
-OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "llama3.2:3b"
 
 # Import the pipeline entrypoint
 from llm.pipeline import generate_announcement, is_official_announcement
@@ -82,11 +78,21 @@ def suggest_announcement_title(text: str) -> Optional[str]:
     return "Pahibalo: Anunsyo sa Komunidad"
 
 
+def _normalize_and_validate_raw_text(raw_text: str) -> str:
+    """Trim input and enforce the minimum announcement length."""
+    stripped = (raw_text or "").strip()
+    if not stripped:
+        raise ValueError("Announcement content cannot be empty.")
+
+    if len(stripped) < 10:
+        raise ValueError("Announcement must be at least 10 characters.")
+
+    return stripped
+
+
 def refine_text(
     raw_text: str,
     ollama_base_url: str = OLLAMA_BASE_URL,
-    signature_name: str | None = None,
-    signature_title: str | None = None,
 ) -> Optional[str]:
     """
     Refine announcement text using the LLM pipeline.
@@ -99,15 +105,14 @@ def refine_text(
         raw_text: The raw announcement text to refine.
         ollama_base_url: Optional Ollama base URL override.
                          Default is http://localhost:11434.
-        signature_name: Optional preferred signer name for official outputs.
-        signature_title: Optional preferred signer title for official outputs.
 
     Returns:
-        Refined text string if successful, None if input is empty.
+        Refined text string if successful.
+
+    Raises:
+        ValueError: If the announcement is empty or shorter than 10 characters.
     """
-    stripped = (raw_text or "").strip()
-    if not stripped:
-        return None
+    stripped = _normalize_and_validate_raw_text(raw_text)
 
     refined = generate_announcement(
         stripped,

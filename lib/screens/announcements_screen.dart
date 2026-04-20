@@ -518,6 +518,20 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       return;
     }
 
+    if (original.length < 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const ErrorNotification(
+            message: 'Announcement must be at least 10 characters before refining.',
+          ),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isRefining = true;
     });
@@ -566,9 +580,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         503 =>
           e.message.trim().isNotEmpty
               ? (e.message.length > 220
-                    ? 'Refinement unavailable. Backend AI provider failed. Check Ollama (llama3.2:3b) and backend logs.'
+              ? 'Refinement unavailable. Backend AI provider failed. Check backend logs.'
                     : 'Refinement unavailable: ${e.message}')
-              : 'Refinement unavailable. Backend AI provider failed. Check Ollama (llama3.2:3b) and backend logs.',
+            : 'Refinement unavailable. Backend AI provider failed. Check backend logs.',
         _ =>
           e.message.length > 80
               ? 'Refinement failed. Check backend.'
@@ -629,7 +643,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       _currentDraftId = draft.id;
       _announcementImageUrls = List.from(draft.imageUrls);
       _pickedImages = [];
-      _hasTriggeredAudienceSuggestion = true;
+      _hasTriggeredAudienceSuggestion = false;
       _eventDateAt = draft.eventDateAt;
     });
     _queuePersistComposeState();

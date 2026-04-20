@@ -13,7 +13,7 @@ The LINKod Admin app provides administrators with:
 
 ## Features
 
-- ✅ AI-powered text refinement (Ollama LLaMA 3.2 3B)
+- ✅ AI-powered text refinement via the backend LLM pipeline
 - ✅ Rule-based audience recommendation
 - ✅ Demographic-based push notification targeting
 - ✅ User approval workflow
@@ -25,7 +25,7 @@ The LINKod Admin app provides administrators with:
 - Flutter SDK 3.9.2 or higher
 - Dart SDK 3.9.2 or higher
 - Python 3.9+ (for backend)
-- Ollama installed and running
+- Hosted LLM credentials configured
 - Firebase project configured
 - Firebase Admin SDK service account JSON
 
@@ -43,10 +43,6 @@ flutter pub get
 ```bash
 cd backend
 pip install -r requirements.txt
-
-# Install and start Ollama
-ollama pull llama3.2:3b
-ollama serve
 ```
 
 ### 3. Configure Firebase Admin SDK
@@ -175,7 +171,7 @@ flutter build linux --release
 ## Troubleshooting
 
 ### Backend not responding
-- Verify Ollama is running: `ollama list`
+- Verify the backend API is running on port 8000
 - Check backend is running on port 8000
 - Verify Firebase Admin SDK credentials are set
 
@@ -185,8 +181,8 @@ flutter build linux --release
 - Verify user is approved and active
 
 ### AI refinement timeout
-- Ensure Ollama is running: `ollama serve`
-- Verify model is pulled: `ollama pull llama3.2:3b`
+- Ensure `LLM_BASE_URL` and `LLM_API_KEY` are set
+- Verify `LLM_MODEL_PRIMARY` and `LLM_MODEL_FALLBACK` are supported by the provider
 - First request may take 60-90 seconds
 
 ## Configuration

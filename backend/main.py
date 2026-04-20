@@ -1,12 +1,12 @@
 """
-LINKod Admin Backend - Local AI Service Only.
+LINKod Admin Backend - Hosted AI Service Only.
 
 Provides:
-1. AI-based text refinement (Ollama, llama3.2:3b) — refine only; no new info, no audience.
+1. AI-based text refinement via the hosted LLM pipeline — refine only; no new info, no audience.
 2. Rule-based audience recommendation — keyword rules from config; transparent, no AI.
 
 Note: Push notification functionality has been moved to Firebase Cloud Functions.
-This backend is now AI-only. Do not add push notification code here.
+This backend is AI-only. Do not add push notification code here.
 
 Human-in-the-loop: Admin reviews and edits AI output and audience suggestions before publishing.
 No auto-publish; Flutter app calls these endpoints then publishes via Firestore when admin confirms.
@@ -85,14 +85,6 @@ class RefineRequest(BaseModel):
     """Raw announcement text to refine. AI only clarifies; does not add info or choose audience."""
 
     raw_text: str = Field(..., min_length=1, description="Raw announcement text")
-    signer_name: Optional[str] = Field(
-        default=None,
-        description="Preferred signer name for official announcement output",
-    )
-    signer_title: Optional[str] = Field(
-        default=None,
-        description="Preferred signer title for official announcement output",
-    )
 
 
 class RefineResponse(BaseModel):
@@ -155,26 +147,17 @@ class SendAccountApprovalResponse(BaseModel):
 @app.post("/refine", response_model=RefineResponse)
 def post_refine(request: RefineRequest) -> RefineResponse:
     """
-    Refine announcement text using local Ollama (llama3.2:3b).
+    Refine announcement text using the hosted LLM pipeline.
     AI only makes text formal, clear, concise. Does not add information or decide audience.
     Returns both original and refined text for human review.
     """
     raw = request.raw_text.strip()
-    if not raw:
-        raise HTTPException(status_code=400, detail="raw_text cannot be empty")
 
-    signer_name = (request.signer_name or "").strip() or None
-    signer_title = (request.signer_title or "").strip() or None
-
-    refined = refine_text(
-        raw,
-        signature_name=signer_name,
-        signature_title=signer_title,
-    )
+    refined = refine_text(raw)
     if refined is None:
         raise HTTPException(
             status_code=503,
-            detail="Text refinement failed. Check that Ollama is running and model llama3.2:3b is available.",
+            detail="Text refinement failed. Check the backend AI provider and logs.",
         )
 
     suggested_title = suggest_announcement_title(refined)

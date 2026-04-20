@@ -2,54 +2,10 @@ from llm.prompt_builder import (
     build_non_official_refinement_prompt,
     build_refinement_prompt,
 )
+import re
 from llm.client import generate_text, generate_text_with_model
 from llm.types import GenerationRequest
 from config.ai_settings import LLM_MODEL_FALLBACK
-import re
-
-
-def _looks_like_name_line(line: str) -> bool:
-    cleaned = line.strip()
-    if not cleaned:
-        return False
-
-    if any(mark in cleaned for mark in [",", "!", "?"]):
-        return False
-
-    parts = [p for p in cleaned.replace("-", " ").split() if p]
-    if len(parts) < 2 or len(parts) > 5:
-        return False
-
-    name_token = re.compile(r"^[A-Za-z][A-Za-z\.'-]*$")
-    if not all(name_token.match(p) for p in parts):
-        return False
-
-    if cleaned.isupper():
-        return True
-
-    return all(p[:1].isupper() for p in parts if p[:1].isalpha())
-
-
-def _extract_signature_line(raw_text: str) -> str | None:
-    lines = [ln.rstrip() for ln in raw_text.splitlines() if ln.strip()]
-    if not lines:
-        return None
-
-    for line in reversed(lines):
-        stripped = line.strip()
-        lower = stripped.lower()
-
-        if lower.startswith(("-", "gikan kang", "from:", "hon.")):
-            return stripped
-
-        if _looks_like_name_line(stripped):
-            return stripped
-
-    return None
-
-
-def _has_existing_signature(raw_text: str) -> bool:
-    return _extract_signature_line(raw_text) is not None
 
 
 # ---------------------------
@@ -160,17 +116,31 @@ def validate_output(output: str, is_official: bool, source_text: str) -> bool:
     if output.startswith("---"):
         return False
 
+    if any(marker in output_lower for marker in PROMPT_ECHO_MARKERS):
+        return False
+
     if len(output.strip()) == 0:
         return False
 
     if is_official:
-        required = ["tinahod kong", "gipanghinaut"]
-        if not source_has_signature:
-            required.append("kaninyo matinahuron")
+        required = [
+            "tinahod kong",
+            "gipanghinaut",
+            "kaninyo matinahuron"
+        ]
 
         for r in required:
             if r not in output_lower:
                 return False
+
+        # Accept either standard closing or preserved sender attribution.
+        has_closing_or_signature = (
+            "kaninyo matinahuron" in output_lower
+            or "gikan kang" in output_lower
+            or bool(re.search(r"\bhon\.", output_lower))
+        )
+        if not has_closing_or_signature:
+            return False
 
     else:
         # Non-official messages must not be converted into official signature format
@@ -193,33 +163,18 @@ def validate_output(output: str, is_official: bool, source_text: str) -> bool:
 # ---------------------------
 # 4. FALLBACK (GUARANTEED FORMAT)
 # ---------------------------
-def force_official_format_fallback(
-    raw_text: str,
-    signature_name: str,
-    signature_title: str,
-    source_signature_line: str | None = None,
-) -> str:
-    if source_signature_line:
-        return f"""Tinahod kong mga baryuhanon,
-
-Gihigayon ang atong {raw_text.strip().capitalize()}.
-
-Gipanghinaut ko ang inyong 100% nga kooperasyon.
-Daghang salamat.
-
-{source_signature_line}"""
-
+def force_official_format_fallback(raw_text: str) -> str:
     return f"""Tinahod kong mga baryuhanon,
 
-Gihigayon ang atong {raw_text.strip().capitalize()}.
+Gihigayon ang atong {body_text}.
 
 Gipanghinaut ko ang inyong 100% nga kooperasyon.
 Daghang salamat.
 
 Kaninyo matinahuron,
 
-{signature_name}
-{signature_title}"""
+HON. ALBERTO C. PACHECO
+Barangay Captain"""
 
 
 def force_non_official_fallback(

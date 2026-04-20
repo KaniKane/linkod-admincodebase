@@ -44,7 +44,7 @@ Yes, the current backend **can** be deployed to Cloud Functions. Two practical o
   - `POST /send-announcement-push` (existing)
   - `POST /send-account-approval` (existing)
   - `POST /send-user-push` (new: for product/task approval push)
-- **Refine and recommend-audiences:** Keep running **locally as a script** when needed (they use Ollama and 120s timeout; Cloud Functions have a 60s default and no Ollama). Admin app continues to call `localhost:8000` for refine/recommend only, and the **deployed function URL** for all push endpoints.
+- **Refine and recommend-audiences:** Keep running **as the backend AI service** when needed (hosted LLMs and 120s timeout). Admin app continues to call the backend API for refine/recommend only, and the **deployed function URL** for all push endpoints.
 - **Flow:** Admin app uses two base URLs: e.g. `kBackendBaseUrl` (Cloud Function URL) for push, `kLocalRefineUrl` (localhost) for refine/recommend, or a single deployed URL if you later move refine to Cloud Run.
 
 ### Option B – Entire FastAPI app as one HTTP Cloud Function
@@ -52,7 +52,7 @@ Yes, the current backend **can** be deployed to Cloud Functions. Two practical o
 - **Idea:** Wrap the full FastAPI app so one HTTP function serves all routes (refine, recommend, send-announcement-push, send-account-approval, send-user-push).
 - **How:** Use **Google Cloud Functions (2nd gen)** or **Firebase HTTP functions** with a Python runtime. The function entry point receives the HTTP request and passes it to an ASGI adapter (e.g. Starlette/FastAPI’s ASGI app). Example pattern:
   - `main.py` exports an HTTP function that calls something like `requests.to_asgi(app)(request)` or a small wrapper that runs the FastAPI app for one request.
-- **Limitations:** Refine has a 120s timeout; you’d need to set the function timeout to 120s (or 9 min max on 2nd gen). Ollama must be available (not typical in Cloud Functions; you’d need to call an external Ollama API or run it elsewhere). So for a backend that depends on a local Ollama, Option A is simpler.
+- **Limitations:** Refine has a 120s timeout; you’d need to set the function timeout to 120s (or 9 min max on 2nd gen). The backend AI service is not meant to run inside Cloud Functions without externalizing the hosted LLM dependency.
 
 **Recommendation:** Use **Option A**: deploy only the **FCM-related** backend as HTTP Cloud Functions. Keep refine/recommend-audiences as a local script (or later move refine to Cloud Run with a longer timeout if needed).
 
