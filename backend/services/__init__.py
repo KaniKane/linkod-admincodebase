@@ -1,1 +1,1 @@
-# Services: AI refinement (Ollama) and rule-based audience recommendation
+# Services: AI refinement and rule-based audience recommendation

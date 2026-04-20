@@ -2,9 +2,24 @@ from llm.prompt_builder import (
     build_non_official_refinement_prompt,
     build_refinement_prompt,
 )
+import re
 from llm.client import generate_text, generate_text_with_model
 from llm.types import GenerationRequest
 from config.ai_settings import LLM_MODEL_FALLBACK
+
+
+PROMPT_ECHO_MARKERS = [
+    "how to use the examples",
+    "examples (style reference only)",
+    "decision logic (very important)",
+    "critical rules",
+    "internal check (do not skip)",
+    "required output format (strict)",
+    "output rules (strict)",
+    "you are the official announcement editor",
+    "do not copy sentences",
+    "style reference only",
+]
 
 
 # ---------------------------
@@ -114,6 +129,9 @@ def validate_output(output: str, is_official: bool, source_text: str) -> bool:
     if output.startswith("---"):
         return False
 
+    if any(marker in output_lower for marker in PROMPT_ECHO_MARKERS):
+        return False
+
     if len(output.strip()) == 0:
         return False
 
@@ -121,12 +139,20 @@ def validate_output(output: str, is_official: bool, source_text: str) -> bool:
         required = [
             "tinahod kong",
             "gipanghinaut",
-            "kaninyo matinahuron"
         ]
 
         for r in required:
             if r not in output_lower:
                 return False
+
+        # Accept either standard closing or preserved sender attribution.
+        has_closing_or_signature = (
+            "kaninyo matinahuron" in output_lower
+            or "gikan kang" in output_lower
+            or bool(re.search(r"\bhon\.", output_lower))
+        )
+        if not has_closing_or_signature:
+            return False
 
     else:
         # Non-official messages must not be converted into official signature format
@@ -150,17 +176,41 @@ def validate_output(output: str, is_official: bool, source_text: str) -> bool:
 # 4. FALLBACK (GUARANTEED FORMAT)
 # ---------------------------
 def force_official_format_fallback(raw_text: str) -> str:
+    lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
+    sender_match = re.search(r"(gikan kang\s+[^\n]+)$", raw_text, flags=re.IGNORECASE)
+    sender_line = sender_match.group(1).strip() if sender_match else None
+
+    if not sender_line:
+        sender_line = next(
+            (
+                line
+                for line in reversed(lines)
+                if re.match(r"^(gikan kang|hon\.)", line, flags=re.IGNORECASE)
+            ),
+            None,
+        )
+
+    if sender_match:
+        body_source = (raw_text[:sender_match.start()] + raw_text[sender_match.end():]).strip()
+    else:
+        body_lines = [line for line in lines if line != sender_line]
+        body_source = " ".join(body_lines).strip() or raw_text.strip()
+
+    body_text = re.sub(r"\s+", " ", body_source).strip(" .,")
+
+    if sender_line:
+        signature_block = sender_line
+    else:
+        signature_block = "Kaninyo matinahuron,\n\nHON. ALBERTO C. PACHECO\nBarangay Captain"
+
     return f"""Tinahod kong mga baryuhanon,
 
-Gihigayon ang atong {raw_text.strip().capitalize()}.
+Gihigayon ang atong {body_text}.
 
 Gipanghinaut ko ang inyong 100% nga kooperasyon.
 Daghang salamat.
 
-Kaninyo matinahuron,
-
-HON. ALBERTO C. PACHECO
-Barangay Captain"""
+{signature_block}"""
 
 
 def force_non_official_fallback(raw_text: str) -> str:

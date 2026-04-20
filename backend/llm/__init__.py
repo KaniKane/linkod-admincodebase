@@ -1,17 +1,16 @@
 """
-LLM Gateway module for LINKod Admin backend.
+LLM module for LINKod Admin backend.
 
-Provides a unified interface for text generation with fallback support:
-- Hosted LLM primary and fallback models
-- Local Ollama fallback
+Provides a unified interface for text generation through the hosted LLM
+pipeline.
 
 Usage:
-    from llm.gateway import refine_text_via_gateway
+    from llm import refine_text_via_gateway
     refined = refine_text_via_gateway(raw_text)
 """
 
+from llm.pipeline import generate_announcement as refine_text_via_gateway
 from llm.types import GenerationRequest, GenerationResult, ValidationResult
-from llm.gateway import refine_text_via_gateway
 
 __all__ = [
     "GenerationRequest",

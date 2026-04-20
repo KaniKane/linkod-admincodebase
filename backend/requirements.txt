@@ -1,5 +1,5 @@
 # LINKod Admin Backend - Local REST API
-# Suitable for 8 GB RAM office PC (Ollama runs separately with llama3.2:3b)
+# Suitable for the hosted AI backend and Firebase integration
 
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0

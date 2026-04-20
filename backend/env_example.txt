@@ -1,10 +1,4 @@
-# AI Provider Mode: "auto" (default), "hosted", or "ollama"
-# - "auto": Try hosted primary -> hosted fallback -> local Ollama
-# - "hosted": Use hosted LLM only (primary + fallback)
-# - "ollama": Use local Ollama only
-AI_PROVIDER_MODE=auto
-
-# Hosted LLM Configuration (required for "hosted" or "auto" mode)
+# Hosted LLM Configuration
 # Example base URLs: https://api.openai.com/v1, https://api.anthropic.com/v1
 LLM_BASE_URL=
 
@@ -23,7 +17,3 @@ LLM_MODEL_FALLBACK=
 # Request settings
 AI_TIMEOUT_SECONDS=60
 AI_MAX_RETRIES=1
-
-# Local Ollama Configuration (for fallback or "ollama" mode)
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2:3b

@@ -1,6 +1,6 @@
 /// API client for the LINKod Admin backend (FastAPI).
 ///
-/// - POST /refine: AI text refinement (Ollama llama3.2:3b)
+/// - POST /refine: AI text refinement via the backend LLM pipeline
 /// - POST /recommend-audiences: rule-based audience recommendation
 ///
 /// Base URL: local backend, e.g. http://localhost:8000
@@ -441,7 +441,7 @@ Future<CancelAnnouncementReminderResponse> cancelAnnouncementReminder({
 
 /// Calls POST /refine with [rawText]. Returns original and refined text.
 /// Throws [AnnouncementBackendException] on empty response, 4xx/5xx, or network error.
-/// Uses 120s timeout; refine can be slow if Ollama is cold or under load.
+/// Uses 120s timeout; refine can be slow if the backend AI provider is under load.
 Future<RefineResponse> refineAnnouncementText(String rawText) async {
   final uri = Uri.parse('$kAnnouncementBackendBaseUrl/refine');
   final response = await http

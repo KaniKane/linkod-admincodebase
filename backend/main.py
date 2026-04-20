@@ -1,12 +1,12 @@
 """
-LINKod Admin Backend - Local AI Service Only.
+LINKod Admin Backend - Hosted AI Service Only.
 
 Provides:
-1. AI-based text refinement (Ollama, llama3.2:3b) — refine only; no new info, no audience.
+1. AI-based text refinement via the hosted LLM pipeline — refine only; no new info, no audience.
 2. Rule-based audience recommendation — keyword rules from config; transparent, no AI.
 
 Note: Push notification functionality has been moved to Firebase Cloud Functions.
-This backend is now AI-only. Do not add push notification code here.
+This backend is AI-only. Do not add push notification code here.
 
 Human-in-the-loop: Admin reviews and edits AI output and audience suggestions before publishing.
 No auto-publish; Flutter app calls these endpoints then publishes via Firestore when admin confirms.
@@ -84,7 +84,7 @@ app.add_middleware(
 class RefineRequest(BaseModel):
     """Raw announcement text to refine. AI only clarifies; does not add info or choose audience."""
 
-    raw_text: str = Field(..., min_length=1, description="Raw announcement text")
+    raw_text: str = Field(..., description="Raw announcement text")
 
 
 class RefineResponse(BaseModel):
@@ -146,19 +146,21 @@ class SendAccountApprovalResponse(BaseModel):
 @app.post("/refine", response_model=RefineResponse)
 def post_refine(request: RefineRequest) -> RefineResponse:
     """
-    Refine announcement text using local Ollama (llama3.2:3b).
+    Refine announcement text using the hosted LLM pipeline.
     AI only makes text formal, clear, concise. Does not add information or decide audience.
     Returns both original and refined text for human review.
     """
     raw = request.raw_text.strip()
-    if not raw:
-        raise HTTPException(status_code=400, detail="raw_text cannot be empty")
 
-    refined = refine_text(raw)
+    try:
+        refined = refine_text(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     if refined is None:
         raise HTTPException(
             status_code=503,
-            detail="Text refinement failed. Check that Ollama is running and model llama3.2:3b is available.",
+            detail="Text refinement failed. Check the backend AI provider and logs.",
         )
 
     return RefineResponse(original_text=raw, refined_text=refined)
