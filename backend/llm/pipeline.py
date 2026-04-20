@@ -5,6 +5,51 @@ from llm.prompt_builder import (
 from llm.client import generate_text, generate_text_with_model
 from llm.types import GenerationRequest
 from config.ai_settings import LLM_MODEL_FALLBACK
+import re
+
+
+def _looks_like_name_line(line: str) -> bool:
+    cleaned = line.strip()
+    if not cleaned:
+        return False
+
+    if any(mark in cleaned for mark in [",", "!", "?"]):
+        return False
+
+    parts = [p for p in cleaned.replace("-", " ").split() if p]
+    if len(parts) < 2 or len(parts) > 5:
+        return False
+
+    name_token = re.compile(r"^[A-Za-z][A-Za-z\.'-]*$")
+    if not all(name_token.match(p) for p in parts):
+        return False
+
+    if cleaned.isupper():
+        return True
+
+    return all(p[:1].isupper() for p in parts if p[:1].isalpha())
+
+
+def _extract_signature_line(raw_text: str) -> str | None:
+    lines = [ln.rstrip() for ln in raw_text.splitlines() if ln.strip()]
+    if not lines:
+        return None
+
+    for line in reversed(lines):
+        stripped = line.strip()
+        lower = stripped.lower()
+
+        if lower.startswith(("-", "gikan kang", "from:", "hon.")):
+            return stripped
+
+        if _looks_like_name_line(stripped):
+            return stripped
+
+    return None
+
+
+def _has_existing_signature(raw_text: str) -> bool:
+    return _extract_signature_line(raw_text) is not None
 
 
 # ---------------------------
@@ -107,6 +152,7 @@ def call_llm(prompt: str) -> str:
 def validate_output(output: str, is_official: bool, source_text: str) -> bool:
     output_lower = output.lower()
     source_lower = source_text.lower()
+    source_has_signature = _has_existing_signature(source_text)
 
     if "note:" in output_lower:
         return False
@@ -118,11 +164,9 @@ def validate_output(output: str, is_official: bool, source_text: str) -> bool:
         return False
 
     if is_official:
-        required = [
-            "tinahod kong",
-            "gipanghinaut",
-            "kaninyo matinahuron"
-        ]
+        required = ["tinahod kong", "gipanghinaut"]
+        if not source_has_signature:
+            required.append("kaninyo matinahuron")
 
         for r in required:
             if r not in output_lower:
@@ -149,7 +193,22 @@ def validate_output(output: str, is_official: bool, source_text: str) -> bool:
 # ---------------------------
 # 4. FALLBACK (GUARANTEED FORMAT)
 # ---------------------------
-def force_official_format_fallback(raw_text: str) -> str:
+def force_official_format_fallback(
+    raw_text: str,
+    signature_name: str,
+    signature_title: str,
+    source_signature_line: str | None = None,
+) -> str:
+    if source_signature_line:
+        return f"""Tinahod kong mga baryuhanon,
+
+Gihigayon ang atong {raw_text.strip().capitalize()}.
+
+Gipanghinaut ko ang inyong 100% nga kooperasyon.
+Daghang salamat.
+
+{source_signature_line}"""
+
     return f"""Tinahod kong mga baryuhanon,
 
 Gihigayon ang atong {raw_text.strip().capitalize()}.
@@ -159,26 +218,55 @@ Daghang salamat.
 
 Kaninyo matinahuron,
 
-HON. ALBERTO C. PACHECO
-Barangay Captain"""
+{signature_name}
+{signature_title}"""
 
 
-def force_non_official_fallback(raw_text: str) -> str:
+def force_non_official_fallback(
+    raw_text: str,
+    signature_name: str | None = None,
+) -> str:
     """Keep non-official posts simple; never inject official signature blocks."""
-    return raw_text.strip()
+    cleaned = raw_text.strip()
+    has_signature = _has_existing_signature(cleaned)
+    signer = (signature_name or "").strip()
+
+    if has_signature or not signer:
+        return cleaned
+
+    return f"{cleaned}\n\n-{signer}"
 
 
 # ---------------------------
 # 5. RETRY SYSTEM
 # ---------------------------
-def refine_with_retry(raw_text: str, max_retries: int = 3) -> str:
+def refine_with_retry(
+    raw_text: str,
+    max_retries: int = 3,
+    signature_name: str | None = None,
+    signature_title: str | None = None,
+) -> str:
     is_official = is_official_announcement(raw_text)
+    source_signature_line = _extract_signature_line(raw_text)
+    has_existing_signature = _has_existing_signature(raw_text)
+
+    # Official defaults: always fall back to Barangay Captain identity when source has no signature.
+    official_default_name = "HON. ALBERTO C. PACHECO"
+    official_default_title = "Barangay Captain"
+    non_official_user_signature = (signature_name or "").strip() or None
 
     for attempt in range(max_retries):
         prompt = (
-            build_refinement_prompt(raw_text)
+            build_refinement_prompt(
+                raw_text,
+                signature_name=None if has_existing_signature else official_default_name,
+                signature_title=None if has_existing_signature else official_default_title,
+            )
             if is_official
-            else build_non_official_refinement_prompt(raw_text)
+            else build_non_official_refinement_prompt(
+                raw_text,
+                signature_name=non_official_user_signature,
+            )
         )
         output = call_llm(prompt)
 
@@ -186,14 +274,30 @@ def refine_with_retry(raw_text: str, max_retries: int = 3) -> str:
             return output
 
     if is_official:
-        return force_official_format_fallback(raw_text)
+        return force_official_format_fallback(
+            raw_text,
+            signature_name=official_default_name,
+            signature_title=official_default_title,
+            source_signature_line=source_signature_line,
+        )
 
-    return force_non_official_fallback(raw_text)
+    return force_non_official_fallback(
+        raw_text,
+        signature_name=non_official_user_signature,
+    )
 
 
 # ---------------------------
 # 6. FINAL FUNCTION
 # ---------------------------
-def generate_announcement(raw_text: str) -> str:
-    result = refine_with_retry(raw_text)
+def generate_announcement(
+    raw_text: str,
+    signature_name: str | None = None,
+    signature_title: str | None = None,
+) -> str:
+    result = refine_with_retry(
+        raw_text,
+        signature_name=signature_name,
+        signature_title=signature_title,
+    )
     return result.strip()

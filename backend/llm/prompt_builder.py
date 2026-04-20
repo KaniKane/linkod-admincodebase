@@ -1,7 +1,60 @@
-def _build_critical_instruction(raw_text: str) -> str:
+import re
+from typing import Optional
+
+
+def _looks_like_name_line(line: str) -> bool:
+    """Heuristic check for plain signature names like 'Junty Bandayanon'."""
+    cleaned = line.strip()
+    if not cleaned:
+        return False
+
+    # Reject obvious sentence-like lines.
+    if any(mark in cleaned for mark in [",", "!", "?"]):
+        return False
+
+    parts = [p for p in cleaned.replace("-", " ").split() if p]
+    if len(parts) < 2 or len(parts) > 5:
+        return False
+
+    # Allow initials and name punctuation.
+    name_token = re.compile(r"^[A-Za-z][A-Za-z\.'-]*$")
+    if not all(name_token.match(p) for p in parts):
+        return False
+
+    # Most name lines are either title-case or all uppercase.
+    if cleaned.isupper():
+        return True
+
+    return all(p[:1].isupper() for p in parts if p[:1].isalpha())
+
+
+def _extract_signature_line(raw_text: str) -> Optional[str]:
+    """Extract a likely existing signature/attribution line from the source text."""
+    lines = [ln.rstrip() for ln in raw_text.splitlines() if ln.strip()]
+    if not lines:
+        return None
+
+    for line in reversed(lines):
+        stripped = line.strip()
+        lower = stripped.lower()
+
+        if lower.startswith(("-", "gikan kang", "from:", "hon.")):
+            return stripped
+
+        if _looks_like_name_line(stripped):
+            return stripped
+
+    return None
+
+
+def _build_critical_instruction(
+    raw_text: str,
+    signature_name: Optional[str] = None,
+    signature_title: Optional[str] = None,
+) -> str:
     text = raw_text.lower()
 
-    has_signature = "gikan kang" in text or "hon." in text or "matinahuron" in text
+    has_signature = _extract_signature_line(raw_text) is not None
 
     # Detect OFFICIAL announcements (not just any message that mentions a meeting/event).
     official_markers = [
@@ -55,13 +108,23 @@ def _build_critical_instruction(raw_text: str) -> str:
         rules.append("- This is an OFFICIAL BARANGAY ANNOUNCEMENT. You MUST apply full official structure.")
 
         if has_signature:
-            rules.append("- Preserve the existing signature exactly.")
+            rules.append("- The input already has a signature/attribution line. Preserve it EXACTLY as written.")
+            rules.append("- Do NOT add a new official title or another signature block.")
         else:
-            rules.append("- Add a proper Barangay Captain closing signature in correct format.")
+            if signature_name:
+                rules.append(f"- Add this default official signer name in the final signature block: {signature_name}")
+            if signature_title:
+                rules.append(f"- Add this default official signer title in the final signature block: {signature_title}")
+            rules.append("- Since there is no signature in input, add the default official signature block.")
 
     else:
-        rules.append("- This is NOT an official announcement. DO NOT add greeting, closing, or signature.")
-        rules.append("- If the input has a sender line like 'From: ...', preserve it but do not convert it into an official signature block.")
+        rules.append("- This is NOT an official announcement.")
+        rules.append("- Do NOT add official greeting/closing markers (e.g., Tinahod..., Kaninyo matinahuron, HON., Barangay Captain).")
+        if has_signature:
+            rules.append("- Preserve the existing signature/attribution line exactly.")
+        elif signature_name:
+            rules.append(f"- Add a simple signature line at the end in this exact format: -{signature_name}")
+            rules.append("- Do NOT add any title to that non-official signature line.")
 
     rules.append("- DO NOT change the target audience.")
     rules.append("""
@@ -72,7 +135,7 @@ def _build_critical_instruction(raw_text: str) -> str:
   ✔ "Tinahod kong mga baryuhanon"
   ✔ "Gipanghinaut ko ang inyong 100% nga kooperasyon."
   ✔ "Daghang salamat."
-  ✔ Official Barangay Captain signature block
+    ✔ Default official signature block (only when OFFICIAL and no signature in input)
 
 - These are REQUIRED for official announcements even if not in the input.
 """)
@@ -96,8 +159,8 @@ Daghang salamat.
 
 Kaninyo matinahuron,
 
-HON. ALBERTO C. PACHECO
-Barangay Captain
+{official_signature_name}
+{official_signature_title}
 ---
 
 === EXAMPLE 3: Free Registration Event ===
@@ -110,8 +173,8 @@ Daghang salamat.
 
 Kaninyo matinahuron,
 
-HON. ALBERTO C. PACHECO
-Barangay Captain
+{official_signature_name}
+{official_signature_title}
 ---
 
 === EXAMPLE 4: Eye Examination Event ===
@@ -123,8 +186,8 @@ Daghang salamat.
 
 Kaninyo matinahuron,
 
-HON. ALBERTO C. PACHECO
-Barangay Captain
+{official_signature_name}
+{official_signature_title}
 ---
 
 === EXAMPLE 5: ZOD Evaluation (with list) ===
@@ -145,8 +208,8 @@ Daghang salamat.
 
 Kaninyo matinahuron,
 
-HON. ALBERTO C. PACHECO
-Barangay Captain
+{official_signature_name}
+{official_signature_title}
 ---
 
 === EXAMPLE 6: Brigada Eskwela (with items list) ===
@@ -294,8 +357,8 @@ Daghang salamat.
 
 Kaninyo matinahuron,
 
-HON. ALBERTO C. PACHECO
-Barangay Captain
+{official_signature_name}
+{official_signature_title}
 
 IF NOT OFFICIAL:
 → ONLY refine wording
@@ -373,8 +436,8 @@ Daghang salamat.
 
 Kaninyo matinahuron,
 
-HON. ALBERTO C. PACHECO
-Barangay Captain
+{official_signature_name}
+{official_signature_title}
 
 DO NOT skip any section.
 DO NOT compress into one paragraph.
@@ -388,14 +451,26 @@ INPUT
 """
 
 
-def build_refinement_prompt(raw_text: str) -> str:
+def build_refinement_prompt(
+    raw_text: str,
+    signature_name: Optional[str] = None,
+    signature_title: Optional[str] = None,
+) -> str:
     stripped = raw_text.strip()
-    dynamic_rules = _build_critical_instruction(stripped)
+    final_signature_name = (signature_name or "").strip() or "HON. ALBERTO C. PACHECO"
+    final_signature_title = (signature_title or "").strip() or "Barangay Captain"
+    dynamic_rules = _build_critical_instruction(
+        stripped,
+        signature_name=final_signature_name,
+        signature_title=final_signature_title,
+    )
 
     return BASE_PROMPT_TEMPLATE.format(
         examples=PREVIOUS_BARANGAY_ANNOUNCEMENTS,
         dynamic_rules=dynamic_rules,
-        raw_text=stripped
+        raw_text=stripped,
+        official_signature_name=final_signature_name,
+        official_signature_title=final_signature_title,
     )
 
 
@@ -443,10 +518,10 @@ WORDING PREFERENCES:
 - Prefer "umaabot nga" for "upcoming".
 
 SIGNATURE RULE:
-- Preserve the signature/attribution ONLY if it already exists in the input.
-- Do NOT add any new signature, title, or sender name.
-- Do NOT add "HON.", "Kaninyo matinahuron", or "Gikan kang" unless already present in the input.
-- If the input has a sender line like "From: ...", preserve it exactly.
+- If input already has a signature/attribution line, preserve it exactly.
+- If input has no signature/attribution line and a user signature is provided,
+  add exactly one line at the end using this format: -{non_official_signature_name}
+- Never add official titles/markers like HON., Barangay Captain, or Kaninyo matinahuron.
 
 GOOD STYLE EXAMPLE (NON-OFFICIAL):
 Input idea: youth who want to join the basketball club should go to barangay gymnasium for an upcoming tournament meeting.
@@ -468,5 +543,12 @@ INPUT:
 """
 
 
-def build_non_official_refinement_prompt(raw_text: str) -> str:
-    return NON_OFFICIAL_PROMPT_TEMPLATE.format(raw_text=raw_text.strip())
+def build_non_official_refinement_prompt(
+    raw_text: str,
+    signature_name: Optional[str] = None,
+) -> str:
+    final_non_official_signature_name = (signature_name or "").strip()
+    return NON_OFFICIAL_PROMPT_TEMPLATE.format(
+        raw_text=raw_text.strip(),
+        non_official_signature_name=final_non_official_signature_name,
+    )

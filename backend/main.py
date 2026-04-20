@@ -20,7 +20,7 @@ import os
 import firebase_admin
 from firebase_admin import credentials, firestore, messaging
 
-from services.ai_refinement import refine_text
+from services.ai_refinement import refine_text, suggest_announcement_title
 from services.audience_rules import recommend_audiences, DEFAULT_AUDIENCE
 
 # Initialize Firebase Admin SDK
@@ -85,6 +85,14 @@ class RefineRequest(BaseModel):
     """Raw announcement text to refine. AI only clarifies; does not add info or choose audience."""
 
     raw_text: str = Field(..., min_length=1, description="Raw announcement text")
+    signer_name: Optional[str] = Field(
+        default=None,
+        description="Preferred signer name for official announcement output",
+    )
+    signer_title: Optional[str] = Field(
+        default=None,
+        description="Preferred signer title for official announcement output",
+    )
 
 
 class RefineResponse(BaseModel):
@@ -92,6 +100,7 @@ class RefineResponse(BaseModel):
 
     original_text: str
     refined_text: str
+    suggested_title: Optional[str] = None
 
 
 class RecommendAudiencesRequest(BaseModel):
@@ -154,14 +163,27 @@ def post_refine(request: RefineRequest) -> RefineResponse:
     if not raw:
         raise HTTPException(status_code=400, detail="raw_text cannot be empty")
 
-    refined = refine_text(raw)
+    signer_name = (request.signer_name or "").strip() or None
+    signer_title = (request.signer_title or "").strip() or None
+
+    refined = refine_text(
+        raw,
+        signature_name=signer_name,
+        signature_title=signer_title,
+    )
     if refined is None:
         raise HTTPException(
             status_code=503,
             detail="Text refinement failed. Check that Ollama is running and model llama3.2:3b is available.",
         )
 
-    return RefineResponse(original_text=raw, refined_text=refined)
+    suggested_title = suggest_announcement_title(refined)
+
+    return RefineResponse(
+        original_text=raw,
+        refined_text=refined,
+        suggested_title=suggested_title,
+    )
 
 
 @app.post("/recommend-audiences", response_model=RecommendAudiencesResponse)

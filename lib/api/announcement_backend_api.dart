@@ -72,17 +72,23 @@ String _normalizeBaseUrl(String baseUrl) {
 
 /// Result of POST /refine: original and refined text.
 class RefineResponse {
-  const RefineResponse({required this.originalText, required this.refinedText});
+  const RefineResponse({
+    required this.originalText,
+    required this.refinedText,
+    this.suggestedTitle,
+  });
 
   factory RefineResponse.fromJson(Map<String, dynamic> json) {
     return RefineResponse(
       originalText: json['original_text'] as String? ?? '',
       refinedText: json['refined_text'] as String? ?? '',
+      suggestedTitle: (json['suggested_title'] as String?)?.trim(),
     );
   }
 
   final String originalText;
   final String refinedText;
+  final String? suggestedTitle;
 }
 
 /// Result of POST /recommend-audiences: suggested audiences and matched rules.
@@ -442,13 +448,27 @@ Future<CancelAnnouncementReminderResponse> cancelAnnouncementReminder({
 /// Calls POST /refine with [rawText]. Returns original and refined text.
 /// Throws [AnnouncementBackendException] on empty response, 4xx/5xx, or network error.
 /// Uses 120s timeout; refine can be slow if Ollama is cold or under load.
-Future<RefineResponse> refineAnnouncementText(String rawText) async {
+Future<RefineResponse> refineAnnouncementText(
+  String rawText, {
+  String? signerName,
+  String? signerTitle,
+}) async {
   final uri = Uri.parse('$kAnnouncementBackendBaseUrl/refine');
+  final payload = <String, dynamic>{'raw_text': rawText};
+  final cleanSignerName = signerName?.trim() ?? '';
+  final cleanSignerTitle = signerTitle?.trim() ?? '';
+  if (cleanSignerName.isNotEmpty) {
+    payload['signer_name'] = cleanSignerName;
+  }
+  if (cleanSignerTitle.isNotEmpty) {
+    payload['signer_title'] = cleanSignerTitle;
+  }
+
   final response = await http
       .post(
         uri,
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'raw_text': rawText}),
+        body: jsonEncode(payload),
       )
       .timeout(const Duration(seconds: 120));
 

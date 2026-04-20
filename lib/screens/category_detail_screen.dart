@@ -13,10 +13,7 @@ import '../widgets/outline_button.dart';
 class CategoryDetailScreen extends StatefulWidget {
   final Map<String, dynamic> category;
 
-  const CategoryDetailScreen({
-    super.key,
-    required this.category,
-  });
+  const CategoryDetailScreen({super.key, required this.category});
 
   @override
   State<CategoryDetailScreen> createState() => _CategoryDetailScreenState();
@@ -33,10 +30,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
         codePoint = int.tryParse(rawCodePoint);
       }
       if (codePoint != null) {
-        return IconData(
-          codePoint,
-          fontFamily: 'MaterialIcons',
-        );
+        return IconData(codePoint, fontFamily: 'MaterialIcons');
       }
     } catch (e) {
       // Fall through to default
@@ -47,9 +41,8 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   Future<void> _createPosting() async {
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (context) => PostingEditDialog(
-        categoryId: widget.category['id'] as String,
-      ),
+      builder: (context) =>
+          PostingEditDialog(categoryId: widget.category['id'] as String),
     );
 
     if (result != null) {
@@ -194,9 +187,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Posting'),
-        content: const Text(
-          'Are you sure you want to delete this posting?',
-        ),
+        content: const Text('Are you sure you want to delete this posting?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -204,9 +195,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.deleteRed,
-            ),
+            style: TextButton.styleFrom(foregroundColor: AppColors.deleteRed),
             child: const Text('Delete'),
           ),
         ],
@@ -256,8 +245,18 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
       return 'Invalid date';
     }
     final months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
@@ -314,7 +313,10 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryGreen,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -371,13 +373,13 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                             ),
                           ),
                           const SizedBox(height: 8),
-                            Text(
-                              'Start sharing updates with residents',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: AppColors.mediumGrey,
-                              ),
+                          Text(
+                            'Start sharing updates with residents',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: AppColors.mediumGrey,
                             ),
+                          ),
                           const SizedBox(height: 24),
                           ElevatedButton.icon(
                             onPressed: _createPosting,
@@ -386,7 +388,10 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primaryGreen,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 14,
+                              ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
                               ),
@@ -430,7 +435,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   Widget _buildPostingCard(Map<String, dynamic> posting) {
     final hasImage = posting['imageUrl'] != null;
     final hasPdf = posting['pdfUrl'] != null;
-    
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.white,
@@ -449,7 +454,9 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
           // Image thumbnail
           if (hasImage)
             ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
               child: Image.network(
                 posting['imageUrl'] as String,
                 height: 140,
@@ -459,7 +466,10 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                   height: 140,
                   color: AppColors.inputBackground,
                   child: const Center(
-                    child: Icon(Icons.image_not_supported, color: AppColors.lightGrey),
+                    child: Icon(
+                      Icons.image_not_supported,
+                      color: AppColors.lightGrey,
+                    ),
                   ),
                 ),
               ),
@@ -469,7 +479,9 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
               height: 100,
               decoration: BoxDecoration(
                 color: AppColors.inputBackground,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(16),
+                ),
               ),
               child: Center(
                 child: Icon(
@@ -534,7 +546,10 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                   if (hasPdf) ...[
                     const SizedBox(height: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.deleteRed.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(6),
@@ -614,7 +629,9 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
               Icon(
                 icon,
                 size: 14,
-                color: isDestructive ? AppColors.deleteRed : AppColors.primaryGreen,
+                color: isDestructive
+                    ? AppColors.deleteRed
+                    : AppColors.primaryGreen,
               ),
               const SizedBox(width: 4),
               Text(
@@ -622,7 +639,9 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
-                  color: isDestructive ? AppColors.deleteRed : AppColors.primaryGreen,
+                  color: isDestructive
+                      ? AppColors.deleteRed
+                      : AppColors.primaryGreen,
                 ),
               ),
             ],

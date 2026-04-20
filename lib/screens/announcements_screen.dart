@@ -522,9 +522,39 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       _isRefining = true;
     });
     try {
-      final result = await refineAnnouncementText(original);
+      String? signerName;
+      String? signerTitle;
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        try {
+          final userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(currentUser.uid)
+              .get();
+          if (userDoc.exists) {
+            final userData = userDoc.data() ?? {};
+            signerName = (userData['fullName'] as String?)?.trim();
+            signerTitle = (userData['position'] as String?)?.trim();
+          }
+        } catch (_) {
+          // Ignore profile lookup issues and continue refine request.
+        }
+
+        signerName ??= currentUser.displayName?.trim();
+      }
+
+      final result = await refineAnnouncementText(
+        original,
+        signerName: signerName,
+        signerTitle: signerTitle,
+      );
       if (!mounted) return;
+      final shouldAutofillTitle = _titleController.text.trim().isEmpty;
+      final suggestedTitle = result.suggestedTitle?.trim() ?? '';
       setState(() {
+        if (shouldAutofillTitle && suggestedTitle.isNotEmpty) {
+          _titleController.text = suggestedTitle;
+        }
         _aiRefinedController.text = result.refinedText;
         _isAIRefined = true;
         _isRefining = false;
@@ -615,7 +645,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           builder: (dialogContext, setDialogState) {
             return AlertDialog(
               title: const Text('Delete Draft'),
-              content: const Text('Are you sure you want to delete this draft?'),
+              content: const Text(
+                'Are you sure you want to delete this draft?',
+              ),
               actions: [
                 Column(
                   mainAxisSize: MainAxisSize.min,
@@ -3291,10 +3323,10 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
     final createdAt = widget.announcement['createdAt'] as DateTime?;
     final status = widget.announcement['status'] as String? ?? 'Published';
     final audiences =
-      (widget.announcement['audiences'] as List?)
-        ?.whereType<String>()
-        .toList() ??
-      <String>[];
+        (widget.announcement['audiences'] as List?)
+            ?.whereType<String>()
+            .toList() ??
+        <String>[];
     final viewCount = (widget.announcement['viewCount'] as num?)?.toInt() ?? 0;
 
     final dateStr = createdAt != null ? _formatDate(createdAt) : '—';
@@ -3456,9 +3488,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                         decoration: BoxDecoration(
                           color: const Color(0xFFF3F8F5),
                           borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: const Color(0xFFD4E7DA),
-                          ),
+                          border: Border.all(color: const Color(0xFFD4E7DA)),
                         ),
                         child: Text(
                           audience,
