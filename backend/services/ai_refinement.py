@@ -86,6 +86,48 @@ def _normalize_and_validate_raw_text(raw_text: str) -> str:
     if len(stripped) < 10:
         raise ValueError("Announcement must be at least 10 characters.")
 
+    # Reject obvious gibberish like random letter strings without real words.
+    words = re.findall(r"[A-Za-zÀ-ÿ']+", stripped)
+    unique_words = {word.lower() for word in words}
+    vowel_counts = [len(re.findall(r"[aeiouAEIOU]", word)) for word in words]
+    has_prompt_hint = bool(
+        re.search(
+            r"\b(create|make|write|generate|draft|himo|buhat|sulat|paghimo|announcement|anunsyo|pahibalo|advisory|notice)\b",
+            stripped,
+            re.IGNORECASE,
+        )
+    )
+    has_announcement_signal = bool(
+        re.search(
+            r"\b(meeting|miting|assembly|barangay|court|hall|schedule|schedule|date|oras|petsa|lugar)\b",
+            stripped,
+            re.IGNORECASE,
+        )
+    )
+
+    if len(words) == 1 and not has_prompt_hint and not has_announcement_signal:
+        raise ValueError("Please enter valid content.")
+
+    if len(words) == 0:
+        raise ValueError("Please enter valid content.")
+
+    # Heuristic: inputs with many repeated characters and very few distinct words are likely gibberish.
+    if len(stripped) >= 12 and len(words) <= 2:
+        repeated_runs = re.search(r"(.)\1{4,}", stripped)
+        low_variety = len(unique_words) <= 1
+        vowel_count = len(re.findall(r"[aeiouAEIOU]", stripped))
+        if repeated_runs and low_variety:
+            raise ValueError("Please enter valid content.")
+        if vowel_count <= 2 and low_variety and not has_prompt_hint and not has_announcement_signal:
+            raise ValueError("Please enter valid content.")
+
+    # Stronger rejection for pseudo-word strings like 'afkhk asdflaksdfl adf'.
+    if not has_prompt_hint and not has_announcement_signal:
+        has_real_word = any(count >= 2 for count in vowel_counts) or any(len(word) >= 5 for word in words)
+        average_vowels = (sum(vowel_counts) / len(vowel_counts)) if vowel_counts else 0
+        if not has_real_word or average_vowels < 1.2:
+            raise ValueError("Please enter valid content.")
+
     return stripped
 
 

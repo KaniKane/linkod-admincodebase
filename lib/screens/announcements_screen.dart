@@ -1877,6 +1877,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
+              _buildClearButton(),
+              const SizedBox(width: 16),
               _buildDraftButton(),
               const SizedBox(width: 16),
               _buildPostButton(),
@@ -2277,6 +2279,33 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               fontSize: 16,
               fontWeight: FontWeight.normal,
               color: AppColors.darkGrey,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClearButton() {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () async {
+          await _resetComposeState();
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF1F1),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.deleteRedAlt, width: 1),
+          ),
+          child: const Text(
+            'Clear fields',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.normal,
+              color: AppColors.deleteRedAlt,
             ),
           ),
         ),

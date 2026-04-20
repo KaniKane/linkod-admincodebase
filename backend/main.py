@@ -163,11 +163,15 @@ def post_refine(request: RefineRequest) -> RefineResponse:
     signer_name = (request.signer_name or "").strip() or None
     signer_title = (request.signer_title or "").strip() or None
 
-    refined = refine_text(
-        raw,
-        signature_name=signer_name,
-        signature_title=signer_title,
-    )
+    try:
+        refined = refine_text(
+            raw,
+            signature_name=signer_name,
+            signature_title=signer_title,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     if refined is None:
         raise HTTPException(
             status_code=503,
