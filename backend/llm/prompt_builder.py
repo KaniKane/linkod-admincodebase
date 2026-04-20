@@ -520,7 +520,8 @@ WORDING PREFERENCES:
 SIGNATURE RULE:
 - If input already has a signature/attribution line, preserve it exactly.
 - If input has no signature/attribution line and a user signature is provided,
-  add exactly one line at the end using this format: -{non_official_signature_name}
+    add exactly one line at the end using this format: -{non_official_signature_name}
+- If user signature is missing, use [Ngalan] as the default non-official signature line.
 - Never add official titles/markers like HON., Barangay Captain, or Kaninyo matinahuron.
 
 GOOD STYLE EXAMPLE (NON-OFFICIAL):
@@ -551,4 +552,73 @@ def build_non_official_refinement_prompt(
     return NON_OFFICIAL_PROMPT_TEMPLATE.format(
         raw_text=raw_text.strip(),
         non_official_signature_name=final_non_official_signature_name,
+    )
+
+
+GENERATION_PROMPT_TEMPLATE = """
+You are an expert Barangay announcement writer in Cebuano (Bisaya).
+
+TASK:
+- Convert the user's instruction into a ready-to-publish announcement draft.
+- If required details are missing, use placeholders.
+
+PLACEHOLDER RULES (STRICT):
+- Use these exact placeholders when missing from the input:
+    - [Petsa]
+    - [Oras]
+    - [Lugar/Covered Court]
+    - [Ngalan]
+    - [Posisyon]
+- Do NOT invent exact dates, times, locations, or names.
+- Keep placeholders in the final output so user can fill them.
+
+STYLE RULES:
+- Use clear, natural Cebuano used in barangays.
+- Keep it formal and community-focused.
+- Preserve the user's target audience and intent.
+
+FORMAT RULES:
+- Return ONLY the final announcement text.
+- No explanations, no notes, no comments.
+- Do NOT output markdown or code blocks.
+
+SIGNATURE RULES:
+- If a signer is provided, use:
+    {signature_name}
+    {signature_title}
+- If signer is missing, use placeholders:
+    [Ngalan]
+    [Posisyon]
+
+DEFAULT STRUCTURE:
+Tinahod kong mga baryuhanon,
+
+[Main message]
+
+Gipanghinaut ko ang inyong 100% nga kooperasyon.
+Daghang salamat.
+
+Kaninyo matinahuron,
+
+[Signature name]
+[Signature title]
+
+INPUT INSTRUCTION:
+\"\"\"
+{raw_text}
+\"\"\"
+"""
+
+
+def build_generation_prompt(
+    raw_text: str,
+    signature_name: Optional[str] = None,
+    signature_title: Optional[str] = None,
+) -> str:
+    final_signature_name = (signature_name or "").strip() or "[Ngalan]"
+    final_signature_title = (signature_title or "").strip() or "[Posisyon]"
+    return GENERATION_PROMPT_TEMPLATE.format(
+    raw_text=raw_text.strip(),
+    signature_name=final_signature_name,
+    signature_title=final_signature_title,
     )

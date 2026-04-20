@@ -448,7 +448,11 @@ Future<CancelAnnouncementReminderResponse> cancelAnnouncementReminder({
 /// Calls POST /refine with [rawText]. Returns original and refined text.
 /// Throws [AnnouncementBackendException] on empty response, 4xx/5xx, or network error.
 /// Uses 120s timeout; refine can be slow if Ollama is cold or under load.
-Future<RefineResponse> refineAnnouncementText(String rawText) async {
+Future<RefineResponse> refineAnnouncementText(
+  String rawText, {
+  String? signerName,
+  String? signerTitle,
+}) async {
   final uri = Uri.parse('$kAnnouncementBackendBaseUrl/refine');
   final payload = <String, dynamic>{'raw_text': rawText};
   final cleanSignerName = signerName?.trim() ?? '';

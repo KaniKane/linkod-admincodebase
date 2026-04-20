@@ -85,6 +85,14 @@ class RefineRequest(BaseModel):
     """Raw announcement text to refine. AI only clarifies; does not add info or choose audience."""
 
     raw_text: str = Field(..., min_length=1, description="Raw announcement text")
+    signer_name: Optional[str] = Field(
+        default=None,
+        description="Preferred signer name for announcement signature behavior",
+    )
+    signer_title: Optional[str] = Field(
+        default=None,
+        description="Preferred signer title for official default signature",
+    )
 
 
 class RefineResponse(BaseModel):
@@ -152,8 +160,14 @@ def post_refine(request: RefineRequest) -> RefineResponse:
     Returns both original and refined text for human review.
     """
     raw = request.raw_text.strip()
+    signer_name = (request.signer_name or "").strip() or None
+    signer_title = (request.signer_title or "").strip() or None
 
-    refined = refine_text(raw)
+    refined = refine_text(
+        raw,
+        signature_name=signer_name,
+        signature_title=signer_title,
+    )
     if refined is None:
         raise HTTPException(
             status_code=503,
