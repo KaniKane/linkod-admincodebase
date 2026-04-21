@@ -2,7 +2,7 @@
 ; This script is dedicated to production packaging and does not replace legacy .iss files.
 
 #define MyAppName "LINKod Admin"
-#define MyAppVersion "1.0.8"
+#define MyAppVersion "1.0.9"
 #define MyAppPublisher "LINKod"
 #define MyAppExeName "linkod_admin.exe"
 #define MyBackendExeName "linkod_admin_backend.exe"

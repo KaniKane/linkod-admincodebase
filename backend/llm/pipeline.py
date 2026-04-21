@@ -4,7 +4,7 @@ from llm.prompt_builder import (
     build_refinement_prompt,
 )
 import re
-from llm.client import generate_text, generate_text_with_model
+from llm.client import generate_text_with_model
 from llm.types import GenerationRequest
 from config.ai_settings import LLM_MODEL_FALLBACK
 
@@ -172,18 +172,14 @@ def is_generation_intent(text: str) -> bool:
 # 2. LLM CALL (EDIT THIS PART)
 # ---------------------------
 def call_llm(prompt: str) -> str:
-    """Call configured LLM provider and return generated text or empty string."""
+    """Call only the 70B model for refinement/generation and return generated text or empty string."""
     request = GenerationRequest(prompt=prompt, temperature=0.0)
 
-    primary = generate_text(request)
-    if primary.success and primary.text:
-        return primary.text.strip()
-
-    fallback_model = LLM_MODEL_FALLBACK
-    if fallback_model:
-        fallback = generate_text_with_model(request, fallback_model)
-        if fallback.success and fallback.text:
-            return fallback.text.strip()
+    # Force a single-model path: use 70B versatile only, no 8B fallback.
+    model_70b = (LLM_MODEL_FALLBACK or "llama-3.3-70b-versatile").strip()
+    result = generate_text_with_model(request, model_70b)
+    if result.success and result.text:
+        return result.text.strip()
 
     return ""
 
