@@ -55,6 +55,9 @@ def suggest_announcement_title(text: str) -> Optional[str]:
     if contains_any(["cleanup", "clean-up", "brigada", "limpyo", "hinlo"]):
         return "Pahibalo: Brigada Limpyo"
 
+    if contains_any(["garbage", "collection", "basura", "kalot", "residuo", "waste", "trash", "garbage collection"]):
+        return "Pahibalo: Koleksyon sa Basura"
+
     if contains_any(["registration", "rehistro", "civil registrar"]):
         return "Pahibalo: Rehistro"
 

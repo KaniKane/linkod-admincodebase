@@ -16,6 +16,12 @@ PROMPT_ECHO_MARKERS = [
     "required output format",
 ]
 
+GENERATION_PLACEHOLDERS = [
+    "[Petsa]",
+    "[Oras]",
+    "[Lugar/Covered Court]",
+]
+
 
 def _looks_like_name_line(line: str) -> bool:
     cleaned = line.strip()
@@ -142,6 +148,12 @@ def is_generation_intent(text: str) -> bool:
     if not lower:
         return False
 
+    # Normalize to token-friendly text so minor punctuation/spacing differences
+    # do not prevent intent detection.
+    normalized = re.sub(r"[^a-z\s]", " ", lower)
+    tokens = [token for token in normalized.split() if token]
+    token_set = set(tokens)
+
     instruction_verbs = [
         "create",
         "make",
@@ -153,19 +165,27 @@ def is_generation_intent(text: str) -> bool:
         "sulat",
         "paghimo",
     ]
-    announcement_words = [
-        "announcement",
-        "anunsyo",
-        "pahibalo",
-        "advisory",
-        "notice",
-    ]
+    announcement_words = {"announcement", "anunsyo", "pahibalo", "advisory", "notice"}
 
-    has_instruction_verb = any(v in lower for v in instruction_verbs)
-    has_announcement_word = any(w in lower for w in announcement_words)
+    has_instruction_verb = any(verb in token_set for verb in instruction_verbs)
+
+    # Accept common spelling variants like "announcemet", "annoucement", etc.
+    has_announcement_word = any(word in token_set for word in announcement_words) or any(
+        token.startswith("announ") for token in tokens
+    )
+
+    has_draft_keyword = "draft" in token_set
+    has_topic_connector = any(
+        connector in token_set
+        for connector in ["about", "for", "regarding", "kabahin", "mahitungod"]
+    )
 
     # Most prompt-style requests are short and imperative.
-    return has_instruction_verb and has_announcement_word and len(stripped) <= 200
+    return (
+        has_instruction_verb
+        and (has_announcement_word or (has_draft_keyword and has_topic_connector))
+        and len(stripped) <= 280
+    )
 
 
 # ---------------------------
@@ -253,6 +273,23 @@ def validate_generation_output(output: str, source_text: str) -> bool:
     if any(marker in output_lower for marker in PROMPT_ECHO_MARKERS):
         return False
 
+    # Must look like a proper barangay draft structure, not a loose sentence.
+    if "tinahod kong" not in output_lower:
+        return False
+    if "kaninyo matinahuron" not in output_lower:
+        return False
+
+    # Reject prompt echo responses.
+    if re.search(r"\b(create|make|write|generate|draft)\b", output_lower):
+        if "announcement" in output_lower or "announc" in output_lower:
+            return False
+
+    # Reject obvious placeholder corruption.
+    if "[" in output and "]" in output:
+        malformed = re.search(r"\[[^\]]{0,2}\]", output)
+        if malformed:
+            return False
+
     # If source instruction does not include specific date/time/location,
     # output should contain placeholders.
     has_date_hint = bool(re.search(r"\b20\d{2}\b|\benero\b|\bfebrero\b|\bmarso\b|\babril\b|\bmayo\b|\bhunyo\b|\bhulyo\b|\bagosto\b|\bsetyembre\b|\boktubre\b|\bnovyembre\b|\bdisyembre\b", source_lower))
@@ -260,10 +297,59 @@ def validate_generation_output(output: str, source_text: str) -> bool:
     has_place_hint = any(k in source_lower for k in ["covered court", "barangay hall", "session hall", "lugar", "venue", "place"])
 
     if not (has_date_hint and has_time_hint and has_place_hint):
-        if "[" not in output or "]" not in output:
+        if not all(ph in output for ph in GENERATION_PLACEHOLDERS):
             return False
 
     return True
+
+
+def _extract_generation_topic(raw_text: str) -> str:
+    """Extract a clean topic phrase from prompt-style generation input."""
+    text = (raw_text or "").strip()
+    if not text:
+        return "kalihokan sa barangay"
+
+    normalized = re.sub(r"\s+", " ", text)
+
+    patterns = [
+        r"^(?:please\s+)?(?:create|make|write|generate|draft)\s+(?:an?\s+)?(?:official\s+)?(?:barangay\s+)?(?:announcement|announc\w+)\s+(?:about|for|regarding)\s+",
+        r"^(?:please\s+)?(?:create|make|write|generate|draft)\s+",
+    ]
+
+    topic = normalized
+    for pattern in patterns:
+        topic = re.sub(pattern, "", topic, flags=re.IGNORECASE)
+
+    topic = topic.strip(" .:-")
+    if not topic:
+        return "kalihokan sa barangay"
+
+    return topic
+
+
+def _build_generation_fallback(
+    raw_text: str,
+    signature_name: str | None,
+    signature_title: str | None,
+) -> str:
+    """Return a clean, readable Cebuano draft when model output is unsuitable."""
+    topic = _extract_generation_topic(raw_text)
+    final_name = (signature_name or "").strip() or "[Ngalan]"
+    final_title = (signature_title or "").strip() or "[Posisyon]"
+
+    return f"""Tinahod kong mga baryuhanon,
+
+Ania ang pahibalo kabahin sa {topic}.
+Ang kalihokan pagahigayon sa [Petsa], alas [Oras], sa [Lugar/Covered Court].
+
+Palihog makigkoordinar ug mosunod sa giya sa barangay aron hapsay ang kalihokan.
+
+Daghang salamat.
+
+Kaninyo matinahuron,
+
+{final_name}
+{final_title}"""
 
 
 # ---------------------------
@@ -275,12 +361,15 @@ def force_official_format_fallback(
     signature_title: str,
     source_signature_line: str | None = None,
 ) -> str:
-    body_text = raw_text.strip().capitalize()
+    # Preserve original casing (names, places, dates) and collapse extra spaces.
+    body_text = re.sub(r"\s+", " ", raw_text.strip())
+    if body_text and body_text[-1] not in ".!?":
+        body_text = f"{body_text}."
 
     if source_signature_line:
         return f"""Tinahod kong mga baryuhanon,
 
-Gihigayon ang atong {body_text}.
+{body_text}
 
 Gipanghinaut ko ang inyong 100% nga kooperasyon.
 Daghang salamat.
@@ -289,7 +378,7 @@ Daghang salamat.
 
     return f"""Tinahod kong mga baryuhanon,
 
-Gihigayon ang atong {body_text}.
+{body_text}
 
 Gipanghinaut ko ang inyong 100% nga kooperasyon.
 Daghang salamat.
@@ -335,21 +424,12 @@ def refine_with_retry(
             if validate_generation_output(output, raw_text):
                 return output
 
-        # Generation fallback with placeholders for missing details.
-        final_name = (signature_name or "").strip() or "[Ngalan]"
-        final_title = (signature_title or "").strip() or "[Posisyon]"
-        return f"""Tinahod kong mga baryuhanon,
-
-Ania ang pahibalo kabahin sa: {raw_text.strip()}.
-Ang kalihokan pagahigayon sa [Petsa], alas [Oras], sa [Lugar/Covered Court].
-
-Gipanghinaut ko ang inyong 100% nga kooperasyon.
-Daghang salamat.
-
-Kaninyo matinahuron,
-
-{final_name}
-{final_title}"""
+        # Clean fallback for prompt-based generation when model output is low-quality.
+        return _build_generation_fallback(
+            raw_text,
+            signature_name=signature_name,
+            signature_title=signature_title,
+        )
 
     is_official = is_official_announcement(raw_text)
     source_signature_line = _extract_signature_line(raw_text)
